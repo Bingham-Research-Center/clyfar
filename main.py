@@ -1,1 +1,35 @@
-"""main script for the project"""
+"""main script for the project
+
+Will eventually need one script using only obs to create a model.
+
+TODO - create the best possible model and save as pickle; load at forecast time and use preprocessed NWP data.
+"""
+
+import importlib
+
+# Create Clyfar v0.1
+version = '0.1'
+v_str = version.replace('.', 'p')
+version_string = f'v{v_str}'
+
+# Import FIS from v_py function return_fis
+module = importlib.import_module(version_string)
+
+# Get FIS instance
+# This is the control system more hidden from user
+ozone_ctrl = module.ozone_ctrl
+# This is out FIS class that wraps the control system
+ozone_sim = module.ozone_sim
+ozone = module.ozone
+
+# Get inputs
+inputs = {
+    'snow': 100,
+    'mslp': 1040E2,
+    'wind': 1.5,
+    'solar': 500
+}
+
+print(ozone_sim.generate_crisp_inference(inputs))
+print(ozone_sim.create_possibility_array())
+pass
