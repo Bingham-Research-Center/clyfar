@@ -6,6 +6,9 @@ TODO - create the best possible model and save as pickle; load at forecast time 
 """
 
 import importlib
+import datetime
+
+from nwp.gefsdata import GEFSData
 
 # Create Clyfar v0.1
 version = '0.1'
@@ -32,4 +35,10 @@ inputs = {
 
 print(ozone_sim.generate_crisp_inference(inputs))
 print(ozone_sim.create_possibility_array())
+
+lon, lat = (360 - 109.6774, 40.0891)
+
+init_dt = datetime.datetime(2023,12,5,18,0,0)
+ts = GEFSData.generate_timeseries(list(range(0,240,12)), init_dt, ":SNOD:", "sde", lat, lon,
+                                    product="atmos.25",member='mean')
 pass
