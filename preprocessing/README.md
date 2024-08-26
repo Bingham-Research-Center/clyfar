@@ -1,0 +1,2 @@
+### Preprocessing
+This is where input data is improved as much as possible. For example, if we have constructed the FIS based on observations, we'd like to error correct the NWP forecasts to our specific use.

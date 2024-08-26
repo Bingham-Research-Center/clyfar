@@ -10,6 +10,7 @@ You can find a preprint on version 0.1 at this [link](https://doi.org/10.20944/p
 ### Future 
 * Aiming to release first operational version (1.0) by Dec 1 2024 for supporting the Ozone Alert system at the Bingham Research Center.
 * Create DOIs for operational version to cite the codebase in publications.
+* Training/AI part where FIS learns from forecast/observed values to improve predictions.
 
 ## Structure of configuration files 
 The configuration files are divided into sections that define the fuzzy inference system. The sections are as follows:
