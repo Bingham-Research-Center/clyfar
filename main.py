@@ -4,7 +4,7 @@ Will eventually need one script using only obs to create a model.
 
 TODO - create the best possible model and save as pickle; load at forecast time and use preprocessed NWP data.
 """
-
+import os
 import importlib
 import datetime
 
@@ -13,10 +13,10 @@ from nwp.gefsdata import GEFSData
 # Create Clyfar v0.1
 version = '0.1'
 v_str = version.replace('.', 'p')
-version_string = f'v{v_str}'
+version_fpath = f'fis.v{v_str}'
 
 # Import FIS from v_py function return_fis
-module = importlib.import_module(version_string)
+module = importlib.import_module(version_fpath)
 
 # Get FIS instance
 # This is the control system more hidden from user
