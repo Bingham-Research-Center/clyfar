@@ -7,6 +7,10 @@ import pytz
 import matplotlib as M
 import matplotlib.pyplot as plt
 import numpy as np
+import cartopy.feature as cfeature
+from cartopy import crs as ccrs
+
+from utils.lookups import lat_lon
 
 def plot_meteogram(df, plot_col, title=None, save=None,second_df=None, second_col=None):
     """Plot a meteogram of the dataframe of data.
@@ -14,8 +18,8 @@ def plot_meteogram(df, plot_col, title=None, save=None,second_df=None, second_co
     Args:
         df (pd.DataFrame): DataFrame of data to plot.
         plot_col (str): Column in df to plot.
-        title (str, optional): Title of the plot. Defaults to None.
-        save (str, optional): Path to save the plot. Defaults to None.
+        title (str, optional): Title of the plot. Defaults to no title.
+        save (str, optional): Path to save the plot. Defaults to not saving (only returning) the plot.
         second_df (pd.DataFrame, optional): Second DataFrame of data to plot. Defaults to None.
         second_col (str, optional): Column in second_df to plot. Defaults to None.
 
@@ -61,3 +65,78 @@ def plot_meteogram(df, plot_col, title=None, save=None,second_df=None, second_co
         fig.savefig(save)
 
     return fig, ax
+
+def surface_plot(ds,vrbl_key,fchr=0,label="variable",save=None,vlim=None,levels=None,plot_type="pcolormesh",
+                         my_extent=[-110.6, -108.7, 40.95, 39.65]):
+    if "step" in ds.dims:
+        plot_data = ds.isel(step=fchr)[vrbl_key]
+    else:
+        plot_data = ds[vrbl_key]
+
+    my_transform = ccrs.PlateCarree()
+
+    fig, ax = plt.subplots(1, figsize=[8,6], constrained_layout=True, dpi=250,
+                      subplot_kw={'projection' : ds.herbie.crs},) #  my_transform = ccrs.PlateCarree())
+    coast = cfeature.NaturalEarthFeature(category='physical', scale='10m',
+                                         edgecolor='black', name='coastline')
+
+    counties = cfeature.NaturalEarthFeature(category='cultural', scale='10m',
+                                            edgecolor='black', name='admin_2_counties_lakes', alpha=0.2)
+    if vlim is None:
+        vmin = None
+        vmax = None
+    else:
+        vmin, vmax = vlim
+
+    cmap = plt.cm.inferno_r
+    colors = cmap(np.arange(cmap.N))
+    colors[:int(0.2 * cmap.N), -1] = np.linspace(0, 1, int(0.2 * cmap.N))  # Adjust transparency
+    my_cm = M.colors.LinearSegmentedColormap.from_list('custom_plasma', colors)
+
+    # f1 = ax.contourf(
+    if plot_type == "pcolormesh":
+        f1 = ax.pcolormesh(
+                        ds.longitude, ds.latitude,
+                        plot_data,
+                        alpha=0.8,
+                        transform=my_transform,
+                        vmin=vmin, vmax=vmax,
+                        cmap=M.cm.inferno_r,
+                        # cmap=my_cm,
+                        # levels=levels,
+                        )
+        c1 = plt.colorbar(f1, fraction=0.046, pad=0.04)
+        c1.set_label(label=label, size=18, weight='bold')
+        c1.ax.tick_params(labelsize=18)
+
+    elif plot_type == "contour":
+        f1 = ax.contour(
+                        ds.longitude, ds.latitude,
+                        plot_data,
+                        transform=my_transform,
+                        color=["k",],
+                        # levels=levels,
+                        )
+    else:
+        raise Exception
+
+
+    ax.add_feature(cfeature.STATES, facecolor='none', edgecolor='black')
+    ax.add_feature(coast, facecolor='none', edgecolor='black')
+    ax.add_feature(counties, facecolor='none', edgecolor='black')
+    ax.add_feature(cfeature.LAKES, facecolor="none",edgecolor="black")
+    ax.add_feature(cfeature.RIVERS, facecolor="none", edgecolor="black")
+
+    # lat_lon is dictionary of {place: (lat,lon)}
+    for place, (lat, lon) in lat_lon.items():
+        ax.scatter(lon, lat, transform=ccrs.PlateCarree(), marker='o', color='r')
+        ax.text(lon, lat, place, transform=ccrs.PlateCarree(), size=12, ha='right', va='bottom', color='blue')
+
+    # To zoom further in:
+
+    ax.set_extent(my_extent, crs=my_transform)
+
+    if save is not None:
+        fig.savefig(save)
+
+    return fig,ax
