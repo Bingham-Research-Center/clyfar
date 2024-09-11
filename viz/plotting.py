@@ -5,12 +5,16 @@ import datetime
 import pytz
 
 import matplotlib as M
+from matplotlib.font_manager import FontProperties
 import matplotlib.pyplot as plt
 import numpy as np
 import cartopy.feature as cfeature
 from cartopy import crs as ccrs
 
 from utils.lookups import lat_lon
+
+M.rcParams["font.size"] = 11
+M.rcParams["font.family"] = "Helvetica"
 
 def plot_meteogram(df, plot_col, title=None, save=None,second_df=None, second_col=None):
     """Plot a meteogram of the dataframe of data.
@@ -139,4 +143,55 @@ def surface_plot(ds,vrbl_key,fchr=0,label="variable",save=None,vlim=None,levels=
     if save is not None:
         fig.savefig(save)
 
+    return fig,ax
+
+
+def plot_hline_lv(ax,lv_dict,c="red",lw=0.5):
+    font_props = FontProperties()
+    font_props.set_weight('bold')
+    font_props.set_variant('small-caps')
+
+    for k,v in lv_dict.items():
+        ax.text(0.01, v, f'{k}', verticalalignment='center', color=c, fontsize=9,
+                    transform=ax.get_yaxis_transform(), ha='left', backgroundcolor='white',
+                    fontproperties=font_props)
+        ax.axhline(v, color=c, lw=lw)
+    return ax
+
+def plot_profile(T_profile,Z_profile,fmt, xlim=None, ylim=None,
+                        plot_levels=None,save=None,title=None):
+    fig, ax = plt.subplots(1, figsize=(8,8))
+    if fmt == "model":
+        f1 = ax.plot(T_profile,Z_profile,color='#1f77b4',lw=2)
+    elif fmt == "obs":
+        f1 = ax.scatter(T_profile,Z_profile)
+    if ylim is not None:
+        ax.set_ylim(ylim)
+    if xlim is not None:
+        ax.set_xlim(xlim)
+
+    ax.set_xlabel('Temperature (C)', fontsize=12, fontweight='bold', color='#333333')
+    ax.set_ylabel('Altitude (m)', fontsize=12, fontweight='bold', color='#333333')
+    # Add subtitle with date
+    if title is None:
+        title = 'Vertical profile of temperature'
+    ax.set_title(title, fontsize=16, fontweight='bold', color='#333333')
+
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+    ax.minorticks_on()
+
+    # Setting spines to be less prominent
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['bottom'].set_color('#888888')
+    ax.spines['left'].set_color('#888888')
+
+    ax.tick_params(axis='both', which='both', labelsize=10, labelcolor='#333333')
+
+    if plot_levels is not None:
+        ax = plot_hline_lv(ax,plot_levels)
+
+    if save is not None:
+        fig.savefig(save)
+    pass
     return fig,ax

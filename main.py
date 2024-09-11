@@ -12,10 +12,17 @@ import numpy as np
 
 from nwp.gefsdata import GEFSData
 from viz import plotting
+import utils.utils as utils
+from utils.lookups import elevations
+
+######## TEST TOGGLES #######
 
 test_fis = False
 test_gefs_meteogram = False
-test_gefs_map_plot = True
+test_gefs_map_plot = False
+test_lapse_rate = True
+
+#############################
 
 if test_fis:
     # Create Clyfar v0.1
@@ -60,7 +67,7 @@ if test_gefs_meteogram:
 if test_gefs_map_plot:
     # TODO: adjust visualisation settings and try different ones in this section (e.g., colour map, contour levels)
 
-    ds_snow = GEFSData.get_cropped_data(init_dt, fxx=12, q_str=":SNOD:", product="atmos.5")
+    ds_snow = GEFSData.get_cropped_data(init_dt, fxx=12, q_str=":SNOD:", product="atmos.5", remove_grib=False)
     fig, ax = plotting.surface_plot(ds_snow, "sde", fchr=0, label="SNOD", save=None,
                                         # vlim=(1, None), levels=clvs, plot_type="contourf",
                                         my_extent=[-110.9, -108.3, 41.15, 39.55]
@@ -68,9 +75,42 @@ if test_gefs_map_plot:
     fig.show()
 
     # Try another with 0.25 degree data
-    ds_snow_0p25 = GEFSData.get_cropped_data(init_dt, fxx=12, q_str=":SNOD:", product="atmos.25")
+    ds_snow_0p25 = GEFSData.get_cropped_data(init_dt, fxx=12, q_str=":SNOD:", product="atmos.25", remove_grib=False)
     fig, ax = plotting.surface_plot(ds_snow_0p25, "sde", fchr=0, label="SNOD", save=None,
                                         my_extent=[-110.9, -108.3, 41.15, 39.55]
                                         )
     fig.show()
+
+
+if test_lapse_rate:
+    # Now plot lapse rates for each grid-cell on inversion day
+    lon, lat = (360-109.6774, 40.0891)
+
+    # TODO: get this time stuff easier to understand and documented!
+    init_dt = datetime.datetime(2023,11,30,0,0,0)
+    init_hb = utils.herbie_from_datetime(init_dt)
+    init_pd = utils.pd_from_datetime(init_dt)
+    fx = 12
+
+    # TODO: use pints package and be explicit about units
+    ds_T = GEFSData.get_cropped_data(init_hb,fx,':TMP:.*mb',product="atmos.5", remove_grib=False) # Celsius?
+    ds_Z = GEFSData.get_cropped_data(init_hb,fx,':HGT:',product="atmos.5", remove_grib=False) # km?
+    profile_df = GEFSData.get_profile_df(ds_T,ds_Z,lat,lon,max_height=5100)
+
+    fig, ax = plotting.plot_profile(profile_df["temp"], profile_df["height"],
+                          "model", plot_levels=elevations,save=None,
+                          title="HEY")
+    fig.show()
+
+    # And again with 0.25 degree
+    # TODO: This isn't working - the URL is wrong for downloading 0.25, maybe choice of pgrb2s v pgrb2a?
+    ds_T = GEFSData.get_cropped_data(init_hb,fx,':TMP:.*mb',product="atmos.25", remove_grib=False) # Celsius?
+    ds_Z = GEFSData.get_cropped_data(init_hb,fx,':HGT:',product="atmos.25", remove_grib=False) # km?
+    profile_df = GEFSData.get_profile_df(ds_T,ds_Z,lat,lon,max_height=5100)
+
+    fig, ax = plotting.plot_profile(profile_df["temp"], profile_df["height"],
+                          "model", plot_levels=elevations,save=None,
+                          title="HEY")
+    fig.show()
+
 pass
