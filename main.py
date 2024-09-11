@@ -8,7 +8,10 @@ import os
 import importlib
 import datetime
 
+import numpy as np
+
 from nwp.gefsdata import GEFSData
+from viz import plotting
 
 # Create Clyfar v0.1
 version = '0.1'
@@ -41,4 +44,7 @@ lon, lat = (360 - 109.6774, 40.0891)
 init_dt = datetime.datetime(2023,12,5,18,0,0)
 ts = GEFSData.generate_timeseries(list(range(0,240,12)), init_dt, ":SNOD:", "sde", lat, lon,
                                     product="atmos.25",member='mean')
+fig, ax = plotting.plot_meteogram(ts, "sde", title=None, save=None,second_df=None, second_col=None)
+fig.show()
+
 pass
