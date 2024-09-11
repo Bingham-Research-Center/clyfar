@@ -1,7 +1,9 @@
 # clyfar
 Bingham Research Center's (Utah State University) Ozone Prediction Model Clyfar
 
-Lawson Lyman Davies 2024 
+Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements information should be updated in `requirements.txt`.
+
+Lawson, Lyman, Davies, 2024 
 
 ## TODOs and notes
 * We may need a custom install of scikit-fuzz rather than conda version

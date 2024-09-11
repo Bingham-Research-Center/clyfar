@@ -9,6 +9,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def plot_meteogram(df, plot_col, title=None, save=None,second_df=None, second_col=None):
+    """Plot a meteogram of the dataframe of data.
+
+    Args:
+        df (pd.DataFrame): DataFrame of data to plot.
+        plot_col (str): Column in df to plot.
+        title (str, optional): Title of the plot. Defaults to None.
+        save (str, optional): Path to save the plot. Defaults to None.
+        second_df (pd.DataFrame, optional): Second DataFrame of data to plot. Defaults to None.
+        second_col (str, optional): Column in second_df to plot. Defaults to None.
+
+    Returns:
+        fig, ax: Matplotlib figure and axis objects.
+    """
+
     fig, ax = plt.subplots(1, figsize=(12, 8), dpi=200)
 
     # Plotting the data

@@ -14,7 +14,8 @@ from nwp.gefsdata import GEFSData
 from viz import plotting
 
 test_fis = False
-test_gefs_meteogram = False
+test_gefs_meteogram = True
+# test_gefs_
 
 if test_fis:
     # Create Clyfar v0.1
@@ -48,7 +49,9 @@ if test_gefs_meteogram:
 
     init_dt = datetime.datetime(2023,12,5,18,0,0)
     ts = GEFSData.generate_timeseries(list(range(0,240,12)), init_dt, ":SNOD:", "sde", lat, lon,
-                                        product="atmos.25",member='mean')
+                                        product="atmos.25",member='mean',
+                                        # To save time in testing we can save the grib files
+                                        remove_grib=False)
     fig, ax = plotting.plot_meteogram(ts, "sde", title=None, save=None,second_df=None, second_col=None)
     fig.show()
 

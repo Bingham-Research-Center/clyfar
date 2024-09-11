@@ -16,7 +16,7 @@ class GEFSData:
 
     @classmethod
     def generate_timeseries(cls, fxx, inittime, gefs_regex, ds_key, lat, lon,
-                                product,member="c00"):
+                                product,member="c00", remove_grib=True):
         """Need more info on variable names etc
 
         product here is "0.25 deg" etc
@@ -27,7 +27,7 @@ class GEFSData:
             validtime = inittime + datetime.timedelta(hours=f)
             H = cls.setup_herbie(inittime, fxx=f, product=product, model="gefs",
                                             member=member)
-            ds = cls.get_CONUS(gefs_regex, H)
+            ds = cls.get_CONUS(gefs_regex, H, remove_grib=remove_grib)
             ds_crop = cls.crop_to_UB(ds)
             val = cls.get_closest_point(ds_crop, ds_key, lat, lon)
             validtimes.append(validtime)
@@ -47,8 +47,8 @@ class GEFSData:
         return H
 
     @staticmethod
-    def get_CONUS(qstr, herbie_inst):
-        ds = herbie_inst.xarray(qstr, remove_grib=True)
+    def get_CONUS(qstr, herbie_inst, remove_grib=True):
+        ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
         # variables = [i for i in list(ds) if len(ds[i].dims) > 0]
         # ds = ds.metpy.parse_cf(varname=variables).squeeze().metpy.assign_latitude_longitude(force=True).metpy.assign_y_x(force=True)
         # ds = ds.metpy.parse_cf(varname=variables).metpy.assign_latitude_longitude(force=True).metpy.assign_y_x(force=True)
@@ -81,9 +81,14 @@ class GEFSData:
         return ds_sub
 
     @classmethod
-    def get_cropped_data(cls,inittime,fxx,q_str,product="nat"):#,xr_str):
+    def get_cropped_data(cls,inittime,fxx,q_str,product="nat", remove_grib=True):
+        """JRL: I'm not sure if this is needed. Speeds up cropped data generation?
+
+        Args:
+            inittime (datetime.datetime)
+        """
         H = cls.setup_herbie(inittime, fxx=fxx, product=product)
-        ds = cls.get_CONUS(q_str, H)
+        ds = cls.get_CONUS(q_str, H, remove_grib=remove_grib)
         ds_crop = cls.crop_to_UB(ds)
         return ds_crop
 
