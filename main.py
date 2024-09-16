@@ -11,6 +11,7 @@ import datetime
 import numpy as np
 
 from nwp.gefsdata import GEFSData
+from nwp.hrrrdata import HRRRData
 from viz import plotting
 import utils.utils as utils
 from utils.lookups import elevations
@@ -20,7 +21,8 @@ from utils.lookups import elevations
 test_fis = False
 test_gefs_meteogram = False
 test_gefs_map_plot = False
-test_lapse_rate = True
+test_lapse_rate = False
+
 
 #############################
 
@@ -62,6 +64,7 @@ if test_gefs_meteogram:
                                         # To save time in testing we can save the grib files
                                         remove_grib=False)
     fig, ax = plotting.plot_meteogram(ts, "sde", title=None, save=None,second_df=None, second_col=None)
+    pass
     fig.show()
 
 if test_gefs_map_plot:
@@ -81,6 +84,9 @@ if test_gefs_map_plot:
                                         )
     fig.show()
 
+    # Method 3 for HRRR
+    ds_t2m_crop = HRRRData.get_cropped_data(init_dt, fxx=12, q_str=":TMP:2 m", product="atmos.5", remove_grib=False)
+    fig, ax = plotting.do_sfc_plot(ds_t2m_crop, "t2m")
 
 if test_lapse_rate:
     # Now plot lapse rates for each grid-cell on inversion day
@@ -104,13 +110,16 @@ if test_lapse_rate:
 
     # And again with 0.25 degree
     # TODO: This isn't working - the URL is wrong for downloading 0.25, maybe choice of pgrb2s v pgrb2a?
-    ds_T = GEFSData.get_cropped_data(init_hb,fx,':TMP:.*mb',product="atmos.25", remove_grib=False) # Celsius?
-    ds_Z = GEFSData.get_cropped_data(init_hb,fx,':HGT:',product="atmos.25", remove_grib=False) # km?
-    profile_df = GEFSData.get_profile_df(ds_T,ds_Z,lat,lon,max_height=5100)
+    working = False
+    if working:
+        ds_T = GEFSData.get_cropped_data(init_hb,fx,':TMP:.*mb',product="atmos.25", remove_grib=False) # Celsius?
+        ds_Z = GEFSData.get_cropped_data(init_hb,fx,':HGT:',product="atmos.25", remove_grib=False) # km?
+        profile_df = GEFSData.get_profile_df(ds_T,ds_Z,lat,lon,max_height=5100)
 
-    fig, ax = plotting.plot_profile(profile_df["temp"], profile_df["height"],
-                          "model", plot_levels=elevations,save=None,
-                          title="HEY")
-    fig.show()
+        fig, ax = plotting.plot_profile(profile_df["temp"], profile_df["height"],
+                              "model", plot_levels=elevations,save=None,
+                              title="HEY")
+        fig.show()
+
 
 pass

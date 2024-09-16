@@ -195,3 +195,17 @@ def plot_profile(T_profile,Z_profile,fmt, xlim=None, ylim=None,
         fig.savefig(save)
     pass
     return fig,ax
+
+def do_sfc_plot(ds,vrbl,minmax=None):
+    # TODO: units and conversion elegantly!
+    data = ds[vrbl]
+    if vrbl == "t2m":
+        # K to C
+        data -= 273.15
+    fig,ax = plt.subplots(1)
+    if minmax is None:
+        im = ax.imshow(data[::-1,:])
+    else:
+        im = ax.imshow(data[::-1,:],vmin=minmax[0],vmax=minmax[1])
+    plt.colorbar(im)
+    return fig,ax

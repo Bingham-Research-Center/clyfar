@@ -5,14 +5,16 @@ import numpy as np
 import pandas as pd
 from cartopy import crs as ccrs
 import xarray as xr
-
 from herbie import Herbie
 
-class GEFSData:
+from nwp.datafile import DataFile
+
+class GEFSData(DataFile):
     def __init__(self):
         """Download, process GEFS data.
         """
         pass
+
 
     @classmethod
     def generate_timeseries(cls, fxx, inittime, gefs_regex, ds_key, lat, lon,
@@ -28,6 +30,7 @@ class GEFSData:
             H = cls.setup_herbie(inittime, fxx=f, product=product, model="gefs",
                                             member=member)
             ds = cls.get_CONUS(gefs_regex, H, remove_grib=remove_grib)
+            # TODO: move the cropping method to a more general script (e.g., geog_funcs)
             ds_crop = cls.crop_to_UB(ds)
             val = cls.get_closest_point(ds_crop, ds_key, lat, lon)
             validtimes.append(validtime)
