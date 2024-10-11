@@ -3,10 +3,20 @@
 
 import os
 import datetime
+import pickle
 
 import pandas as pd
 import numpy as np
 import pytz
+
+def save_to_pickle(obj, fpath):
+    with open(fpath, 'wb') as f:
+        pickle.dump(obj, f)
+
+def load_from_pickle(fpath):
+    with open(fpath, 'rb') as f:
+        obj = pickle.load(f)
+    return obj
 
 def get_closest_non_nan(df, column, target_time, tolerance):
     if df[column].isna().all():
