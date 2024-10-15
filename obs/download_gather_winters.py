@@ -16,6 +16,7 @@ from obs.obsdata import ObsData
 
 ### CONSTANTS ###
 fdir = "../data"
+qc = "all"
 
 start_month = 12
 end_month = 3
@@ -49,7 +50,7 @@ for year in years:
     print(f"Downloading for winter {year-1}/{year}.")
     start_date = datetime.datetime(year-1,start_month,start_day)
     end_date = datetime.datetime(year,end_month,end_day)
-    obs = ObsData(start_date,end_date, vrbls=obs_vars)
+    obs = ObsData(start_date,end_date, vrbls=obs_vars, qc=qc)
     pass
     obs.save_df(fdir, f"UB_obs_{int(year)}.parquet", drop_na=True)
     print("Saved to disc.")

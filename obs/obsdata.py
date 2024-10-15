@@ -14,12 +14,13 @@ import utils.utils as utils
 
 class ObsData:
     def __init__(self,start_date,end_date,recent=12*60*60, radius_mi=45, radius_ctr="UCL21",
-                    vrbls=None):
+                    vrbls=None, qc=None):
         """Download, process, and archive observation data.
         """
         self.start_date = start_date
         self.end_date = end_date
         self.recent = recent
+        self.qc = qc
 
         # format example: radius="UCL21,50"
         radius_str = f"{radius_ctr},{radius_mi}"
@@ -62,6 +63,7 @@ class ObsData:
                                                 verbose=False,
                                              qc_checks='all',
                                              # qc_checks='synopticlabs',
+                                             # qc_remove_data="on",
                                              )
             except AssertionError:
                 # raise
