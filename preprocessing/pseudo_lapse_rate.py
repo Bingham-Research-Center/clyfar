@@ -11,7 +11,7 @@ from obs.obsdata import ObsData
 from viz import plotting
 
 def compute_pseudo_lapse_rate(filt_temp_df, elevations, x_range=(1000, 4000), do_filter=False, elev_bins=None,
-                              num_std_dev=1.5):
+                              num_std_dev=1.5, do_plot=True):
     """
     Compute the pseudo-lapse rate using least squares regression and plot the results.
 
@@ -38,14 +38,15 @@ def compute_pseudo_lapse_rate(filt_temp_df, elevations, x_range=(1000, 4000), do
     lapse_rate = slope * 1000
     print(f"Pseudo-lapse rate: {lapse_rate:.2f} °C/km")
 
-    # Plot the profile
-    fig, ax = plotting.plot_profile(filt_temp_df["max_air_temp"], filt_temp_df["elevation"], "obs",
-                                    plot_levels=elevations)
+    if do_plot:
+        # Plot the profile
+        fig, ax = plotting.plot_profile(filt_temp_df["max_air_temp"], filt_temp_df["elevation"], "obs",
+                                        plot_levels=elevations)
 
-    # Visualize the least squares regression as a line on the axes "ax"
-    x = np.linspace(x_range[0], x_range[1], 100)
-    y = slope * x + intercept
-    ax.plot(y, x, color='black', linestyle='dashed')
-    plt.show()
+        # Visualize the least squares regression as a line on the axes "ax"
+        x = np.linspace(x_range[0], x_range[1], 100)
+        y = slope * x + intercept
+        ax.plot(y, x, color='black', linestyle='dashed')
+        plt.show()
 
     return lapse_rate
