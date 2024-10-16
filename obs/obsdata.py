@@ -109,7 +109,16 @@ class ObsData:
         return df
 
     @classmethod
-    def filter_temperature_outliers(cls, df, elev_bins, num_std_dev=2):
+    def filter_temperature_outliers(cls, df, elev_bins, num_std_dev=2, temp_str="max_air_temp"):
+        """Filter out temperature outliers in the DataFrame.
+
+        Args:
+            df (pd.DataFrame): DataFrame to filter.
+            elev_bins (list): List of elevation bins.
+            num_std_dev (int): Number of standard deviations to consider. Lower values drop more outliers
+            temp_str (str): Column name for the temperature variable.
+
+        """
         filtered_dfs = []
 
         for min_elev, max_elev in itertools.zip_longest(elev_bins[:-1], elev_bins[1:]):
@@ -118,15 +127,15 @@ class ObsData:
             sub_df = df[(df["elevation"] > min_elev) & (df["elevation"] <= max_elev)]
 
             # Calculate mean and standard deviation of air_temp in this bin
-            mean_temp = sub_df["drybulb"].mean()
-            std_dev_temp = sub_df["drybulb"].std()
+            mean_temp = sub_df[temp_str].mean()
+            std_dev_temp = sub_df[temp_str].std()
 
             # Define the acceptable range for air_temp
             lower_bound = mean_temp - num_std_dev * std_dev_temp
             upper_bound = mean_temp + num_std_dev * std_dev_temp
 
             # Filter out rows where air_temp is outside the acceptable range
-            filtered_sub_df = sub_df[(sub_df["drybulb"] > lower_bound) & (sub_df["drybulb"] < upper_bound)]
+            filtered_sub_df = sub_df[(sub_df[temp_str] > lower_bound) & (sub_df[temp_str] < upper_bound)]
 
             # Append the filtered sub-dataframe to the list
             filtered_dfs.append(filtered_sub_df)
@@ -170,7 +179,7 @@ class ObsData:
             latest_hr_dt = current_time.replace(minute=0, second=0, microsecond=0) - datetime.timedelta(hours=1)
         return latest_hr_dt
 
-    def get_profile_df(self, dt:pd.Timestamp, temp_type="drybulb",tolerance=5):
+    def get_profile_df(self, dt:pd.Timestamp, temp_type="drybulb",tolerance=30):
         profile_data = []
         df = self.df
 
