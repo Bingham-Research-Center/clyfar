@@ -209,3 +209,50 @@ def do_sfc_plot(ds,vrbl,minmax=None):
         im = ax.imshow(data[::-1,:],vmin=minmax[0],vmax=minmax[1])
     plt.colorbar(im)
     return fig,ax
+
+def visualize_station_locations(meta_df, towns, extent, only_stids=None, stid_name=False):
+    """
+    Visualize station locations on a map.
+
+    Args:
+        meta_df (pd.DataFrame): Metadata dataframe containing station information.
+        towns (dict): Dictionary of towns with their coordinates.
+        extent (list): List of extents for the map [west, east, south, north].
+        only_stids (list, optional): List of station IDs to plot. If None, plot all stations.
+        stid_name (bool, optional): Annotate the stid string by each scatter point. Default is False.
+
+    """
+    fig = plt.figure(figsize=(12, 9))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+
+    lats = []
+    lons = []
+    elevs = []
+    stids = []
+
+    for stid in meta_df.columns:
+        if only_stids is None or stid in only_stids:
+            # Convert to meters
+            elevs.append(meta_df[stid].loc["ELEV_DEM"] * 0.304)
+            lats.append(meta_df[stid].loc["latitude"])
+            lons.append(meta_df[stid].loc["longitude"])
+            stids.append(stid)
+
+    sc = ax.scatter(lons, lats, c=elevs, transform=ccrs.PlateCarree())
+    cbar = fig.colorbar(sc, orientation='horizontal', pad=0.01)
+
+    # Annotate stid string by each scatter point if stid_name is True
+    if stid_name:
+        for lon, lat, stid in zip(lons, lats, stids):
+            ax.text(lon, lat, stid, transform=ccrs.PlateCarree(), fontsize=8)
+
+    # Add reference towns in RED
+    for town, latlon in towns.items():
+        ax.scatter(latlon[1], latlon[0], color='red', transform=ccrs.PlateCarree())
+        ax.text(latlon[1], latlon[0], town, color='red', transform=ccrs.PlateCarree())
+
+    ax.add_feature(cfeature.STATES.with_scale("10m"))
+    ax.add_feature(cfeature.RIVERS.with_scale("10m"))
+
+    ax.set_extent(extent)  # set extents
+    plt.show()

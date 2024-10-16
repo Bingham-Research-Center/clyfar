@@ -140,3 +140,20 @@ def select_nearest_neighbours(source_df, target_df, max_diff='30min'):
     # Select the corresponding rows from the source DataFrame
     selected_rows = source_df.iloc[nearest_indices]
     return selected_rows
+
+def find_common_stids(vrbl_stids, years, num_years):
+    """
+    Find the station IDs that have reported for the last `num_years` consistently.
+
+    TODO: make more general than just stid (e.g., for any column)
+
+    Args:
+        vrbl_stids (dict): Dictionary of station IDs per year.
+        years (list): List of years.
+        num_years (int): Number of years to check for consistency.
+
+    Returns:
+        set: Set of common station IDs.
+    """
+    stids = [set(vrbl_stids[year]) for year in years[-num_years:]]
+    return set.intersection(*stids)
