@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 
 from obs.obsdata import ObsData
 from viz import plotting
+from viz.profile_plots import compute_max_temp_profile
+
 
 def compute_pseudo_lapse_rate(filt_temp_df, elevations, x_range=(1000, 4000), do_filter=False, elev_bins=None,
                               num_std_dev=1.5, do_plot=True):
@@ -17,7 +19,7 @@ def compute_pseudo_lapse_rate(filt_temp_df, elevations, x_range=(1000, 4000), do
 
     Args:
         filt_temp_df (pd.DataFrame): DataFrame with the filtered temperature data.
-        elevations (dict): Dictionary of station names and their elevations.
+        elevations (dict): Dictionary of names and elevations for plotting vertical lines on the figure for reference.
         x_range (tuple): Tuple of the x-axis range for the plot. Default is (1000, 4000).
         do_filter (bool): Whether to filter the temperature data. Default is False.
         elev_bins (list): List of elevation bins for filtering. Default is None.
@@ -50,3 +52,38 @@ def compute_pseudo_lapse_rate(filt_temp_df, elevations, x_range=(1000, 4000), do
         plt.show()
 
     return lapse_rate
+
+def compute_plr_timeseries(temp_df, meta_df, elevations, start_year, end_year, elev_bins, num_std_dev=1,
+                                start_month=12, end_month=3, start_day=1, end_day=15):
+    """
+    Compute the pseudo-lapse rate for each day within the specified date range.
+
+    Args:
+        temp_df (pd.DataFrame): DataFrame containing temperature data.
+        meta_df (pd.DataFrame): DataFrame containing metadata.
+        elevations (dict): Dictionary of names and elevations for plotting vertical lines on the figure for reference.
+        start_year (int): The starting year of the range.
+        end_year (int): The ending year of the range.
+        elev_bins (list): List of elevation bins for filtering.
+        num_std_dev (int): Number of standard deviations for filtering. Default is 1.
+        start_month (int): The starting month of period. Default is 12. (Winter)
+        end_month (int): The ending month of period. Default is 3. (Winter)
+        start_day (int): The starting day of period. Default is 1.
+        end_day (int): The ending day of period. Default is 15. (End of Ozone Alert)
+
+    Returns:
+        pd.DataFrame: DataFrame containing the lapse rate for each day.
+    """
+    lapse_rate_list = []
+
+    start_date = f"{start_year:d}-{start_month:02d}-{start_day:02d}"
+    end_date = f"{end_year:d}-{end_month:02d}-{end_day:02d}"
+
+    for date in pd.date_range(start_date, end_date):
+        max_temp = compute_max_temp_profile(temp_df, meta_df, date.strftime("%Y-%m-%d"))
+        lapse_rate = compute_pseudo_lapse_rate(max_temp, elevations, do_filter=True, elev_bins=elev_bins,
+                                                    num_std_dev=num_std_dev, do_plot=False)
+        lapse_rate_list.append({"date": date, "lapse_rate": lapse_rate})
+
+    lapse_rate_df = pd.DataFrame(lapse_rate_list)
+    return lapse_rate_df
