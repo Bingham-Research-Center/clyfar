@@ -169,7 +169,7 @@ def plot_mf(ax, x, y, label=None, line_color=LINE_COLOR, plot_fill=False, linest
 
 def plot_activation(x_uod, mf_func, y_value, fuzz_color=LINE_COLOR,
                     category_label=None, variable_name="snow depth",
-                    vrbl_unit="cm", direction="increasing",
+                    vrbl_unit="cm",
                     return_activation_y=False, save_path=None):
     """Plot the activation of a fuzzy set based on input value."""
     fig, ax = plt.subplots(figsize=(8, 6))
@@ -598,9 +598,10 @@ def main():
         "Rule 2": y2,
     }
 
+    # Make these the same as the rule examples above depending on rule itself
     plot_colors = {
-        "Rule 1": "orange",
-        "Rule 2": "purple"
+        "Rule 1": OZONE_CATEGORIES["elevated"],
+        "Rule 2": OZONE_CATEGORIES["background"],
     }
 
     fig, ax, y_agg = make_mf_figure(
