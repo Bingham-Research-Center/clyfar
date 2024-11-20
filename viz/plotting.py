@@ -108,6 +108,7 @@ def surface_plot(ds,vrbl_key,fchr=0,label="variable",save=None,vlim=None,levels=
                         cmap=M.cm.inferno_r,
                         # cmap=my_cm,
                         # levels=levels,
+                        edgecolors='black',
                         )
         c1 = plt.colorbar(f1, fraction=0.046, pad=0.04)
         c1.set_label(label=label, size=18, weight='bold')
@@ -125,11 +126,12 @@ def surface_plot(ds,vrbl_key,fchr=0,label="variable",save=None,vlim=None,levels=
         raise Exception
 
 
-    ax.add_feature(cfeature.STATES, facecolor='none', edgecolor='black')
+    ax.add_feature(cfeature.STATES, facecolor='none', edgecolor='red',
+                        linewidth=0.5, linestyle=':')
     ax.add_feature(coast, facecolor='none', edgecolor='black')
-    ax.add_feature(counties, facecolor='none', edgecolor='black')
-    ax.add_feature(cfeature.LAKES, facecolor="none",edgecolor="black")
-    ax.add_feature(cfeature.RIVERS, facecolor="none", edgecolor="black")
+    ax.add_feature(counties, facecolor='none', edgecolor='gray', alpha=0.3)
+    ax.add_feature(cfeature.LAKES, facecolor="aqua",edgecolor="aqua")
+    ax.add_feature(cfeature.RIVERS, facecolor="blue", edgecolor="aqua")
 
     # lat_lon is dictionary of {place: (lat,lon)}
     for place, (lat, lon) in lat_lon.items():
