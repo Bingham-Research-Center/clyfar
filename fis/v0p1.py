@@ -13,6 +13,10 @@ from skfuzzy import control as ctrl
 
 from fis.fis import FIS
 
+### General settings ###
+
+
+
 ### UNIVERSES OF DISCOURSE ###
 
 # mm

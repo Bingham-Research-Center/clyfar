@@ -3,6 +3,7 @@ import itertools
 import os
 
 import metpy.calc
+import pytz
 from metpy.units import units
 import numpy as np
 import pandas as pd
@@ -10,31 +11,58 @@ import pandas as pd
 import synoptic.services as ss
 
 import utils.utils as utils
-# from utils.lookups import obs_vars
+from utils.lookups import Lookup
 
 class ObsData:
-    def __init__(self,start_date,end_date,recent=12*60*60, radius_mi=45, radius_ctr="UCL21",
-                    vrbls=None, qc=None):
-        """Download, process, and archive observation data.
+    def __init__(self, start_date, end_date, vrbl, recent=12*60*60,
+                    stids=None,
+                    radius_mi=45, radius_ctr="UCL21", qc=None,):
+        """Download, process, and archive observation data for one variable.
+
+        If stids is a list, don't find the radius etc, but download data
+        just for those stations. This could be a dictionary where
+        keys are the variable and values are the stids.
+
+        The 'vrbl' should be the membership function (short) name like 'snow'
         """
-        self.start_date = start_date
-        self.end_date = end_date
+        # Local time
+        self.start_date_lt = start_date
+        self.end_date_lt = end_date
+
+        # UTC time
+        self.start_date_utc = start_date.astimezone(pytz.utc)
+        self.end_date_utc = end_date.astimezone(pytz.utc)
+
+        # Lookup for variable keys
+        self.L = Lookup()
+
         self.recent = recent
         self.qc = qc
 
-        # format example: radius="UCL21,50"
-        radius_str = f"{radius_ctr},{radius_mi}"
-        self.radius_str = radius_str
+        if stids is None:
+            # format example: radius="UCL21,50"
+            radius_str = f"{radius_ctr},{radius_mi}"
+            self.radius_str = radius_str
 
-        self.vrbls = self.return_variable_list(vrbls)
-        self.meta_df = self.create_metadata_df()
-        self.stids = [str(s) for s in self.meta_df.columns]
+            self.vrbls = self.return_variable_list(vrbl)
+            self.meta_df = self.create_metadata_df()
+            # This only works if all stations are identical...
+            # TODO replace with dictionary for each variable and its stids
+            # self.stids = [str(s) for s in self.meta_df.columns]
+        else:
+            # TODO - sort out this hard-coded way to avoid the return_variable_list
+            self.vrbl = vrbl
+            self.stids = stids
+            self.meta_df = self.create_metadata_df(stids=self.stids)
 
         self.df = self.create_df()
 
-    def create_metadata_df(self):
+    def create_metadata_df(self, stids=None):
         # TODO - check this finds all stations within certain time, not just recent
-        df_meta = ss.stations_metadata(radius=self.radius_str) #, recent=self.recent)
+        if stids is None:
+            df_meta = ss.stations_metadata(radius=self.radius_str) #, recent=self.recent)
+        else:
+            df_meta = ss.stations_metadata(stid=stids)
         return df_meta
 
     def get_elevations(self):
@@ -53,50 +81,36 @@ class ObsData:
             pd.DataFrame: dataframe of observation data
 
         """
-        # Make dataframe of data for this period
         df_list = []
-
         for stid in self.stids:
             print("Loading data for station", stid)
+            # Need to catch "no data" versus "error or bug"!
             try:
-                _df = ss.stations_timeseries(stid=stid, start=self.start_date, end=self.end_date, vars=self.vrbls,
-                                                verbose=False,
-                                             qc_checks='all',
-                                             # qc_checks='synopticlabs',
-                                             # qc_remove_data="on",
-                                             )
+                stid_df = ss.stations_timeseries(
+                        stid=stid, start=self.start_date_utc,
+                        end=self.end_date_utc,
+                        # vars=string_dict[self.vrbl]["synoptic"],
+                        vars = self.L.get_key(self.vrbl, "synoptic"),
+                        verbose=False, qc_checks='all',
+                        )
             except AssertionError:
-                # raise
                 print("Skipping", stid)
                 # continue
 
-            # Assign this metadata to the variables df for ease of access
-            # TODO - maybe remove?
-            # stid_lat = self.meta_df[stid].loc["latitude"]  # .values.squeeze()
-            # stid_lon = self.meta_df[stid].loc["longitude"]  # .values.squeeze()
-            # elev = self.meta_df[stid].loc["ELEVATION"] * 0.304  # .values.squeeze()*0.304
+            try:
+                stid_df = stid_df.assign(stid=stid)
+            except UnboundLocalError:
+                print("No data for", stid)
+                continue
 
-            ############# Uncomment below for density calculation: ##########
-            # if ("pressure" in _df.columns) and ("air_temp" in _df.columns) and ("dew_point_temperature" in _df.columns):
-            #     rho = get_density(_df["pressure"],_df["air_temp"]+273.15,_df["dew_point_temperature"]+273.15)
-            #     _df = _df.assign(air_density=rho.values)
-            _df =  _df.assign(stid=stid)
-            #, elevation=elev, latitude=stid_lat, longitude=stid_lon)
-
-            # Check certain data for QC
-            # _df = self.check_constant_temps(_df)
-
-            pd.to_datetime(_df.index.strftime('%Y-%m-%dT%H:%M:%SZ'))
-            df_list.append(_df)
+            pd.to_datetime(stid_df.index.strftime('%Y-%m-%dT%H:%M:%SZ'))
+            df_list.append(stid_df)
 
         df = pd.concat(df_list, axis=0, ignore_index=False)
 
         # Reduce memory use
         col64 = [df.columns[i] for i in range(len(list(df.columns))) if (df.dtypes.iloc[i] == np.float64)]
         change_dict = {c: np.float32 for c in col64}
-
-        # Adding ozone concentration because it's randomly an object
-        # change_dict["ozone_concentration"] = np.float32
 
         # Making stid string type
         change_dict["stid"] = str
@@ -170,7 +184,8 @@ class ObsData:
 
     @staticmethod
     def get_latest_hour():
-        current_time = datetime.datetime.utcnow()
+        # Hard coded UTC...
+        current_time = datetime.datetime.now(tz=pytz.utc)
         # If past 20 min, use latest hour
         if current_time.minute > 20:
             latest_hr_dt = current_time.replace(minute=0, second=0, microsecond=0)

@@ -84,13 +84,14 @@ class GEFSData(DataFile):
         return ds_sub
 
     @classmethod
-    def get_cropped_data(cls,inittime,fxx,q_str,product="nat", remove_grib=True):
+    def get_cropped_data(cls,inittime,fxx,q_str,product="nat", remove_grib=True,
+                            member="c00"):
         """JRL: I'm not sure if this is needed. Speeds up cropped data generation?
 
         Args:
             inittime (datetime.datetime)
         """
-        H = cls.setup_herbie(inittime, fxx=fxx, product=product)
+        H = cls.setup_herbie(inittime, fxx=fxx, product=product, member=member)
         ds = cls.get_CONUS(q_str, H, remove_grib=remove_grib)
         ds_crop = cls.crop_to_UB(ds)
         return ds_crop

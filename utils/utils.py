@@ -4,6 +4,8 @@
 import os
 import datetime
 import pickle
+import time
+import functools
 
 import pandas as pd
 import numpy as np
@@ -81,7 +83,7 @@ def create_meteogram_fname(inittime, loc, vrbl, model):
 
 def try_create(fpath):
     if not os.path.exists(fpath):
-        os.mkdir(fpath)
+        os.makedirs(fpath, exist_ok=True)
         print("Creating directory", fpath)
     return
 
@@ -157,3 +159,158 @@ def find_common_stids(vrbl_stids, years, num_years):
     """
     stids = [set(vrbl_stids[year]) for year in years[-num_years:]]
     return set.intersection(*stids)
+
+def datetime_of_previous_run(dt, do_utc=True, do_naive=True, do_local=True,
+                                hours=6):
+    # Going to assume we want all three variants of the datetime, haha
+    new_dt_utc = dt - datetime.timedelta(hours=hours)
+    init_dt_naive = new_dt_utc.replace(tzinfo=None)
+    local_t0 = new_dt_utc.astimezone(pytz.timezone('US/Mountain'))
+    return new_dt_utc, init_dt_naive, local_t0
+
+def get_nice_tick_spacing(data_range, quantizations):
+    """Calculate a nice tick spacing for a given data range.
+
+    Example:
+
+        ```python
+        inch_spacing = get_nice_tick_spacing(inch_range, quantizations)
+        # Calculate tick positions in inches
+        inch_min = np.floor(y_min * conversion_factor / inch_spacing) * inch_spacing
+        inch_max = np.ceil(y_max * conversion_factor / inch_spacing) * inch_spacing
+        inch_ticks = np.arange(inch_min, inch_max + inch_spacing/2, inch_spacing)
+        # Set the ticks on the secondary axis
+        ax2.set_yticks(inch_ticks)
+        ```
+
+    Args:
+        data_range (float): Range of data to be covered
+        quantizations (list): List of allowed tick spacings
+
+    Returns:
+        float: Selected tick spacing
+    """
+    target_num_ticks = 5
+
+    # Convert quantizations to sorted list
+    spacings = sorted(quantizations)
+
+    # Find the spacing that gives closest to target number of ticks
+    best_spacing = spacings[0]
+    best_diff = float('inf')
+
+    for spacing in spacings:
+        num_ticks = data_range / spacing
+        diff = abs(num_ticks - target_num_ticks)
+        if diff < best_diff:
+            best_diff = diff
+            best_spacing = spacing
+
+    return best_spacing
+
+def get_valid_forecast_init(current_dt=None, required_delay_hours=7,
+                            force_init_dt=None):
+    """Determines valid forecast initialization time accounting for data availability."""
+
+    if force_init_dt:
+        init_times = {
+            # 'utc': force_init_dt.astimezone(pytz.utc),
+            'utc': force_init_dt.replace(tzinfo=pytz.timezone('UTC')),
+            'naive': force_init_dt.replace(tzinfo=None),
+            'local': force_init_dt.astimezone(pytz.timezone('US/Mountain')),
+            'skipped': []
+        }
+        return init_times
+
+    # Use current UTC time if not specified to override it
+    current_dt = current_dt or datetime.datetime.now(tz=pytz.utc)
+
+    # Find most recent 6-hourly initialization time
+    init_dt = current_dt.replace(
+        hour=current_dt.hour - (current_dt.hour % 6),
+        minute=0, second=0, microsecond=0
+    ).replace(tzinfo=pytz.utc)
+
+    # Calculate hours needed to wait for data availability
+    hours_since_init = (current_dt - init_dt).total_seconds() / 3600
+    periods_to_backtrack = max(1, int(np.ceil((required_delay_hours - hours_since_init) / 6)))
+
+    # Store initialization history
+    init_times = {
+        'utc': init_dt - datetime.timedelta(hours=6 * periods_to_backtrack),
+        'skipped': [init_dt - datetime.timedelta(hours=6 * i) for i in range(periods_to_backtrack)]
+    }
+
+    # Add timezone variants
+    init_times['naive'] = init_times['utc'].replace(tzinfo=None)
+    init_times['local'] = init_times['utc'].astimezone(pytz.timezone('US/Mountain'))
+
+    return init_times
+
+def print_forecast_init_times(init_times):
+    """Prints the forecast initialization times with informative messages.
+
+    Args:
+        init_times (dict): Dictionary containing initialization times.
+    """
+    print("Current datetime in UTC:", datetime.datetime.now(tz=pytz.utc))
+    for key, value in init_times.items():
+        if key == 'utc':
+            print(f"Forecast initialization time (UTC): {value}")
+        elif key == 'naive':
+            print(f"Forecast initialization time (naive, no timezone): {value}")
+        elif key == 'local':
+            print(f"Forecast initialization time (local, US/Mountain): {value}")
+        elif key == 'skipped':
+            print("Skipped initialization times (most recent runs):")
+            for skipped_time in value:
+                print(f"  - {skipped_time}")
+
+
+def print_system_info():
+    """Prints system information about available resources.
+
+    Most useful for deciding how to optimize parallel processing.
+    """
+    import multiprocessing
+    import psutil
+
+    print("Number of CPUs:", multiprocessing.cpu_count())
+    print("Number of GPUs:", len(os.environ.get('CUDA_VISIBLE_DEVICES', '').split(',')))
+    print("Memory available:", psutil.virtual_memory().total / 1e9, "GB")
+    print("Number of threads:", psutil.cpu_count(logical=False))
+    # All add a line about system storage memory, in GB.
+    # TODO - make this also tell us storage on a supercomputer/archive
+    print("System storage memory:", psutil.disk_usage('/').total / 1e9, "GB")
+    return
+
+def configurable_timer(threshold_ms: float = None, log_file: str = None):
+    """
+    Configurable timer decorator with threshold alerts and logging capabilities.
+
+    Example:
+        @configurable_timer(threshold_ms=200, log_file="performance_log.txt")
+        def func(...):
+
+    Args:
+        threshold_ms (float, optional): Alert threshold in milliseconds
+        log_file (str, optional): Path to timing log file
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.perf_counter()
+            result = func(*args, **kwargs)
+            execution_time = (time.perf_counter() - start_time) * 1000
+
+            if threshold_ms and execution_time > threshold_ms:
+                print(f"Warning: {func.__name__} exceeded threshold "
+                      f"({execution_time:.2f} ms > {threshold_ms} ms)")
+
+            if log_file:
+                with open(log_file, 'a') as f:
+                    f.write(f"{func.__name__},{execution_time:.2f}\n")
+
+            return result
+        return wrapper
+    return decorator
