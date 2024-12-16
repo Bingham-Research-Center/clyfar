@@ -64,9 +64,10 @@ def get_optimal_process_count() -> int:
     int: Optimal number of processes, reserving one core for system operations
     """
     # Just for the laptop so we don't overload it
-    all_but_two = max(1, mp.cpu_count() - 2)
-    sensible = 10
-    return sensible
+    # TODO - argparse to set CPUs
+    # ncpus = max(1, mp.cpu_count() - 2)
+    ncpus = 30
+    return ncpus
 
 class ParallelEnsembleProcessor:
     """
@@ -292,7 +293,7 @@ def main(visualise=True, save=True):
     member_names = [f'p{n:02d}' for n in range(1, 31)]
 
     # for testing
-    member_names = member_names[:10]
+    # member_names = member_names[:10]
 
     # Initialize geographic parameters
     latlons = {
@@ -303,8 +304,8 @@ def main(visualise=True, save=True):
 
     # Get initialization time
     init_dt = utils.get_valid_forecast_init(
-        # force_init_dt=datetime.datetime(2024, 12, 8, 12, 0, 0)
-        # force_init_dt=datetime.datetime(2024, 12, 9, 18, 0, 0)
+        # force_init_dt=datetime.datetime(2024, 12, 16, 6, 0, 0)
+        force_init_dt=datetime.datetime(2024, 12, 15, 18, 0, 0)
     )
 
     # Execute parallel workflow

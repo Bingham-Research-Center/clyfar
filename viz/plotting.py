@@ -20,7 +20,9 @@ from utils.utils import get_nice_tick_spacing
 from utils.lookups import lat_lon, Lookup
 
 M.rcParams["font.size"] = 11
-M.rcParams["font.family"] = "Helvetica"
+# M.rcParams["font.family"] = ["Helvetica", "Ubuntu Light", "Roboto", "Nimbus Sans",]
+M.rcParams["font.family"] = "sans-serif"
+M.rcParams["font.sans-serif"] = ["Nimbus Sans", "Helvetica", "Ubuntu Sans Light", "Roboto Sans"]
 
 def plot_comparison_meteogram(df, plot_col, title=None, save=None,
                                 second_df=None, second_col=None):

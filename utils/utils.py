@@ -208,7 +208,7 @@ def get_nice_tick_spacing(data_range, quantizations):
 
     return best_spacing
 
-def get_valid_forecast_init(current_dt=None, required_delay_hours=7,
+def get_valid_forecast_init(current_dt=None, required_delay_hours=8,
                             force_init_dt=None):
     """Determines valid forecast initialization time accounting for data availability."""
 

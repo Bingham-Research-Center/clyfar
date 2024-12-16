@@ -29,7 +29,7 @@ percentiles = [10, 50, 90]
 n_members = 30
 member_names = [f"p{i:02d}" for i in range(1, n_members+1)]
 # For testing:
-member_names = member_names[:10]
+# member_names = member_names[:10]
 
 # Load the configuration for Clyfar version 1
 clyfar = Clyfar()
@@ -48,13 +48,12 @@ def load_forecast_data(variable: str, init_dt: datetime.datetime, member_names: 
             print(f"Warning: File {fpath} does not exist.")
     return dfs
 
+# TODO - make this argparse or automatic; link with parallel-* script?
 all_dfs = {}
 for variable in ['snow', 'mslp', 'solar', 'wind']:
     all_dfs[variable] = load_forecast_data(variable,
-                         # datetime.datetime(2024,12,7,12,0,0),
-                         # datetime.datetime(2024,12,8,12,0,0),
-                         # datetime.datetime(2024,12,9,18,0,0),
-                         datetime.datetime(2024,12,10,6,0,0),
+                         datetime.datetime(2024,12,15,18,0,0),
+                         # datetime.datetime(2024,12,16,6,0,0),
                          member_names = member_names,
                                            )
 
@@ -154,6 +153,7 @@ def run_inference(forecast_data: dict, percentiles, bogus_add=None):
 
 # Way to force inference to add these values to see difference to forecast
 # bogus_add = {'snow': 80, 'mslp': 0, 'wind': -1, 'solar': 50}
+# bogus_add = {'snow':0, 'mslp':0, 'wind':0, 'solar':100}
 bogus_add = None
 clyfar_df = run_inference(data_dict, percentiles, bogus_add=bogus_add)
 
@@ -182,8 +182,9 @@ fig.autofmt_xdate()
 # Remove the legend for clarity
 # ax.legend()
 
-plt.show()
-
+# plt.show()
+# TODO - get this archived in its own folder/name asap
+fig.savefig('./figures/clyfar_output/latest_clyfar.png')
 
 # We then have output for each GEFS ensemble member
 # Show output time series forecasts of ozone percentiles over the 16 days
