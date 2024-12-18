@@ -61,7 +61,7 @@ def load_variable(init_dt, start_h, max_h, delta_h, q_str, product,
     # TODO check lat/lon where relevant.
     return ds_time_series
 
-def check_and_create_latlon_files(deg_res, fdir='data'):
+def check_and_create_latlon_files(deg_res, fdir='./data/geog'):
     """Check if lat/lon files exist for a given resolution, and create them if not.
 
     Args:

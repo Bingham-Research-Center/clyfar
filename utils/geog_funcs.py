@@ -5,6 +5,9 @@ import requests
 import urllib.parse
 import pandas as pd
 
+from utils.utils import try_create
+
+
 def elevation_from_latlon(lats, lons):
     """Look up elevation of lat/lon"""
     # From https://gis.stackexchange.com/questions/338392/getting... help discussion
@@ -32,7 +35,7 @@ def elevation_from_latlon(lats, lons):
     df['elevation_m'] = elevations
     return df
 
-def get_elevations_for_resolutions(latlons, deg_res, fdir='data'):
+def get_elevations_for_resolutions(latlons, deg_res, fdir='./data/geog'):
     """
     Compute elevations for given lat/lon pairs and save to specified location.
 
@@ -45,6 +48,7 @@ def get_elevations_for_resolutions(latlons, deg_res, fdir='data'):
     if os.path.exists(fpath):
         elev_df = pd.read_parquet(fpath)
     else:
+        try_create(fdir)
         lats = latlons[deg_res]['latitudes']
         lons = latlons[deg_res]['longitudes']
 
