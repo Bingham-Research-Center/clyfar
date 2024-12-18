@@ -50,7 +50,9 @@ from viz.possibility_funcs import (plot_percentile_meteogram,
 L = Lookup()
 clyfar = Clyfar()
 clyfar_data_root = './data/clyfar_output'
+utils.try_create(clyfar_data_root)
 clyfar_fig_root = './figures/clyfar_output'
+utils.try_create(clyfar_fig_root)
 
 # Configure logging with precise timestamp and process identification
 logging.basicConfig(level=logging.INFO,
@@ -534,6 +536,10 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
                 fig, ax = plot_percentile_meteogram(
                                 clyfar_df_dict[clyfar_member],
                                 )
+                fname = utils.create_meteogram_fname(init_dt_dict['naive'],
+                                    "UB-pc", "ozone", clyfar_member)
+                fig.savefig(os.path.join(clyfar_fig_root,fname))
+
 
             # for clyfar_member in clyfar_df_dict.keys():
             #     fig, ax = plot_possibility_bar_timeseries(
@@ -544,6 +550,9 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
                 fig, ax = plot_ozone_heatmap(
                                 clyfar_df_dict[clyfar_member],
                                 )
+                fname = utils.create_meteogram_fname(init_dt_dict['naive'],
+                                            "UB-heatmap", "ozone", clyfar_member)
+                fig.savefig(os.path.join(clyfar_fig_root,fname))
 
             # TODO - the heatmaps could be normalised by baserate...
             # Could also hatch necessity etc
