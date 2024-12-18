@@ -491,17 +491,19 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
     init_dt_dict = utils.get_valid_forecast_init(force_init_dt=dt)
 
     if do_gefs:
+        print("Downloading GEFS data for", init_dt_dict['naive'])
         # Execute parallel workflow
         results = parallel_forecast_workflow(
                         init_dt_dict['naive'], masks, member_names, ncpus=ncpus,
                         testing=testing)
 
         if save:
-            # Save raw time series of GEFS forecasts to disc (not daily values)
+            print("Saving GEFS data for", init_dt_dict['naive'])
             for variable, dfs in results.items():
                 save_forecast_data(dfs, variable, init_dt_dict)
 
         if visualise:
+            print("Visualizing GEFS data for", init_dt_dict['naive'])
             # Generate visualization suite
             visualize_results(results, init_dt_dict)
 
@@ -510,9 +512,10 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
     # Run Clyfar here - GEFS time series already exists if everything went well
     # Go member by member to compute Clyfar
     if do_clyfar:
+        print("Running Clyfar for", init_dt_dict['naive'])
 
         ############################
-        # TODO 1Create daily values
+        # TODO Create daily values
         ############################
 
         clyfar_df_dict = {}
@@ -528,10 +531,10 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
             # utils.try_create(os.path.dirname(data_fpath))
             # clyfar_df.to_parquet(data_fpath)
 
-        pass
+        print("Clyfar inference complete for", init_dt_dict['naive'])
 
         if visualise:
-
+            print("Visualizing Clyfar data for", init_dt_dict['naive'])
             for clyfar_member in clyfar_df_dict.keys():
                 fig, ax = plot_percentile_meteogram(
                                 clyfar_df_dict[clyfar_member],
@@ -560,6 +563,7 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
 
 
     pass
+    print("Forecast workflow complete for", init_dt_dict['naive'])
     return
 
 if __name__ == "__main__":
