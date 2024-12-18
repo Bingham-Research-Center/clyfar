@@ -82,100 +82,73 @@ class FIS:
                          self.mfs[variable][category])
 
     @staticmethod
-    def clip_activate(distr: np.ndarray, activation: float) -> np.ndarray:
-        """
-        Clips a possibility distribution at given activation level.
+    def alpha_cut(mf: np.ndarray, alpha: float) -> np.ndarray:
+        """Clips a membership function at given activation level.
 
         Args:
-            distr: Possibility distribution (values in [0,1])
-            activation: Alpha-cut level (in [0,1])
+            mf: Membership function (values in [0,1])
+            alpha: Activation level (in [0,1])
         Returns:
-            Clipped distribution
+            Clipped membership function
         """
-        return np.minimum(distr, activation)
+        if alpha is None:
+            return np.full_like(mf, 0.0)
+        return np.fmin(mf, alpha)
 
-
-    def add_mf(self, variable, category, mf):
+    def add_mf(self, variable: str, category: str, mf: np.ndarray) -> None:
         """Add a membership function to the FIS.
 
         Args:
-            variable (str): The variable to add the membership function to.
-            category (str): The category of the variable.
-            mf (np.array): The membership function to add.
+            variable: The variable to add the membership function to
+            category: The category of the variable
+            mf: The membership function to add
         """
         self.mfs[variable][category] = mf
-        return
+
+    def clipped_mfs_from_dict(self, vrbl, activations: dict):
+        acts = []
+        mfs = []
+        for cat in self.mfs[vrbl].keys():
+            mf = self.mfs[vrbl][cat]
+            act = activations.loc[cat].squeeze()
+            mfs.append(mf)
+            acts.append(act)
+        clipped_mf = self.compute_clipped_mfs(mfs, acts)
+        return clipped_mf
 
     @staticmethod
-    def alpha_cut(membership_function: np.ndarray, alpha: float) -> np.ndarray:
-        """Implements α-cut operation with NaN-safe behavior for robust inference.
-        Particularly suitable for systems where missing values may be encountered.
+    def compute_clipped_mfs(mfs: list[np.ndarray], activations: list[float]) -> list[np.ndarray]:
+        """Compute clipped membership functions for each MF-activation pair.
 
-        This is an activation computation over the x-axis (uod).
+        Args:
+            mfs: List of membership functions
+            activations: List of activation levels
+        Returns:
+            List of clipped membership functions
         """
-        if alpha is None:
-            return np.full_like(membership_function, 0.0)
-        return np.fmin(membership_function, alpha)
+        return [np.fmin(mf, activation) for mf, activation in zip(mfs, activations)]
 
     @staticmethod
-    def aggregate_activations(*acts):
-        return np.fmax(*acts)
+    def aggregate_maximal(*distributions: np.ndarray) -> np.ndarray:
+        """Aggregates distributions using maximum operator.
+
+        Args:
+            distributions: Arrays to aggregate
+        Returns:
+            Maximum across all distributions
+        """
+        return np.fmax.reduce(distributions)
 
     @staticmethod
-    def joining_activations(*memberships: np.ndarray) -> np.ndarray:
-        return np.fmin.reduce(memberships)
+    def combine_minimal(*distributions: np.ndarray) -> np.ndarray:
+        """Combines distributions using minimum operator.
 
-    @staticmethod
-    def compute_union(*arrs):
-        return np.maximum.reduce(*arrs)
-
-    @staticmethod
-    def compute_intersection(*arrs):
-        return np.minimum.reduce(*arrs)
-
-    @staticmethod
-    def aggregate_maximal_possibilities(
-            *distributions: np.ndarray,
-            sequential: bool = False
-    ) -> np.ndarray:
-        """Aggregates possibility distributions using maximum operator."""
-        return (np.fmax.reduce(distributions) if sequential
-                else np.fmax(*distributions))
-
-    @staticmethod
-    def combine_possibility_measures(
-            *distributions: np.ndarray,
-            sequential: bool = True
-    ) -> np.ndarray:
-        """Combines possibility distributions using minimum operator, implementing
-        conjunctive fusion. Essential for scenarios requiring simultaneous
-        satisfaction of multiple possibility constraints."""
-        return (np.fmin.reduce(distributions) if sequential
-                else np.fmin(*distributions))
-
-
-    @staticmethod
-    def compute_crisp_union(
-            *sets: np.ndarray,
-            sequential: bool = True
-    ) -> np.ndarray:
-        """Performs union operation on crisp sets using maximum, without NaN handling.
-        Applicable in classical set operations where NaN handling is not a concern."""
-        return (np.maximum.reduce(sets) if sequential
-                else np.maximum(*sets))
-
-
-    @staticmethod
-    def compute_crisp_intersection(
-            *sets: np.ndarray,
-            sequential: bool = True
-    ) -> np.ndarray:
-        """Performs intersection operation on crisp sets using minimum, without NaN
-        handling. Suitable for classical set operations where computational efficiency
-        is prioritized over NaN handling."""
-        return (np.minimum.reduce(sets) if sequential
-                else np.minimum(*sets))
-
+        Args:
+            distributions: Arrays to combine
+        Returns:
+            Minimum across all distributions
+        """
+        return np.fmin.reduce(distributions)
 
     @staticmethod
     def defuzzify_percentiles(x_uod, y_agg, percentiles=None,
@@ -187,21 +160,34 @@ class FIS:
         """
         if percentiles is None:
             percentiles = [10, 50, 90]
-        total_area = np.trapezoid(y_agg, x_uod)
-        cumulative_area = np.cumsum((y_agg[:-1] + y_agg[1:]) / 2 * np.diff(x_uod))
-        if total_area == 0:
-            # Avoid div. by zero error
-            return {p: np.nan for p in percentiles}
-        cumulative_area_normalized = cumulative_area / total_area
 
-        percentile_results = {}
-        for p in percentiles:
-            idx = np.where(cumulative_area_normalized >= p / 100.0)[0]
-            if idx.size > 0:
-                percentile_results[p] = x_uod[idx[0]]
-            else:
-                # percentile_results[f'{p}th percentile'] = x_uod[-1]
-                percentile_results[p] = x_uod[-1]
+        method = 2
+
+        if method == 1:
+            total_area = np.trapezoid(y_agg, x_uod)
+            cumulative_area = np.cumsum((y_agg[:-1] + y_agg[1:]) / 2 * np.diff(x_uod))
+            if total_area == 0:
+                # Avoid div. by zero error
+                return {p: np.nan for p in percentiles}
+            cumulative_area_normalized = cumulative_area / total_area
+
+            percentile_results = {}
+            for p in percentiles:
+                idx = np.where(cumulative_area_normalized >= p / 100.0)[0]
+                if idx.size > 0:
+                    percentile_results[p] = x_uod[idx[0]]
+                else:
+                    # percentile_results[f'{p}th percentile'] = x_uod[-1]
+                    percentile_results[p] = x_uod[-1]
+
+        elif method == 2:
+            percentile_results = {}
+            for p in percentiles:
+                val_x = FIS.find_percentile_by_area(x_uod, y_agg, p/100)
+                percentile_results[p] = val_x
+
+        else:
+            raise ValueError("Invalid method")
 
         if print_percentiles:
             print("Percentiles:")
@@ -275,127 +261,92 @@ class FIS:
         self.df.update(inputs)
 
     @staticmethod
-    def create_trapz(x_uod: np.ndarray, m_left: float, c_left: float,
-                            c_right: float, m_right: float,
-                            h_max: float = 1.0,
-                            h_min: float = 0.0) -> np.ndarray:
-        """Generates a generalized trapezoidal membership function with variable height
-        boundaries.
-
-        This implementation supports both standard and inverted trapezoidal shapes through
-        specification of minimum and maximum height parameters. The function accommodates
-        asymmetrical trapezoids through independent specification of left and right core
-        distances.
-
-        Terminology Note:
-        In fuzzy set literature, there exists a terminological variance between American
-        English ("trapezoid") and British English ("trapezium"). This implementation uses
-        "trapezoidal" as it is most common in international fuzzy set literature,
-        particularly in possibility theory (cf. Dubois and Prade, 1988).
-
-        Mathematical formulation:
-        Let x be the input variable. The membership function μ(x) is defined as:
-
-        μ(x) = h_min                                                  for x < m_left - c_left
-        μ(x) = h_min + (h_max - h_min)(x - (m_left - c_left))/c_left
-                                                          for m_left - c_left ≤ x < m_left
-        μ(x) = h_max                                     for m_left ≤ x ≤ m_right
-        μ(x) = h_max - (h_max - h_min)(x - m_right)/c_right
-                                                    for m_right < x ≤ m_right + c_right
-        μ(x) = h_min                                    for x > m_right + c_right
+    def create_trapz(x_uod: np.ndarray, s_left: float, c_left: float,
+                     c_right: float, s_right: float,
+                     h_max: float = 1.0,
+                     h_min: float = 0.0) -> np.ndarray:
+        """Creates an asymmetric trapezoidal membership function.
 
         Args:
-            x_uod (np.ndarray): Universe of discourse (x-axis values).
-            m_left (float): Left modal value (start of core).
-            m_right (float): Right modal value (end of core).
-            c_left (float): Left core distance (spread from m_left to left boundary).
-            c_right (float): Right core distance (spread from m_right to right boundary).
-            h_max (float): Maximum membership value, constrained to [0,1].
-                It's most common to have the trapezoid peak at 1.0.
-            h_min (float, optional): Minimum membership value. Defaults to 0.0.
+            x_uod: Universe of discourse (x-axis points)
+            s_left: Leftmost point of support (where membership begins to rise from h_min)
+            c_left: Left point of core (where membership reaches h_max)
+            c_right: Right point of core (where membership begins to decrease from h_max)
+            s_right: Rightmost point of support (where membership returns to h_min)
+            h_max: Maximum height of membership function (default: 1.0)
+            h_min: Minimum height of membership function (default: 0.0)
 
         Returns:
-            np.ndarray: Membership values μ(x) for the given universe of discourse.
+            np.ndarray: Membership function values over x_uod
+
+        Note:
+            The function creates a trapezoid with these key regions:
+            - Support: Region where membership > h_min, bounded by [s_left, s_right]
+            - Core: Region of maximum membership (h_max), bounded by [c_left, c_right]
+            - Left slope: Linear increase from s_left to c_left
+            - Right slope: Linear decrease from c_right to s_right
         """
-        # Initialize output array with h_min values
+        # Initialize output array with minimum height
         y = np.full_like(x_uod, h_min, dtype=float)
 
-        # Define key x-axis points
-        x_left_boundary = m_left - c_left
-        x_right_boundary = m_right + c_right
-
-        # Core region (flat top)
-        core_mask = (x_uod >= m_left) & (x_uod <= m_right)
+        # Core region (maximum membership)
+        core_mask = (x_uod >= c_left) & (x_uod <= c_right)
         y[core_mask] = h_max
 
         # Left slope region
-        left_mask = (x_uod >= x_left_boundary) & (x_uod < m_left)
+        left_mask = (x_uod >= s_left) & (x_uod < c_left)
         y[left_mask] = h_min + (h_max - h_min) * (
-                x_uod[left_mask] - x_left_boundary) / c_left
+                x_uod[left_mask] - s_left) / (c_left - s_left)
 
         # Right slope region
-        right_mask = (x_uod > m_right) & (x_uod <= x_right_boundary)
+        right_mask = (x_uod > c_right) & (x_uod <= s_right)
         y[right_mask] = h_max - (h_max - h_min) * (
-                x_uod[right_mask] - m_right) / c_right
+                x_uod[right_mask] - c_right) / (s_right - c_right)
 
         return y
 
 
     @staticmethod
     def create_piecewise_linear_sigmoid(x_uod: np.ndarray, h_left: float,
-                                            m_left: float, m_right: float,
-                                            h_right: float) -> np.ndarray:
-        """Constructs a piecewise linear approximation of a sigmoid membership function.
-
-        This function implements a trapezoidal-based approximation of a sigmoid curve
-        characterized by two critical points (m_left, m_right) that define the transition
-        region, and two height parameters (h_left, h_right) that specify the membership
-        degrees at these points. The monotonicity of the sigmoid (increasing or decreasing)
-        is determined by the relationship between h_left and h_right.
-
-        Mathematical formulation:
-        Let width = m_right - m_left and delta_h = h_right - h_left
-
-        When h_right > h_left (increasing):
-            mu(x) = h_left                                    for x < m_left
-            mu(x) = h_left + delta_h * (x - m_left)/width    for m_left ≤ x ≤ m_right
-            mu(x) = h_right                                  for x > m_right
-
-        When h_right < h_left (decreasing):
-            mu(x) = h_left                                   for x < m_left
-            mu(x) = h_left + delta_h * (x - m_left)/width    for m_left ≤ x ≤ m_right
-            mu(x) = h_right                                  for x > m_right
+                                        m_left: float, m_right: float,
+                                        h_right: float) -> np.ndarray:
+        """Creates a piecewise linear sigmoid (monotonic) membership function.
 
         Args:
-            x_uod (np.ndarray): Universe of discourse (x-axis values).
-            m_left (float): Left modal point on x-axis marking transition onset.
-            m_right (float): Right modal point marking transition completion.
-            h_left (float): Membership degree at the left modal point (m_left).
-            h_right (float): Membership degree at the right modal point (m_right).
+            x_uod: Universe of discourse points
+            h_left: Height at left inflection point (start of transition)
+            m_left: Left inflection point on x-axis
+            m_right: Right inflection point on x-axis
+            h_right: Height at right inflection point (end of transition)
 
         Returns:
-            np.ndarray: Membership values mu(x) for the given universe of discourse.
+            Membership values over x_uod
+
+        Note:
+            Creates a monotonic function with three regions:
+            - Left region: Constant h_left for x < m_left
+            - Middle region: Linear transition from h_left to h_right between m_left and m_right
+            - Right region: Constant h_right for x > m_right
 
         Raises:
-            ValueError: If m_right <= m_left, violating the monotonicity requirement.
-            ValueError: If h_right == h_left, indicating a degenerate case.
+            ValueError: If m_right <= m_left or h_right == h_left
         """
         if m_right <= m_left:
-            raise ValueError("Right modal point must be strictly greater than left modal point")
+            raise ValueError("Right point must be greater than left point")
         if h_right == h_left:
-            raise ValueError("Terminal membership degrees must differ to define a transition")
+            raise ValueError("Heights must differ to create transition")
 
         width = m_right - m_left
         delta_h = h_right - h_left
 
-        # Initialize with the left boundary value
+        # Initialize with left height
         y = np.full_like(x_uod, h_left, dtype=float)
 
-        # Compute transition region using a unified formula
+        # Linear transition region
         mask = (x_uod >= m_left) & (x_uod <= m_right)
         y[mask] = h_left + delta_h * (x_uod[mask] - m_left) / width
 
-        # Set terminal region
+        # Right region
         y[x_uod > m_right] = h_right
 
         return y
@@ -531,6 +482,8 @@ class FIS:
             clipped_mf = self.alpha_cut(
                         self.mfs['ozone'][ozone_cat], activation)
             y_list.append(clipped_mf)
+
+        # We are missing the information of x-axis locations of these y values.
 
         y_agg = np.maximum.reduce(y_list)
         return y_agg

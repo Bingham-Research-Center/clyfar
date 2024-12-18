@@ -122,7 +122,7 @@ class Clyfar(FIS):
         self.mslp_uod = np.arange(99500, 105010, 50)  # MSLP in Pa
         self.wind_uod = np.arange(0, 15.1, 0.25)    # Wind in m/s
         self.solar_uod = np.arange(100, 805, 5)     # Solar in W/m²
-        self.ozone_uod = np.arange(20, 141, 1)      # Ozone in ppb
+        self.ozone_uod = np.arange(20, 140.1, 0.5)      # Ozone in ppb
 
         # Also hold in self.universes in format {variable: uod}
         self.universes = {
@@ -173,7 +173,7 @@ class Clyfar(FIS):
         return df
 
     def compute_ozone(self, snow_val, mslp_val, wind_val, solar_val,
-                            percentiles: Sequence[int|float]) -> dict:
+                            percentiles: Sequence[int|float]):
         """
         Computes the ozone level based on input parameters.
 
@@ -201,8 +201,21 @@ class Clyfar(FIS):
             self.simulation, self.ozone,
             ozone_cats.keys(), normalize=False)
 
+        # Computing percentiles from aggregated distribution
+        # y_agg = self.compute_aggregated_distr(poss_df, self.ozone)
 
-        y_agg = self.compute_aggregated_distr(poss_df, self.ozone)
+        # Clip all MFs at their activation levels
+        # mfs is a list of all membership functions!
+        # activations is the value from possibility df
+        clipped = self.clipped_mfs_from_dict("ozone", poss_df)
+
+        # Aggregate across all categories
+        y_agg = self.aggregate_maximal(*clipped)
+
+        # fig,ax = plt.subplots(1)
+        # ax.plot(self.ozone.universe, y_agg)
+        # fig.show()
+
         pc_dict = self.defuzzify_percentiles(self.ozone.universe, y_agg,
                                              percentiles=percentiles)
         pass
@@ -213,7 +226,9 @@ class Clyfar(FIS):
         # self.df.at[0, 'ozone_50pc'] = pc_dict[50]
         # self.df.at[0, 'ozone_90pc'] = pc_dict[90]
 
-        return pc_dict
+        # TODO - return other things like possibilities?
+
+        return pc_dict, poss_df
 
     def _define_membership_functions(self):
         """Defines all membership functions for the fuzzy variables.
@@ -226,9 +241,9 @@ class Clyfar(FIS):
 
         # Wind Membership Functions
         self.wind['calm'] = self.create_piecewise_linear_sigmoid(
-                    self.wind_uod, 1, 1.5, 3.5, 0)
+                    self.wind_uod, 1, 2.0, 4.0, 0)
         self.wind['breezy'] = self.create_piecewise_linear_sigmoid(
-                    self.wind_uod, 0, 1.5, 3.5, 1)
+                    self.wind_uod, 0, 2.0, 4.0, 1)
 
         # MSLP Membership Functions
         self.mslp['low'] = self.create_piecewise_linear_sigmoid(
@@ -248,13 +263,13 @@ class Clyfar(FIS):
 
         # Ozone Membership Functions
         self.ozone['background'] = self.create_trapz(
-                    self.ozone_uod, 25, 40, 50, 60)
+                    self.ozone_uod, 20, 30, 40, 50)
         self.ozone['moderate'] = self.create_trapz(
                     self.ozone_uod, 40, 50, 60, 70)
         self.ozone['elevated'] = self.create_trapz(
                     self.ozone_uod, 50, 60, 75, 90)
         self.ozone['extreme'] = self.create_trapz(
-                    self.ozone_uod, 0, 75, 90, 125)
+                    self.ozone_uod, 60, 75, 90, 125)
 
         # Put these in a dictionary as another way to access.
         mfs = {
