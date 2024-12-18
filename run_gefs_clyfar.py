@@ -37,7 +37,7 @@ from preprocessing.representative_nwp_values import (
     do_nwpval_snow, do_nwpval_mslp,
 )
 from utils import utils
-from utils.geog_funcs import save_elevations_for_resolutions
+from utils.geog_funcs import get_elevations_for_resolutions
 from utils.lookups import Lookup
 from utils.utils import configurable_timer
 from viz.plotting import plot_meteogram
@@ -64,7 +64,7 @@ def initialize_geography(latlons):
     masks = {}
 
     for res in ['0p25', '0p5']:
-        elev_df[res] = save_elevations_for_resolutions(latlons, res, fdir='data')
+        elev_df[res] = get_elevations_for_resolutions(latlons, res, fdir='data')
         masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
 
     return elev_df, masks

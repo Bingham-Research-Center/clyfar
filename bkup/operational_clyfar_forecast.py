@@ -24,7 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 
-from utils.geog_funcs import elevation_from_latlon, save_elevations_for_resolutions
+from utils.geog_funcs import elevation_from_latlon, get_elevations_for_resolutions
 from utils.lookups import (
     elevations, snow_stids, wind_stids, solar_stids,
     mslp_stids, ozone_stids, Lookup
@@ -94,7 +94,7 @@ def initialize_geography(latlons):
     masks = {}
 
     for res in ['0p25', '0p5']:
-        elev_df[res] = save_elevations_for_resolutions(latlons, res, fdir='data')
+        elev_df[res] = get_elevations_for_resolutions(latlons, res, fdir='data')
         masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
 
     return elev_df, masks

@@ -31,7 +31,7 @@ ozone_stids = ["QV4", "QRS"]
 GEOGRAPHIC_CONSTANTS = {
     'extent': [-110.9, -108.2, 41.3, 39.2],
     'ouray': {'lat': 40.0891, 'lon': -109.6774},
-    'elevation_threshold': 2000,
+    'elevation_threshold': 1900,
 }
 
 # Forecast configuration

@@ -32,7 +32,7 @@ def elevation_from_latlon(lats, lons):
     df['elevation_m'] = elevations
     return df
 
-def save_elevations_for_resolutions(latlons, deg_res, fdir='data'):
+def get_elevations_for_resolutions(latlons, deg_res, fdir='data'):
     """
     Compute elevations for given lat/lon pairs and save to specified location.
 
