@@ -42,8 +42,8 @@ from utils.lookups import Lookup
 from utils.utils import configurable_timer
 from viz.plotting import plot_meteogram
 from fis.v1p0 import Clyfar
-from viz.possibility_funcs import plot_percentile_meteogram, \
-    plot_possibility_bars
+from viz.possibility_funcs import (plot_percentile_meteogram,
+    plot_possibility_bar_timeseries, plot_ozone_heatmap)
 
 ######### SETTINGS ##########
 
@@ -441,7 +441,7 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
             # Too annoying with too little return to check in the parallel
             # processing whether the file exists or not, so manually toggle
             # that section.
-            do_gefs=False):
+            do_gefs=True):
     """Execute parallel operational forecast workflow.
 
     Note:
@@ -526,13 +526,27 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
             # utils.try_create(os.path.dirname(data_fpath))
             # clyfar_df.to_parquet(data_fpath)
 
+        pass
+
         if visualise:
-            # clyfar_member = "clyfar001"
-            # fig,axes = plt.subplots(ncols=2, figsize=(12, 6))
+
             for clyfar_member in clyfar_df_dict.keys():
                 fig, ax = plot_percentile_meteogram(
                                 clyfar_df_dict[clyfar_member],
                                 )
+
+            # for clyfar_member in clyfar_df_dict.keys():
+            #     fig, ax = plot_possibility_bar_timeseries(
+            #                     clyfar_df_dict[clyfar_member],
+            #                     )
+
+            for clyfar_member in clyfar_df_dict.keys():
+                fig, ax = plot_ozone_heatmap(
+                                clyfar_df_dict[clyfar_member],
+                                )
+
+            # TODO - the heatmaps could be normalised by baserate...
+            # Could also hatch necessity etc
             pass
 
 
@@ -561,11 +575,16 @@ if __name__ == "__main__":
     parser.add_argument(
         '-t', '--testing', action='store_true',
         help='Enable testing mode')
-
-    # TODO - implement argparse to toggle on/off clyfar and/or gefs blocks
+    parser.add_argument(
+        '--no-clyfar', action='store_true',
+        help='Disable Clyfar processing')
+    parser.add_argument(
+        '--no-gefs', action='store_true',
+        help='Disable GEFS processing')
 
     args = parser.parse_args()
     # Leave maxhr for now - not implemented
-    main(dt = args.inittime, ncpus = args.ncpus, nmembers = args.nmembers,
-                visualise=True, save=True,
-                verbose=args.verbose, testing=args.testing)
+    main(dt=args.inittime, ncpus=args.ncpus, nmembers=args.nmembers,
+         visualise=True, save=True,
+         verbose=args.verbose, testing=args.testing,
+         do_clyfar=not args.no_clyfar, do_gefs=not args.no_gefs)

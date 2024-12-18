@@ -513,8 +513,8 @@ def add_forecast_hour_axis(ax, df_dict):
 
     # Label this transition with a text annotation "10 days: coarser resolution"
     day10_note = "    10 days: coarser resolution hereon.   "
-    ax.text(forecast_transition[0], 0.035, day10_note,
-                transform=ax.get_xaxis_transform(), ha='left', va='top',
+    ax.text(forecast_transition[0], 1-0.035, day10_note,
+                transform=ax.get_xaxis_transform(), ha='left', va="center",
                 fontsize=8, color='darkgray')# pad=1)
 
     secax = ax.secondary_xaxis('top')

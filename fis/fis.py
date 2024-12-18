@@ -105,12 +105,15 @@ class FIS:
         """
         self.mfs[variable][category] = mf
 
-    def clipped_mfs_from_dict(self, vrbl, activations: dict):
+    def clipped_mfs_from_dict(self, vrbl, activation_df: pd.DataFrame
+                                ) -> list[np.ndarray]:
         acts = []
         mfs = []
         for cat in self.mfs[vrbl].keys():
             mf = self.mfs[vrbl][cat]
-            act = activations.loc[cat].squeeze()
+            # This can't be None - find the source
+            act = activation_df.loc[cat]['possibility']
+            act = 0.0 if not isinstance(act, float) else act
             mfs.append(mf)
             acts.append(act)
         clipped_mf = self.compute_clipped_mfs(mfs, acts)

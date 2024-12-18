@@ -4,35 +4,166 @@
 import os
 
 import numpy as np
-import matplotlib as M
+import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import matplotlib.colors as mcolors
+
 
 def plot_possibility_heatmap(possibility_df):
     pass
 
-def plot_possibility_timeseries(df, fig=None, ax=None):
-    """The rows/index is timestamp, and columns are the categories.
+def plot_possibility_bar_timeseries(df):
+    """For time series dataframe, plot possibilities as bars.
+
+    The format of the data frame has rows as dates (index is time stamp),
+    columns has values like weather variables, possibilities etc.
     """
-    if fig is None:
-        fig, ax = plt.subplots(figsize=(10, 5))
-    # For each row, we want bars of different colours as x-axis locations
-    # for each category, with the height of the bar being the possibility
-    raise NotImplementedError
-    return
+    # Create the figure and the first axis
+    fig, ax1 = plt.subplots(figsize=(10, 6), dpi=300)
 
-def plot_possibility_bars(possibility_df):
-    """Plot the possibility distribution as a bar chart.
+    # Plot the forecast and observed ozone concentration on the first axis
+    ax1.plot(df['ozone_10pc'], label='10pc')
+    ax1.plot(df['ozone_50pc'], label='50pc')
+    ax1.plot(df['ozone_90pc'], label='90pc')
 
-    The dataframe should have column names as the category (e.g., 'elevated') and the row has value $[0--1]$.
+    # Add horizontal lines for NAAQS limit and typical background
+    ax1.axhline(y=70, color='magenta', linestyle=':', linewidth=1.5, label='NAAQS for Ozone', zorder=2)
+    ax1.axhline(y=40, color='k', linestyle=':', linewidth=1.5, label='Typical Background', zorder=2)
 
-    Args:
-        possibility_df (pd.DataFrame): The possibility distribution as a DataFrame.
+    # Set the first axis labels and limits
+    ax1.set_ylabel('Ozone Concentration (ppb)', fontsize=10)
+    ax1.set_xlabel('Date of year', fontsize=10)
+    # ax1.set_ylim(28, 75)
+    # ax1.legend(loc='center left', fontsize=10)
 
+    # Create the second y-axis and plot the bars
+    ax2 = ax1.twinx()
+    ax2.bar(df.index, df['extreme'], color='red', alpha=0.99, label='Possibility of Extreme Ozone', zorder=4)
+    ax2.bar(df.index, df['elevated'], color='green', alpha=0.45, label='Possibility of Elevated Ozone', zorder=3)
+    ax2.bar(df.index, df['moderate'], color='orange', alpha=0.3, label='Possibility of Moderate Ozone', zorder=2)
+    ax2.bar(df.index, df['background'], color='blue', alpha=0.2, label='Possibility of Background Ozone', zorder=1)
+
+    # Set the second axis labels and limits
+    ax2.set_ylabel('Membership', fontsize=10)
+    ax2.set_ylim(0, 1)
+
+    # Add thick black lines with solid arrows for specific dates
+    # dates = ['2022-02-27', '2022-01-02', '2021-12-14']
+    # date_labels = ['27 Feb', '2 Jan', '14 Dec']
+    # for date, label in zip(dates, date_labels):
+    #     date_timestamp = pd.Timestamp(date)
+    #     ax1.annotate('', xy=(date_timestamp, 70), xytext=(date_timestamp, 75),
+    #                  arrowprops=dict(facecolor='black', shrink=0.05, width=5, headwidth=10))
+    #     ax1.text(date_timestamp, 75.5, label, ha='center', fontsize=10)
+
+    # Add legends for both axes
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines + lines2, labels + labels2, loc='upper center', fontsize=10, facecolor='white')
+
+    # Set x-axis labels as "XX mmm YY"
+    # XX is the day, mmm is the 3-letter abbreviated months, and YY is the last two digits of year
+    # Set x-axis labels as "XX mmm YY" with appropriate spacing
+    ax1.xaxis.set_major_locator(mdates.MonthLocator())
+    # ax1.xaxis.set_minor_locator(mdates.DayLocator(bymonthday=(1, 15)))
+    ax1.xaxis.set_minor_locator(mdates.DayLocator(bymonthday=range(1, 34, 7)))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%d %b %y'))
+
+    # Rotate the x-axis labels for better readability
+    plt.setp(ax1.get_xticklabels(), rotation=45, ha='right', fontsize=10)
+
+    plt.grid(False, which='both')
+
+    # Display the plot
+    plt.show()
+
+    return fig, (ax1, ax2)
+
+def plot_ozone_heatmap(df):
+    """For time series dataframe, plot ozone categories as a heatmap.
+
+    The format of the data frame has rows as dates (index is time stamp),
+    columns containing the possibility values for each category.
+    Categories are plotted from bottom to top: background, moderate, elevated, extreme,
+    each with its own colorblind-friendly color.
     """
-    fig, ax = plt.subplots()
-    ax.bar(possibility_df.columns, possibility_df.values[0])
-    ax.set_ylabel('Possibility')
-    ax.set_xlabel('Category')
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 3), dpi=300)
+
+    # Define colorblind-friendly colors for each category
+    category_colors = {
+        'background': '#2b8cbe',  # Blue
+        'moderate': '#f16913',    # Orange
+        'elevated': '#fec44f',    # Yellow
+        # 'extreme': '#de2d26'      # Red
+        'extreme': '#6a0dad',      # Purple
+    }
+
+    categories = ['background', 'moderate', 'elevated', 'extreme']
+
+    # Create a 2D array where rows are categories and columns are timestamps
+    heatmap_data = np.array([df[cat].values for cat in categories])
+
+    # Create meshgrid for plotting
+    x = np.arange(len(df.index))
+    y = np.arange(len(categories))
+    X, Y = np.meshgrid(x, y)
+
+    # Create a custom colormap for each category
+    for i, category in enumerate(categories):
+        mask = np.zeros_like(heatmap_data, dtype=bool)
+        mask[i, :] = True
+
+        # Plot each row with its own color
+        im = ax.pcolormesh(X, Y,
+                           np.where(mask, heatmap_data, np.nan),
+                           cmap=mcolors.LinearSegmentedColormap.from_list('',
+                                                                          ['white', category_colors[category]]),
+                           vmin=0, vmax=1,
+                           shading='auto')
+
+    # Customize axes
+    # ax.set_yticks(np.arange(len(categories)))
+    # ax.set_yticklabels(categories)
+
+    # Set x-axis ticks and labels
+    tick_locations = np.arange(0, len(df.index), len(df.index)//8)
+    ax.set_xticks(tick_locations)
+    ax.set_xticklabels([df.index[i].strftime('%d %b %y') for i in tick_locations],
+                       rotation=45, ha='right')
+
+    # Add colorbar
+    # cbar = plt.colorbar(im)
+    # cbar.set_label('Possibility Value', rotation=270, labelpad=15)
+
+    # Labels and title
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Ozone Categories')
+    plt.title('Ozone Category Possibilities Over Time')
+
+    ax.grid(True, which='major', axis='y', linestyle='-',
+                    color='grey', alpha=0.3, linewidth=0.5)
+    ax.set_axisbelow(False)  # Make grid appear above the heatmap
+    ax.set_yticks(np.arange(len(categories) + 1) - 0.5)  # Grid lines between categories
+    ax.set_yticks(np.arange(len(categories)), minor=True)  # Category labels in center
+    ax.set_yticklabels(categories, minor=True)  # Put labels on minor ticks
+    ax.set_yticklabels([], minor=False)  # Hide major tick labels
+    ax.tick_params(axis='y', which='both', length=0)  # Hide y-axis ticks
+
+
+    # Add faint vertical grey line for 10 days (240 hours) into the forecast
+    xpos = int(240/3)
+    ax.axvline(x=xpos, color='grey', linestyle='--', alpha=0.6)
+    # Annotate at the top of the axis to the right of 10 days with note
+    ax.text(xpos, len(category_colors.keys()),
+                    "10 days: coarser resolution hereon.", ha='left',
+                    va='top', fontsize=8, color='darkgray')
+
+    # Adjust layout
+    plt.tight_layout()
+
+    fig.show()
 
     return fig, ax
 
