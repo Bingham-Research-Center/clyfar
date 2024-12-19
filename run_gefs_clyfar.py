@@ -501,6 +501,7 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
         results = parallel_forecast_workflow(
                         init_dt_dict['naive'], masks, member_names, ncpus=ncpus,
                         testing=testing)
+        print(results)
 
         if save:
             print("Saving GEFS data for", init_dt_dict['naive'])
