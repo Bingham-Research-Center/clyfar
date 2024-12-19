@@ -82,9 +82,12 @@ def create_meteogram_fname(inittime, loc, vrbl, model):
     return fname
 
 def try_create(fpath):
-    if not os.path.exists(fpath):
-        os.makedirs(fpath, exist_ok=True)
-        print("Creating directory", fpath)
+    try:
+        if not os.path.exists(fpath):
+            os.makedirs(fpath, exist_ok=True)
+            print("Creating directory", fpath)
+    except OSError as e:
+        print(f"Error creating directory {fpath}: {e}")
     return
 
 def create_nwp_title(description, model, init_time, valid_time):
