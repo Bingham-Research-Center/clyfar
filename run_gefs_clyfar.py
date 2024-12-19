@@ -17,8 +17,7 @@ JRL: Disclosure. This is one script that Claude 3.5 LLM did heavy-lifting for.
 """
 import argparse
 import multiprocessing as mp
-import multiprocessing
-multiprocessing.set_start_method('spawn', force=True)
+mp.set_start_method('spawn', force=True)
 from multiprocessing import Pool
 import os
 from typing import Dict, List, Tuple
