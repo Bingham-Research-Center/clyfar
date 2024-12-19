@@ -218,7 +218,11 @@ class ParallelEnsembleProcessor:
         if variable not in processor_map:
             raise ValueError(f"Unsupported variable: {variable}")
 
-        with Pool(processes=self.process_count) as pool:
+        ctx = mp.get_context('spawn')
+        # pool = ctx.Pool(processes=4)
+
+        with ctx.Pool(processes=self.process_count) as pool:
+        # with Pool(processes=self.process_count) as pool:
             results = pool.map(processor_map[variable], member_names)
 
         return dict(results)
