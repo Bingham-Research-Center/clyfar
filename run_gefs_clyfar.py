@@ -17,9 +17,8 @@ JRL: Disclosure. This is one script that Claude 3.5 LLM did heavy-lifting for.
 """
 import argparse
 import multiprocessing as mp
-mp.set_start_method('spawn', force=True)
+# mp.set_start_method('spawn', force=True)
 print("Current start method:", mp.get_start_method())
-# from multiprocessing import Pool
 import os
 from typing import Dict, List, Tuple
 import logging
@@ -219,11 +218,11 @@ class ParallelEnsembleProcessor:
         if variable not in processor_map:
             raise ValueError(f"Unsupported variable: {variable}")
 
-        ctx = mp.get_context('spawn')
+        # ctx = mp.get_context('spawn')
         # pool = ctx.Pool(processes=4)
 
-        with ctx.Pool(processes=self.process_count) as pool:
-        # with Pool(processes=self.process_count) as pool:
+        # with ctx.Pool(processes=self.process_count) as pool:
+        with mp.Pool(processes=self.process_count) as pool:
             results = pool.map(processor_map[variable], member_names)
 
         return dict(results)
