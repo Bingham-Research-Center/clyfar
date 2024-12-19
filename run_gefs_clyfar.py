@@ -68,7 +68,7 @@ def initialize_geography(latlons):
     masks = {}
 
     for res in ['0p25', '0p5']:
-        elev_df[res] = get_elevations_for_resolutions(latlons, res, fdir='data')
+        elev_df[res] = get_elevations_for_resolutions(latlons, res)
         masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
 
     return elev_df, masks
