@@ -602,4 +602,6 @@ if __name__ == "__main__":
     main(dt=args.inittime, ncpus=args.ncpus, nmembers=args.nmembers,
          visualise=True, save=True,
          verbose=args.verbose, testing=args.testing,
-         do_clyfar=not args.no_clyfar, do_gefs=not args.no_gefs)
+         # do_clyfar=not args.no_clyfar, do_gefs=not args.no_gefs
+         do_clyfar=True, do_gefs=True,
+         )
