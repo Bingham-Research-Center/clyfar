@@ -18,7 +18,8 @@ JRL: Disclosure. This is one script that Claude 3.5 LLM did heavy-lifting for.
 import argparse
 import multiprocessing as mp
 mp.set_start_method('spawn', force=True)
-from multiprocessing import Pool
+print("Current start method:", mp.get_start_method())
+# from multiprocessing import Pool
 import os
 from typing import Dict, List, Tuple
 import logging
