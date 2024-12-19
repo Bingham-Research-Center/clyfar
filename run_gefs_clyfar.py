@@ -226,7 +226,7 @@ class ParallelEnsembleProcessor:
 
 #### END OF CLASS ####
 
-@configurable_timer(log_file="performance_log.txt")
+# @configurable_timer(log_file="performance_log.txt")
 def parallel_forecast_workflow(init_dt: datetime.datetime,
                         masks: Dict,
                         member_names: List[str],
