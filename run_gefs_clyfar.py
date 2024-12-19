@@ -501,7 +501,10 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
         results = parallel_forecast_workflow(
                         init_dt_dict['naive'], masks, member_names, ncpus=ncpus,
                         testing=testing)
-        print(results)
+
+        # Print the variables into the function above for testing/debugging
+        print(f"{init_dt_dict['naive']=}, {masks=}, {member_names=}, "
+                                        f"{ncpus=}, {testing=}")
 
         if save:
             print("Saving GEFS data for", init_dt_dict['naive'])
