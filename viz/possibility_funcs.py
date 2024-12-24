@@ -162,9 +162,6 @@ def plot_ozone_heatmap(df):
 
     # Adjust layout
     plt.tight_layout()
-
-    fig.show()
-
     return fig, ax
 
 def plot_percentile_meteogram(df, fig=None, ax=None,
