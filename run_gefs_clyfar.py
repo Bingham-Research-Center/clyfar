@@ -568,7 +568,7 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
                 fname = utils.create_meteogram_fname(init_dt_dict['naive'],
                                             "UB-heatmap", "ozone", clyfar_member)
                 fig.savefig(os.path.join(clyfar_fig_root,fname))
-                fig.close()
+                plt.close(fig)
 
             # TODO - the heatmaps could be normalised by baserate...
             # Could also hatch necessity etc
@@ -609,7 +609,7 @@ if __name__ == "__main__":
         help='Disable GEFS processing')
 
     args = parser.parse_args()
-    # Leave maxhr for now - not implemented
+    # Leave maxhr for now - not :4implemented
 
     print("Parsed Arguments:")
     print(f"Initialization Time: {args.inittime}")
