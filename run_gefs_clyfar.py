@@ -268,6 +268,7 @@ def create_forecast_fname(variable: str, member: str,
                             init_dt_dict: datetime.datetime) -> str:
     """Create the file path for saving forecast data."""
     dataroot = "./data"
+    utils.try_create(dataroot)
     timestr = init_dt_dict.strftime('%Y%m%d_%H%MZ')
     fpath = os.path.join(dataroot, timestr, f"{timestr}_{variable}_{member}_df.parquet")
     return fpath
@@ -467,7 +468,7 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
         do_clyfar (bool): Whether to run Clyfar. Default is True.
         do_gefs (bool): Whether to download GEFS data. Default is False.
     """
-    #T ODO - can skip GEFS download and run Clyfar on GEFS time series if
+    #TODO - can skip GEFS download and run Clyfar on GEFS time series if
     # it was already saved to disc
     percentiles = [10, 50, 90]
 
@@ -479,6 +480,8 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
 
     # Initialize ensemble members and CPUs for parallelisation
     member_names = [f'p{n:02d}' for n in range(1, nmembers + 1)]
+    print(member_names, nmembers)
+
     if testing:
         member_names = member_names[:10]
         ncpus = 10
