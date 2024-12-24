@@ -610,6 +610,16 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     # Leave maxhr for now - not implemented
+
+    print("Parsed Arguments:")
+    print(f"Initialization Time: {args.inittime}")
+    print(f"Number of CPUs: {args.ncpus}")
+    print(f"Number of Members: {args.nmembers}")
+    print(f"Verbose: {args.verbose}")
+    print(f"Testing: {args.testing}")
+    print(f"Do Clyfar: {not args.no_clyfar}")
+    print(f"Do GEFS: {not args.no_gefs}")
+
     main(dt=args.inittime, ncpus=args.ncpus, nmembers=args.nmembers,
          visualise=True, save=True,
          verbose=args.verbose, testing=args.testing,
