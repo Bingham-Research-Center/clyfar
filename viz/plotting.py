@@ -345,6 +345,11 @@ def plot_meteogram(df_dict, vrbl_col, title=None, fig=None, ax=None,
     elif vrbl_col == "si10":
         # Add second x-axis with wind speed in mph
         ax = add_wind_labels(ax, y_min, y_max)
+    elif vrbl_col == "t2m":
+        ax = add_temperature_labels(ax, y_min, y_max)
+
+    else:
+        pass
 
     # Configure axes labels and title
     ax.set_xlabel("Time")
@@ -493,6 +498,34 @@ def add_wind_labels(ax, y_min, y_max):
         ax.text(0.02, pos, label, transform=ax.get_yaxis_transform(),
                 ha='left', va='top', fontsize=8, color='blue')
     return ax
+
+def add_temperature_labels(ax, y_min, y_max):
+    y_gap = abs(y_max - y_min)
+    # We want to mark round Fahrenheit temperatures on the y-axis for ease
+    temp_c_positions = np.arange(
+        np.floor(y_min),
+        np.ceil(y_max) + 1,
+        1 if y_gap < 5 else 2 if y_gap < 10 else 3 if y_gap < 16 else 5,
+        dtype=int
+    )
+
+    for pos in temp_c_positions:
+        if pos < y_min or pos > y_max:
+            continue
+
+        # TODO - make this more elegant with pint package
+        temp_f = int(round(pos * 9/5 + 32, 0))
+
+        ax.axhline(y=pos, color='blue', linestyle='-', alpha=0.1, zorder=1)
+        label = f"{temp_f} degF"
+        ax.text(0.02, pos, label, transform=ax.get_yaxis_transform(),
+                ha='left', va='top', fontsize=8, color='blue')
+
+    # Add line for freezing
+    ax.axhline(y=0, color='red', linestyle='-.', alpha=0.15, zorder=1)
+
+    return ax
+
 
 def add_forecast_hour_axis(ax, df_dict):
     """Add forecast hour axis with ticks for every forecast row/index date and labels every 12 hours.

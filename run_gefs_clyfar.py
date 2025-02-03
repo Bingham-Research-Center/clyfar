@@ -14,9 +14,13 @@ Key methodological considerations:
 - Inter-process communication architecture
 
 JRL: Disclosure. This is one script that Claude 3.5 LLM did heavy-lifting for.
+TODO - "temp" to become numerous further variables in branch testing v1.1+
 """
 import argparse
 import multiprocessing as mp
+
+from scipy import ndimage
+
 # mp.set_start_method('spawn', force=True)
 print("Current start method:", mp.get_start_method())
 import os
@@ -35,7 +39,7 @@ from fis.v1p0 import (
 )
 from preprocessing.representative_nwp_values import (
     do_nwpval_wind, create_forecast_dataframe, do_nwpval_solar,
-    do_nwpval_snow, do_nwpval_mslp,
+    do_nwpval_snow, do_nwpval_mslp, do_nwpval_temp,
 )
 from utils import utils
 from utils.geog_funcs import get_elevations_for_resolutions
@@ -44,7 +48,8 @@ from utils.utils import configurable_timer
 from viz.plotting import plot_meteogram
 from fis.v1p0 import Clyfar
 from viz.possibility_funcs import (plot_percentile_meteogram,
-    plot_possibility_bar_timeseries, plot_ozone_heatmap)
+                                   plot_possibility_bar_timeseries,
+                                   plot_ozone_heatmap, plot_dailymax_heatmap)
 
 ######### SETTINGS ##########
 
@@ -61,16 +66,73 @@ logging.basicConfig(level=logging.INFO,
                    datefmt='%Y-%m-%d %H:%M:%S')
 
 ######### FUNCS ##########
-def initialize_geography(latlons):
+def initialize_geography(latlons, use_raw_elevations=False):
     """Initialize geographic masks and elevation data."""
     elev_df = {}
     masks = {}
 
+    # Split between low & high elevation is "elevation_threshold"
+    # Use a 2-D filter to take a weighted average of the neighbouring cells
     for res in ['0p25', '0p5']:
-        elev_df[res] = get_elevations_for_resolutions(latlons, res)
-        masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
+        elev_df[res] = get_elevations_for_resolutions(latlons, res, fdir='data')
+        if use_raw_elevations:
+            masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
+        else:
+            mask_temp = elev_df[res] < GEOGRAPHIC_CONSTANTS[
+            # Arbitrary extra 500m buffer as we're smoothing and masking anyway
+                        'elevation_threshold'] + 250
+
+            # Temporary for now
+            masks[res] = mask_temp
+
+            # Apply the weighted average
+            weighted_elev = weighted_average(elev_df[res], mask_temp)
+            elev_df[res] = weighted_elev
+            masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
 
     return elev_df, masks
+
+def weighted_average(elevation, mask):
+    """
+    Compute the weighted average of each cell with its neighbors.
+
+    Parameters:
+    - elevation: 2D NumPy array of elevation values.
+    - mask: 2D NumPy boolean array where True indicates a low terrain cell.
+
+    Returns:
+    - 2D NumPy array of weighted averages.
+    """
+    # Define the convolution kernel for 8-connected neighbors
+    kernel = np.array([[1, 1, 1],
+                       [1, 0, 1],
+                       [1, 1, 1]])
+
+    # Compute the number of valid neighbors for each cell
+    neighbor_counts = ndimage.convolve(mask.astype(float), kernel,
+                                       mode='constant', cval=0.0)
+
+    # Avoid division by zero; set to 1 where neighbour_counts is 0 to prevent NaNs
+    # JRL - is this needed?
+    safe_neighbor_counts = np.where(neighbor_counts == 0, 1, neighbor_counts)
+
+    # Compute the sum of neighbor elevation values
+    # First, mask the elevation to consider only valid neighbors
+
+    masked_elevation = np.where(mask, elevation, 0)
+    sum_neighbors = ndimage.convolve(masked_elevation, kernel, mode='constant', cval=0.0)
+
+    # Compute the average of the surrounding cells
+    avg_neighbors = sum_neighbors / neighbor_counts
+
+    # Compute the final weighted average
+    weighted_avg = (2 * elevation + avg_neighbors) / 3
+
+    # Handle cells with no valid neighbors: retain the original elevation
+    weighted_avg = np.where(neighbor_counts == 0, elevation, weighted_avg)
+
+    return weighted_avg
+
 
 def get_optimal_process_count(ncpus=None) -> int:
     """
@@ -87,7 +149,7 @@ def get_optimal_process_count(ncpus=None) -> int:
     ncpus = max(1, mp.cpu_count() - 1)
     # For testing:
     # ncpus = 30
-    ncpus = 10
+    # ncpus = 10
     return ncpus
 
 class ParallelEnsembleProcessor:
@@ -133,6 +195,25 @@ class ParallelEnsembleProcessor:
         )
         return member, df
 
+    def _process_ensemble_member_temp(self,
+                            member: str) -> Tuple[str, pd.DataFrame]:
+        self.logger.info(f"Processing temp forecast for member {member}")
+
+        dh = 6 if self.testing else FORECAST_CONFIG['delta_h']
+        temp_ts = do_nwpval_temp(
+            init_dt_naive=self.init_dt,
+            start_h = 0,
+            max_h = FORECAST_CONFIG['max_h']['0p5'],
+            masks = self.masks,
+            delta_h = dh,
+            member = member,
+        )
+        df = create_forecast_dataframe(
+            temp_ts,
+            self.lookup.string_dict['temp']["array_name"]
+        )
+        return member, df
+
     def _process_ensemble_member_solar(self, member: str) -> Tuple[str, pd.DataFrame]:
         """Process solar radiation with high temporal resolution requirements."""
         self.logger.info(f"Processing solar forecast for member {member}")
@@ -140,7 +221,7 @@ class ParallelEnsembleProcessor:
         solar_dh = 6 if self.testing else FORECAST_CONFIG['solar_delta_h']
         solar_ts = do_nwpval_solar(
             init_dt_naive=self.init_dt,
-            start_h=3,
+            start_h= 0 + solar_dh,
             max_h = FORECAST_CONFIG['max_h']['0p5'],
             masks = self.masks,
             delta_h= solar_dh,
@@ -212,7 +293,8 @@ class ParallelEnsembleProcessor:
             'wind': self._process_ensemble_member_wind,
             'solar': self._process_ensemble_member_solar,
             'snow': self._process_ensemble_member_snow,
-            'mslp': self._process_ensemble_member_mslp
+            'mslp': self._process_ensemble_member_mslp,
+            'temp': self._process_ensemble_member_temp,
         }
 
         if variable not in processor_map:
@@ -251,7 +333,8 @@ def parallel_forecast_workflow(init_dt: datetime.datetime,
                                             testing=testing)
     results = {}
 
-    for variable in ['wind', 'solar', 'snow', 'mslp']:
+    # TODO - make this not hard coded here
+    for variable in ['wind', 'solar', 'snow', 'mslp', 'temp']:
         results[variable] = processor.process_variable_parallel(
             member_names, variable
         )
@@ -381,9 +464,11 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
     mslp_ = L.string_dict['mslp']['array_name']
     wind_ = L.string_dict['wind']['array_name']
     solar_ = L.string_dict['solar']['array_name']
+    temp_ = L.string_dict['temp']['array_name']
 
     all_vrbl_dfs = {}
-    for variable in ['snow', 'mslp', 'solar', 'wind']:
+    all_vrbls = ['snow', 'mslp', 'solar', 'wind', 'temp']
+    for variable in all_vrbls:
         # Put the dataframe for this member and variable into the dictionary
         all_vrbl_dfs[variable] = load_forecast_data(variable, init_dt,
                                     member_names = [member,])[member]
@@ -406,15 +491,11 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
         mslp_val = all_vrbl_dfs["mslp"][mslp_].loc[dt] * 100  # For hPa to Pa
         wind_val = all_vrbl_dfs["wind"][wind_].loc[dt] # already in m/s?
         solar_val = all_vrbl_dfs["solar"][solar_].loc[dt] # already w/m2 TODO Crap after 240h
-
-        # just for testing:
-        # snow_val += 50.0
-        # mslp_val += 4*100
-        # wind_val /= 1.5
-        # solar_val += 100
+        temp_val = all_vrbl_dfs["temp"][temp_].loc[dt] # already in C
 
         # Use the variables in the function call
         pc_dict, poss_df = clyfar.compute_ozone(
+            # Don't need temp, that's for visualising only
             snow_val, mslp_val, wind_val, solar_val,
             percentiles=percentiles)
 
@@ -429,6 +510,7 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
         output_df.loc[dt, 'mslp'] = mslp_val
         output_df.loc[dt, 'wind'] = wind_val
         output_df.loc[dt, 'solar'] = solar_val
+        output_df.loc[dt, 'temp'] = temp_val
         pass
     # Do we have columns for possibility, etc?
     # Whatever is needed for plotting data
@@ -538,32 +620,47 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
                 init_dt_dict['naive'], member,
                 percentiles)
 
-            # data_fname = f"clyfar-{1+nm:03d}_{dt.strftime('%Y%m%d_%H%M')}Z.parquet"
-            # data_fpath = os.path.join(clyfar_data_root, data_fname)
-            # utils.try_create(os.path.dirname(data_fpath))
-            # clyfar_df.to_parquet(data_fpath)
-
         print("Clyfar inference complete for", init_dt_dict['naive'])
 
         if visualise:
-            print("Visualizing Clyfar data for", init_dt_dict['naive'])
-            for clyfar_member in clyfar_df_dict.keys():
-                fig, ax = plot_percentile_meteogram(
-                                clyfar_df_dict[clyfar_member],
-                                )
-                fname = utils.create_meteogram_fname(init_dt_dict['naive'],
-                                    "UB-pc", "ozone", clyfar_member)
-                fig.savefig(os.path.join(clyfar_fig_root,fname))
-                plt.close(fig)
 
-            for clyfar_member in clyfar_df_dict.keys():
-                fig, ax = plot_ozone_heatmap(
-                                clyfar_df_dict[clyfar_member],
-                                )
-                fname = utils.create_meteogram_fname(init_dt_dict['naive'],
-                                            "UB-heatmap", "ozone", clyfar_member)
-                fig.savefig(os.path.join(clyfar_fig_root,fname))
-                plt.close(fig)
+            do_optim_pessim = False
+            do_heatmap = True
+            do_dailymax_heatmap = False
+
+            print("Visualizing Clyfar data for", init_dt_dict['naive'])
+            if do_optim_pessim:
+                for clyfar_member in clyfar_df_dict.keys():
+                    fig, ax = plot_percentile_meteogram(
+                                    clyfar_df_dict[clyfar_member],
+                                    )
+                    fname = utils.create_meteogram_fname(init_dt_dict['naive'],
+                                        "UB-pc", "ozone", clyfar_member)
+                    fig.savefig(os.path.join(clyfar_fig_root,fname))
+                    plt.show()
+                    plt.close(fig)
+
+            if do_heatmap:
+                for clyfar_member in clyfar_df_dict.keys():
+                    fig, ax = plot_ozone_heatmap(
+                                    clyfar_df_dict[clyfar_member],
+                                    )
+                    fname = utils.create_meteogram_fname(init_dt_dict['naive'],
+                                                "UB-heatmap", "ozone", clyfar_member)
+                    fig.savefig(os.path.join(clyfar_fig_root,fname))
+                    plt.show()
+                    plt.close(fig)
+
+            if do_dailymax_heatmap:
+                for clyfar_member in clyfar_df_dict.keys():
+                    fig, ax = plot_dailymax_heatmap(
+                                    clyfar_df_dict[clyfar_member],
+                                    )
+                    fname = utils.create_meteogram_fname(init_dt_dict['naive'],
+                                                "UB-dmax-heatmap", "ozone", clyfar_member)
+                    fig.savefig(os.path.join(clyfar_fig_root,fname))
+                    plt.show()
+                    plt.close(fig)
 
             # TODO - the heatmaps could be normalised by baserate...
             pass
@@ -603,7 +700,7 @@ if __name__ == "__main__":
         help='Disable GEFS processing')
 
     args = parser.parse_args()
-    # Leave maxhr for now - not :4implemented
+    # Leave maxhr for now - not implemented
 
     print("Parsed Arguments:")
     print(f"Initialization Time: {args.inittime}")

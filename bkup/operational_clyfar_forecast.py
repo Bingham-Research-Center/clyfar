@@ -27,7 +27,8 @@ import xarray as xr
 from utils.geog_funcs import elevation_from_latlon, get_elevations_for_resolutions
 from utils.lookups import (
     elevations, snow_stids, wind_stids, solar_stids,
-    mslp_stids, ozone_stids, Lookup
+    mslp_stids, ozone_stids, Lookup, temp_stids, lowhigh_elev_split,
+    # Lookup,
 )
 from nwp.gefsdata import GEFSData
 import utils.utils as utils
@@ -39,6 +40,7 @@ from preprocessing.representative_nwp_values import (
     get_latlon_timeseries_df,
     get_grid_timeseries,
     do_nwpval_snow, do_nwpval_mslp, do_nwpval_wind, do_nwpval_solar,
+    do_nwpval_temp,
 )
 from preprocessing.representative_obs import get_representative_obs
 from viz.plotting import plot_meteogram
@@ -47,7 +49,8 @@ from viz.plotting import plot_meteogram
 GEOGRAPHIC_CONSTANTS = {
     'extent': [-110.9, -108.2, 41.3, 39.2],
     'ouray': {'lat': 40.0891, 'lon': -109.6774},
-    'elevation_threshold': 2000,
+    # 'elevation_threshold': 2000,
+    'elevation_threshold': lowhigh_elev_split,
 }
 
 # Forecast configuration
@@ -88,14 +91,35 @@ VARIABLE_METADATA = {
     }
 }
 
-def initialize_geography(latlons):
+def initialize_geography(latlons, use_raw_elevations=True):
     """Initialize geographic masks and elevation data."""
     elev_df = {}
     masks = {}
 
     for res in ['0p25', '0p5']:
-        elev_df[res] = get_elevations_for_resolutions(latlons, res, fdir='data')
-        masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
+        # TODO: make this average for  grid square to avoid high bias (mtns)
+        elev_df[res] = get_elevations_for_resolutions(latlons,
+                                        res, fdir='data')
+        if use_raw_elevations:
+            masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS[
+                                            'elevation_threshold']
+        else:
+            # Do average of cell by weighted average of all cells around
+            # (for surrounding v (8?) values from surrounding grid area,
+            # weight each value by 0.5(1/v), then final average is
+            # the cell's given elevation value, weight 1.0 (i.e. full),
+            # then all averaged with 0.5(1/v) weight for each
+            # surrounding cell's value.
+
+            # Can do with filter over the masked area...
+            # Define the convolution kernel for 8-connected neighbors
+            kernel = np.array([[1, 1, 1],
+                               [1, 0, 1],
+                               [1, 1, 1]])
+
+            raise NotImplementedError
+
+
 
     return elev_df, masks
 
@@ -144,6 +168,22 @@ def process_snow_forecast(init_dt, masks, member_names, delta_h=12):
         )
     return dfs_snow
 
+def process_temp_forecast(init_dt, masks, member_names, delta_h=12):
+    """Process temperature forecasts for all ensemble members."""
+    dfs_temp = {}
+    L = Lookup()
+
+    for member in member_names:
+        print(f"Processing temperature member {member}")
+        temp_ts = do_nwpval_temp(
+            init_dt, masks, delta_h=delta_h, member=member,
+        )
+        dfs_temp[member] = create_forecast_dataframe(
+            temp_ts,
+            L.string_dict['temp']["array_name"]
+        )
+    return dfs_temp
+
 def process_solar_forecast(init_dt, masks, member_names, delta_h=3):
     """Process solar radiation forecasts for all ensemble members."""
     dfs_solar = {}
@@ -152,7 +192,7 @@ def process_solar_forecast(init_dt, masks, member_names, delta_h=3):
     for member in member_names:
         print(f"Processing solar member {member}")
         solar_ts = do_nwpval_solar(init_dt, masks, delta_h=delta_h,
-                                   quantile=0.9, member=member)
+                                   member=member)
         dfs_solar[member] = create_forecast_dataframe(
             solar_ts,
             L.string_dict['solar']["array_name"],
@@ -217,10 +257,12 @@ def main():
         delta_h=FORECAST_CONFIG['solar_delta_h']
     )
     dfs_mslp = process_mslp_forecast(init_dt['naive'], member_names)
+    dfs_temp = process_temp_forecast(init_dt['naive'], masks, member_names)
 
     # Generate plots
     for var, dfs in [('wind', dfs_wind), ('snow', dfs_snow),
-                     ('solar', dfs_solar), ('mslp', dfs_mslp)]:
+                     ('solar', dfs_solar), ('mslp', dfs_mslp),
+                     ('temp', dfs_temp),]:
         title = (f"{VARIABLE_METADATA['labels'][var]} forecast: "
                  f"GEFS members initialised at "
                  f"{dfs[member_names[0]].index[0].strftime('%Y-%m-%d %H%M')} UTC")

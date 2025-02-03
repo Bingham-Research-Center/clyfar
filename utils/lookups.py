@@ -1,6 +1,20 @@
 """Lookup tables and dictionaries for geography, variables, etc
 """
+# Clyfar version 0.9.0 (pre-release, no bugfixes in testing yet)
+snow_stids = ['COOPJENU1', 'COOPFTDU1', 'COOPALMU1', 'COOPDINU1', 'COOPROSU1',
+              'COOPVELU1', 'COOPDSNU1', 'COOPOURU1', 'COOPNELU1']
+wind_stids = ['DURU1', 'A1622', 'SPMU1', 'QV4', 'WAXU1', 'E8302', 'KVEL',
+                'QRS', 'MYT5']
+solar_stids = ["A1622", "SPMU1", "SFLU1", "E3712", "UTSTV", "USWU1", "MCKU1"]
+mslp_stids = ["KVEL",]
+ozone_stids = ["QV4", "QRS", "UBCSP",]
+temp_stids = ['A1622', 'UINU1','KVEL', 'USWU1', 'BLAU1', 'KU69', 'UBCSP']
 
+# Elevation for masking NWP data as "low level"
+lowhigh_elev_split = 1850
+
+##############################################
+# Things common to all versions of Clyfar
 
 lat_lon = {
         "Vernal": (40.4555,-109.5287),
@@ -60,7 +74,11 @@ class Lookup:
             "wind": {'array_name': 'si10', 'label': 'Wind speed (m/s)',
                      'mf_name': 'wind', 'gefs_query': "GRD:10 m above", 'synoptic': 'wind_speed'},
             "ozone": {'label': 'Ozone concentration (ppb)', 'mf_name': 'ozone',
-                      'synoptic': 'ozone_concentration', }
+                      'synoptic': 'ozone_concentration', },
+            "temp": {'array_name': 't2m', 'label': 'Temperature (C)',
+                        # 'mf_name': 'temp',
+                        'gefs_query': "TMP:2 m above",
+                        'synoptic': 'temperature'},
         }
 
     def find_vrbl_keys(self, value):

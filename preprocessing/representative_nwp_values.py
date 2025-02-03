@@ -12,7 +12,10 @@ import xarray as xr
 
 from nwp.download_funcs import load_variable
 from obs.download_winters import download_most_recent
-from utils.lookups import Lookup
+from utils.lookups import Lookup, snow_stids
+from preprocessing.representative_obs import do_repval_snow, \
+    get_representative_obs
+
 
 def create_forecast_dataframe(variable_ts, variable_name,
                                 init_time=None, add_h_init_time=0):
@@ -51,6 +54,9 @@ def create_forecast_dataframe(variable_ts, variable_name,
     # Assign np.nan values for those first h hours rows
 
     # df['fxx'] = df['fxx'] + add_h_init_time
+
+    # if variable_name not in ["si10", "sdswrf","sde","prmsl",]:
+    #     pass
 
     df = df[[variable_name, 'fxx']]
     return df
@@ -105,8 +111,11 @@ def get_grid_timeseries(init_dt_naive, start_h, max_h, q_str, masks, delta_h,
     if do_early:
         ds_ts_early = load_variable(init_dt_naive, start_h, 240, delta_h, q_str,
                             "atmos.25", member=member,)
-        if L.find_vrbl_keys(q_str)['mf_name'] == 'wind':
-            ds_ts_early = ds_ts_early.herbie.with_wind("speed")
+        try:
+            if L.find_vrbl_keys(q_str)['mf_name'] == 'wind':
+                ds_ts_early = ds_ts_early.herbie.with_wind("speed")
+        except KeyError:
+            pass
         mask_early = create_mask(ds_ts_early, masks["0p25"])
         ds_masked_early = ds_ts_early.where(mask_early)
 
@@ -115,8 +124,11 @@ def get_grid_timeseries(init_dt_naive, start_h, max_h, q_str, masks, delta_h,
         start_h_0p5 = 240+delta_h_0p5 if skip_first_0p5 else 240
         ds_ts_late = load_variable(init_dt_naive, start_h_0p5, max_h,
                             delta_h_0p5,q_str,"atmos.5", member=member)
-        if L.find_vrbl_keys(q_str)['mf_name'] == 'wind':
-            ds_ts_late = ds_ts_late.herbie.with_wind("speed")
+        try:
+            if L.find_vrbl_keys(q_str)['mf_name'] == 'wind':
+                ds_ts_late = ds_ts_late.herbie.with_wind("speed")
+        except KeyError:
+            pass
         mask_late = create_mask(ds_ts_late, masks["0p5"])
         ds_masked_late = ds_ts_late.where(mask_late)
 
@@ -201,6 +213,7 @@ def do_nwpval_snow(init_dt_naive: datetime.datetime,
                    start_h: int, max_h: int, masks: dict,
                    delta_h: int, member: str ='p01',
                    do_early: bool = True, do_late: bool = True,
+                   initialise_with_obs = False,
                    ) -> xr.DataArray:
     """Compute a representative forecast value for snow depth in the Basin.
 
@@ -220,6 +233,8 @@ def do_nwpval_snow(init_dt_naive: datetime.datetime,
             data (<= 240 hours).
         do_late (bool): Whether to process the lower-resolution (0p5)
             data (> 240 hours). Will skip 240 as that's covered by 0p25.
+        initialise_with_obs (bool): Whether to offset the forecast by the
+            current observed representative value.
 
     Returns:
         xarray.DataArray: The time series of snow depth in the Basin.
@@ -228,9 +243,45 @@ def do_nwpval_snow(init_dt_naive: datetime.datetime,
     snow_ts = process_nwp_timeseries(
                     init_dt_naive, start_h, max_h, masks,
                     delta_h, variable_type='snow',
-                    quantile = 0.9, member = member, do_early = do_early,
+                    quantile = 0.75, member = member, do_early = do_early,
                     do_late = do_late, pc_method = "hazen",
                     )
+
+    if initialise_with_obs:
+        # TODO - fully test and also turn off if zero depth is reachef
+        # Also we need to return the offset amount so it can be be displayed
+        # TODO consider a log file with things like this?
+
+        # Offset the timeseries by the current observed representative value.
+        # This is like a "data assimilation" for the time series
+        # If any snow-depth values are negative, set them to zero.
+
+        # Create a representative snow-depth value
+        # snow_raw = get_representative_obs("snow", 14, snow_stids,
+        #                                         timezone="US/Mountain")
+
+        # If turned off, or too much missing data, this is backup.
+        repr_val = 0
+
+        # Load data via Synoptic Weather API (and SynopticPy)
+        recent_df = download_most_recent("snow", 7,
+                                            snow_stids).df
+        repr_snow = do_repval_snow(recent_df, snow_stids)
+
+        # Use most recent value for "DA"
+        repr_val = float(repr_snow.loc[repr_snow.index[-1]].squeeze())
+
+        # Offset the timeseries by the representative value vs original value
+        offset = float(snow_ts.isel(time=0).sde.values.squeeze()) - repr_val
+
+        # positive means GEFS depth was higher
+        snow_ts = snow_ts - offset
+
+        # TODO - export this offset value for visualisations
+        # Set negative snow-depths to zero
+        snow_ts = snow_ts.where(snow_ts > 0, 0)
+
+    pass
     return snow_ts
 
 def do_nwpval_wind(init_dt_naive: datetime.datetime,
@@ -260,14 +311,18 @@ def do_nwpval_wind(init_dt_naive: datetime.datetime,
     return process_nwp_timeseries(
                     init_dt_naive, start_h, max_h, masks,
                     delta_h, variable_type='wind',
-                    quantile = 0.9, member = member, do_early = do_early,
+                    quantile = 0.5, member = member, do_early = do_early,
                     do_late = do_late, pc_method="hazen",
                     )
+
+# def do_nwpval_solar_alt():
+#     """This version uses """
 
 def do_nwpval_solar(init_dt_naive: datetime.datetime,
                     start_h: int, max_h: int, masks: dict,
                     delta_h: int, member: str ='p01',
                     do_early: bool = True, do_late: bool = True,
+                    approximate_0p5 = True,
                     ) -> xr.DataArray:
     """Compute a representative forecast value for solar radiation.
 
@@ -279,6 +334,16 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
     We use the hazen technique with low percentile value to capture something
     towards the maximum but there is a lot of uncertainty in solar radiation
     and the signal of time of year may be better as a replacement variable.
+
+    The variable "approximate_0p5" is used to skip the coarser
+    0.5 deg resolution GEFS forecasts (only every 6 hours; misses solar max)
+    forecasts and instead use a high (?) percentile over all 0.25 degree
+    forecast. (This will be separate from the issues not catching the max
+    during each day, but we just want a signal). At this range, cloud cover
+    is meaningless at the local scale, so let's hedge a good number using
+    the previous measurements to approximate the solar insolation.
+
+    TODO: manually set nighttime as zero, but we want daily max anyway.
 
     TODO:
     * After fxx=240, we don't have 3-h insolation so we should think about
@@ -293,7 +358,78 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
                         quantile = 0.9, member = member, do_early = do_early,
                         do_late = do_late, pc_method="hazen",
                         )
+
+    if approximate_0p5:
+        # Use 0.9 percentile from each timestamp's collection of solar stids
+        # at the given time of day to form an approximate value for hours
+        # where we don't have 3-h data from 0p25 GEFS.
+
+        # Start time
+        if max_h <= 240:
+            return solar_ts
+
+        datetime_arr = pd.to_datetime(solar_ts.time.values).to_pydatetime()
+        # Now create a dataframe from these datetimes and the solar values
+        solar_df = solar_ts.to_dataframe()
+        solar_df.index = datetime_arr
+
+        # I'm not sure why the dtype arguemnts doesn't work for me
+        for h in np.arange(240+delta_h, max_h, delta_h, dtype=int):
+            # Compute the representative solar value for this time
+            # Subset all solar values for the first ~9 days at this hour of day
+            timestamp = init_dt_naive + datetime.timedelta(hours=int(h))
+            hour = timestamp.hour
+
+            pass
+
+            subset_df = solar_df[solar_df.index.hour == hour]
+
+            # Take quantile over the 9 or so days - seems to be too high?
+            # Make dynamic e.g., maximum possible, factored by cloud cover
+            approx_solar = subset_df['sdswrf'].quantile(0.5)
+
+            # This timestamp may or may not exist
+            # If it does, we want to overwrite the existing value with new one
+            # If it doesn't, we want to add it to the dataframe.
+
+            # Hard-coded snow string for now, pragmatic
+            pass
+            solar_df.loc[timestamp, 'sdswrf'] = approx_solar
+            # solar_df = solar_df.reindex(sorted(solar_df.index))
+
+        # Sort in chronological order (index, datetime)
+        solar_ts = solar_df.sort_index()
+
     return solar_ts
+
+def do_nwpval_temp(init_dt_naive,
+                   start_h: int, max_h: int, masks: dict,
+                   delta_h: int, member: str ='p01',
+                   do_early: bool = True, do_late: bool = True,
+                   ) -> xr.DataArray:
+
+    """We want the 50th percentile over all stations, for now!
+
+    Will be replaced by pseudo-lapse-rate in version 1.x but this allows plots
+    of raw GEFS data.
+
+    Temperature here is kind of useless as it's a function of height that
+    is more useful as (a) a gradient to estimate pseudo-lapse-rate and (b)
+    to help judgement of whether snow persists at Basin level.
+
+    TODO: make min/max for each station, and implement variation with height
+        (pseudo-lapse-rate) to go into the FIS inferences.
+    """
+    temp_ts = process_nwp_timeseries(
+        init_dt_naive, start_h, max_h, masks,
+        delta_h, variable_type='temp',
+        quantile = 0.5, member = member, do_early = do_early,
+        do_late = do_late, pc_method = "hazen",
+    )
+    # TODO - I'm not sure if this is where to convert to C but will for now
+    temp_ts = temp_ts - 273.15
+
+    return temp_ts
 
 def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
                      member, quantile=0.5):

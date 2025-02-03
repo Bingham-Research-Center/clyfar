@@ -21,17 +21,14 @@ from utils.lookups import Lookup
 from fis.fis import FIS
 
 # Geographic and computational constants
-snow_stids = ['COOPJENU1', 'COOPFTDU1', 'COOPALMU1', 'COOPDINU1', 'COOPROSU1',
-              'COOPVELU1', 'COOPDSNU1', 'COOPOURU1', 'COOPNELU1']
-wind_stids = ['DURU1', 'A1622', 'SPMU1', 'QV4', 'WAXU1', 'E8302', 'KVEL', 'QRS', 'MYT5']
-solar_stids = ["A1622", "SPMU1", "SFLU1", "E3712", "UTSTV", "USWU1", "MCKU1"]
-mslp_stids = ["KVEL",]
-ozone_stids = ["QV4", "QRS"]
+from utils.lookups import (snow_stids, wind_stids, solar_stids,
+                            mslp_stids, ozone_stids, temp_stids,
+                           )
 
 GEOGRAPHIC_CONSTANTS = {
     'extent': [-110.9, -108.2, 41.3, 39.2],
     'ouray': {'lat': 40.0891, 'lon': -109.6774},
-    'elevation_threshold': 1900,
+    'elevation_threshold': 1850,
 }
 
 # Forecast configuration
@@ -39,13 +36,16 @@ FORECAST_CONFIG = {
     'delta_h': 3,  # Time step in forecast series
     'solar_delta_h': 3,  # Higher temporal resolution for solar radiation
     'max_h': {"0p25": 240, "0p5": 384},
+    # As of now, let's include stuff we plot but don't use...like temp
     'products': {
         'solar': "atmos.25", 'snow': "atmos.25",
-        'mslp': "atmos.25", 'wind': "atmos.25"
+        'mslp': "atmos.25", 'wind': "atmos.25",
+        'temp': "atmos.25",
     },
     'products_backup': {
         'solar': "atmos.5", 'snow': "atmos.5",
-        'mslp': "atmos.5", 'wind': "atmos.5"
+        'mslp': "atmos.5", 'wind': "atmos.5",
+        'temp': "atmos.5",
     }
 }
 
@@ -56,19 +56,22 @@ VARIABLE_METADATA = {
         'snow': 'Snow depth (cm)',
         'mslp': 'Mean sea level pressure (hPa)',
         'wind': 'Wind speed (m/s)',
-        'ozone': 'Ozone concentration (ppb)'
+        'ozone': 'Ozone concentration (ppb)',
+        'temp': 'Temperature (°C)'
     },
     'station_ids': {
         "snow": snow_stids, "wind": wind_stids,
         "solar": solar_stids, "mslp": mslp_stids,
-        "ozone": ozone_stids
+        "ozone": ozone_stids,
+        "temp": temp_stids,
     },
     'variable_names': {
         'solar': 'solar_radiation',
         'snow': 'snow_depth',
         'wind': 'wind_speed',
         'mslp': 'sea_level_pressure',
-        'ozone': 'ozone_concentration'
+        'ozone': 'ozone_concentration',
+        'temp': 'temperature',
     }
 }
 
@@ -101,6 +104,8 @@ solar_cats = {
     "high": "#FF6F61"
 }
 
+temp_cats = {}
+
 # Looking into "factory classes"...
 
 class Clyfar(FIS):
@@ -109,6 +114,8 @@ class Clyfar(FIS):
 
         First creates generic FIS object via inheritance, then adds specific
         configuration details for this version.
+
+        I don't think I need temperature if i just want to plot the GEFS data
         """
         super().__init__()
 
