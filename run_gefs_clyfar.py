@@ -154,6 +154,10 @@ def get_optimal_process_count(ncpus=None) -> int:
     # ncpus = 10
     return ncpus
 
+def process_member_variable(args):
+    member, variable, processor_map = args
+    return variable, member, processor_map[variable](member)[1]
+
 class ParallelEnsembleProcessor:
     """
     Manages parallel processing of ensemble forecasts with synchronized I/O operations.
@@ -278,19 +282,7 @@ class ParallelEnsembleProcessor:
         )
         return member, df
 
-    def process_variable_parallel(self,
-                                member_names: List[str],
-                                variable: str) -> Dict[str, pd.DataFrame]:
-        """
-        Execute parallel processing for specified meteorological variable.
-
-        Args:
-        member_names: List of ensemble member identifiers
-        variable: Target meteorological variable
-
-        Returns:
-        Dictionary mapping member identifiers to processed DataFrames
-        """
+    def get_processor_maps(self) -> Dict[str, callable]:
         processor_map = {
             'wind': self._process_ensemble_member_wind,
             'solar': self._process_ensemble_member_solar,
@@ -298,49 +290,50 @@ class ParallelEnsembleProcessor:
             'mslp': self._process_ensemble_member_mslp,
             'temp': self._process_ensemble_member_temp,
         }
+        return processor_map
 
-        if variable not in processor_map:
-            raise ValueError(f"Unsupported variable: {variable}")
+    def process_variable_member_parallel(self, member_names: List[str], variables: List[str]) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """
+        Execute parallel processing for specified meteorological variables and ensemble members.
 
-        # ctx = mp.get_context('spawn')
-        # pool = ctx.Pool(processes=4)
+        Args:
+        member_names: List of ensemble member identifiers
+        variables: List of target meteorological variables
 
-        # with ctx.Pool(processes=self.process_count) as pool:
+        Returns:
+        Nested dictionary mapping variables and member identifiers to processed DataFrames
+        """
+        processor_map = self.get_processor_maps()
+
         with mp.Pool(processes=self.process_count) as pool:
-            results = pool.map(processor_map[variable], member_names)
+            results = pool.map(process_member_variable, [(member, variable, processor_map) for member in member_names for variable in variables])
 
-        return dict(results)
+        nested_results = {}
+        for variable, member, df in results:
+            if variable not in nested_results:
+                nested_results[variable] = {}
+            nested_results[variable][member] = df
+
+        return nested_results
 
 #### END OF CLASS ####
 
 # @configurable_timer(log_file="performance_log.txt")
-def parallel_forecast_workflow(init_dt: datetime.datetime,
-                        masks: Dict,
-                        member_names: List[str],
-                        ncpus: int = None,
-                        testing: bool = False,
-                        ) -> Dict[str, Dict[str, pd.DataFrame]]:
+def parallel_forecast_workflow(init_dt: datetime.datetime, masks: Dict, member_names: List[str], variables: List[str], ncpus: int = None, testing: bool = False) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
-    Execute comprehensive parallel forecast workflow for all variables.
+    Execute comprehensive parallel forecast workflow for all variables and members.
 
     Args:
     init_dt: Forecast initialization datetime
     masks: Geographic masks for data filtering
-        member_names: List of ensemble member identifiers
+    member_names: List of ensemble member identifiers
+    variables: List of target meteorological variables
 
     Returns:
     Nested dictionary of processed forecasts by variable and member
     """
-    processor = ParallelEnsembleProcessor(init_dt, masks, process_count=ncpus,
-                                            testing=testing)
-    results = {}
-
-    # TODO - make this not hard coded here
-    for variable in ['wind', 'solar', 'snow', 'mslp', 'temp']:
-        results[variable] = processor.process_variable_parallel(
-            member_names, variable
-        )
-
+    processor = ParallelEnsembleProcessor(init_dt, masks, process_count=ncpus, testing=testing)
+    results = processor.process_variable_member_parallel(member_names, variables)
     return results
 
 # Root directory for image output
@@ -528,13 +521,9 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
 #################################################
 
 def main(dt, clyfar_fig_root, clyfar_data_root,
-            maxhr='all', ncpus='auto', nmembers='all', visualise=True,
-            save=True, verbose=False, testing=False, do_clyfar=True,
-            # TODO change this to be true by default when workflow is developed
-            # Too annoying with too little return to check in the parallel
-            # processing whether the file exists or not, so manually toggle
-            # that section.
-            do_gefs=True):
+         maxhr='all', ncpus='auto', nmembers='all', visualise=True,
+         save=True, verbose=False, testing=False, no_clyfar=False,
+         no_gefs=False):
     """Execute parallel operational forecast workflow.
 
     Note:
@@ -553,17 +542,13 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         do_clyfar (bool): Whether to run Clyfar. Default is True.
         do_gefs (bool): Whether to download GEFS data. Default is False.
     """
-    #TODO - can skip GEFS download and run Clyfar on GEFS time series if
-    # it was already saved to disc
     percentiles = [10, 50, 90]
 
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Print how many CPUs, GPUs, memory, and threads we have for resources
     utils.print_system_info()
 
-    # Initialize ensemble members and CPUs for parallelisation
     member_names = [f'p{n:02d}' for n in range(1, nmembers + 1)]
     print(member_names, nmembers)
 
@@ -571,28 +556,26 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         member_names = member_names[:10]
         ncpus = 10
     else:
-        ncpus = ncpus if ncpus != 'auto' else nmembers
+        ncpus = ncpus if ncpus != 'auto' else nmembers * 5  # Adjust for both members and variables
 
-    # Initialize geographic parameters
     latlons = {
         '0p25': check_and_create_latlon_files("0p25"),
         '0p5': check_and_create_latlon_files("0p5")
     }
     elev_df, masks = initialize_geography(latlons)
 
-    # Get initialization time
     init_dt_dict = utils.get_valid_forecast_init(force_init_dt=dt)
 
-    if do_gefs:
-        print("Downloading GEFS data for", init_dt_dict['naive'])
-        # Execute parallel workflow
-        results = parallel_forecast_workflow(
-                        init_dt_dict['naive'], masks, member_names, ncpus=ncpus,
-                        testing=testing)
+    variables = ['wind', 'solar', 'snow', 'mslp', 'temp']
 
-        # Print the variables into the function above for testing/debugging
+    if not no_gefs:
+        print("Downloading GEFS data for", init_dt_dict['naive'])
+        results = parallel_forecast_workflow(
+            init_dt_dict['naive'], masks, member_names, variables, ncpus=ncpus,
+            testing=testing)
+
         print(f"{init_dt_dict['naive']=}, {masks=}, {member_names=}, "
-                                        f"{ncpus=}, {testing=}")
+              f"{ncpus=}, {testing=}")
 
         if save:
             print("Saving GEFS data for", init_dt_dict['naive'])
@@ -604,11 +587,9 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             # Generate visualization suite
             visualize_results(results, init_dt_dict)
 
-
-
     # Run Clyfar here - GEFS time series already exists if everything went well
     # Go member by member to compute Clyfar
-    if do_clyfar:
+    if not no_clyfar:
         print("Running Clyfar for", init_dt_dict['naive'])
 
         ############################
@@ -622,14 +603,28 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             clyfar_df_dict[clyfar_member] = run_singlemember_inference(
                 init_dt_dict['naive'], member,
                 percentiles)
+            pass
 
         print("Clyfar inference complete for", init_dt_dict['naive'])
 
         # TODO - save datatables so those can be used to export json files
+        # Each member needs possibility of each category for each time (row)
+        # then with third dimension of ensemble members.
 
+        if save:
+            # subfolder for this run
+            # Root gets us to subdir with date
+            # subdir = os.path.join(clyfar_data_root,
+                                  # init_dt_dict['naive'].strftime('%Y%m%d%H'),
+                                  # )
+            subdir = clyfar_data_root
+            utils.try_create(subdir)
+            for clyfar_member, df in clyfar_df_dict.items():
+                df.to_parquet(os.path.join(subdir,
+                                f"{clyfar_member}_df.parquet"))
+            print("Saved Clyfar dataframes to ", subdir)
 
         if visualise:
-
             do_optim_pessim = False
             do_heatmap = True
             do_dailymax_heatmap = False
@@ -644,9 +639,12 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                                     )
                     fname = utils.create_meteogram_fname(init_dt_dict['naive'],
                                         "UB-pc", "ozone", clyfar_member)
-                    fig.savefig(os.path.join(clyfar_fig_root,fname))
+                    subdir = os.path.join(clyfar_fig_root, "optim_pessim")
+                    utils.try_create(subdir)
+                    fig.savefig(os.path.join(subdir,fname))
                     plt.show()
                     plt.close(fig)
+                    print("Saved optimist/pessimist plots to ", subdir)
 
             if do_heatmap:
                 for clyfar_member in clyfar_df_dict.keys():
@@ -654,10 +652,14 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                                     clyfar_df_dict[clyfar_member],
                                     )
                     fname = utils.create_meteogram_fname(init_dt_dict['naive'],
-                                                "UB-heatmap", "ozone", clyfar_member)
-                    fig.savefig(os.path.join(clyfar_fig_root,fname))
+                                    "UB-poss", "ozone",
+                                    clyfar_member, actually_heatmap=True,)
+                    subdir = os.path.join(clyfar_fig_root, "heatmap")
+                    utils.try_create(subdir)
+                    fig.savefig(os.path.join(subdir,fname))
                     plt.show()
                     plt.close(fig)
+                    print("Saved 3-h heatmaps of O3 categories to ", subdir)
 
             if do_dailymax_heatmap:
                 for clyfar_member in clyfar_df_dict.keys():
@@ -665,14 +667,16 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                                     clyfar_df_dict[clyfar_member],
                                     )
                     fname = utils.create_meteogram_fname(init_dt_dict['naive'],
-                                                "UB-dmax-heatmap", "ozone", clyfar_member)
-                    fig.savefig(os.path.join(clyfar_fig_root,fname))
+                                         "UB-dailymax", "ozone",
+                                         clyfar_member, actually_heatmap=True,)
+                    subdir = os.path.join(clyfar_fig_root, "heatmap")
+                    utils.try_create(subdir)
+                    fig.savefig(os.path.join(subdir,fname))
                     plt.show()
                     plt.close(fig)
+                    print("Saved daily-max heatmaps of O3 categories to ", subdir)
 
-            # TODO - the heatmaps could be normalised by baserate...
-            pass
-
+    # TODO - the heatmaps could be normalised by baserate...
 
     pass
     print("Forecast workflow complete for", init_dt_dict['naive'])
@@ -708,10 +712,10 @@ if __name__ == "__main__":
         '-t', '--testing', action='store_true',
         help='Enable testing mode')
     parser.add_argument(
-        '--no-clyfar', action='store_true',
+        '-nc', '--no-clyfar', action='store_true',
         help='Disable Clyfar processing')
     parser.add_argument(
-        '--no-gefs', action='store_true',
+        '-ng', '--no-gefs', action='store_true',
         help='Disable GEFS processing')
 
     args = parser.parse_args()
@@ -733,6 +737,5 @@ if __name__ == "__main__":
          ncpus=args.ncpus, nmembers=args.nmembers,
          visualise=True, save=True,
          verbose=args.verbose, testing=args.testing,
-         # do_clyfar=not args.no_clyfar, do_gefs=not args.no_gefs
-         do_clyfar=True, do_gefs=True,
+         no_clyfar=args.no_clyfar, no_gefs=args.no_gefs,
          )

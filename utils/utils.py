@@ -76,9 +76,10 @@ def create_image_fname(dt, inittime, plot_type, model,
     fname = f"{init_str}{date_str}_{plot_type}_{model}.png"
     return fname
 
-def create_meteogram_fname(inittime, loc, vrbl, model):
+def create_meteogram_fname(inittime, loc, vrbl, model, actually_heatmap=False):
     init_str = inittime.strftime("%Y%m%d-%H%M")
-    fname = f"meteogram_{loc}_{vrbl}_{init_str}_{model}.png"
+    plot_str = "heatmap" if actually_heatmap else "meteogram"
+    fname = f"{plot_str}_{loc}_{vrbl}_{init_str}_{model}.png"
     return fname
 
 def try_create(fpath):
@@ -317,3 +318,13 @@ def configurable_timer(threshold_ms: float = None, log_file: str = None):
             return result
         return wrapper
     return decorator
+
+def json_from_poss_df(df):
+    """Export possibility dataframes into json format for website.
+    """
+    return
+
+def json_from_obs_df(df):
+    """Export observation dataframes into json format for website.
+    """
+    return
