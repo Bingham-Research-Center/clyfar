@@ -55,10 +55,12 @@ from viz.possibility_funcs import (plot_percentile_meteogram,
 
 L = Lookup()
 clyfar = Clyfar()
-clyfar_data_root = './data/clyfar_output'
-utils.try_create(clyfar_data_root)
-clyfar_fig_root = './figures/clyfar_output'
-utils.try_create(clyfar_fig_root)
+
+# TODO - DYNAMIC PATHS
+# clyfar_data_root = './data/clyfar_output'
+# utils.try_create(clyfar_data_root)
+# clyfar_fig_root = './figures/clyfar_output'
+# utils.try_create(clyfar_fig_root)
 
 # Configure logging with precise timestamp and process identification
 logging.basicConfig(level=logging.INFO,
@@ -525,7 +527,8 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
 ############## CLYFAR FUNCS #####################
 #################################################
 
-def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
+def main(dt, clyfar_fig_root, clyfar_data_root,
+            maxhr='all', ncpus='auto', nmembers='all', visualise=True,
             save=True, verbose=False, testing=False, do_clyfar=True,
             # TODO change this to be true by default when workflow is developed
             # Too annoying with too little return to check in the parallel
@@ -622,11 +625,16 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
 
         print("Clyfar inference complete for", init_dt_dict['naive'])
 
+        # TODO - save datatables so those can be used to export json files
+
+
         if visualise:
 
             do_optim_pessim = False
             do_heatmap = True
             do_dailymax_heatmap = False
+
+            # TODO - create folders by run date and GEFS v Clyfar output
 
             print("Visualizing Clyfar data for", init_dt_dict['naive'])
             if do_optim_pessim:
@@ -671,6 +679,7 @@ def main(dt, maxhr='all', ncpus='auto', nmembers='all', visualise=True,
     return
 
 if __name__ == "__main__":
+    # TODO - add data & figure paths (set by environment variables at runtime)
     parser = argparse.ArgumentParser(
             description="Run the parallel operational forecast workflow.")
     parser.add_argument(
@@ -683,6 +692,12 @@ if __name__ == "__main__":
     parser.add_argument(
         '-m', '--nmembers', required=True, type=int,
         help='Number of ensemble members to use')
+    parser.add_argument(
+        '-d', '--data-root', required=True, type=str,
+        help='Root directory for data output')
+    parser.add_argument(
+        '-f', '--fig-root', required=True, type=str,
+        help='Root directory for figure output')
     # parser.add_argument(
     #     '-x', '--maxhr', type=int,
     #     help='Maximum hours to run the models')
@@ -710,8 +725,12 @@ if __name__ == "__main__":
     print(f"Testing: {args.testing}")
     print(f"Do Clyfar: {not args.no_clyfar}")
     print(f"Do GEFS: {not args.no_gefs}")
+    print("Saving data to root directory:", args.data_root)
+    print("Saving figures to root:", args.fig_root)
 
-    main(dt=args.inittime, ncpus=args.ncpus, nmembers=args.nmembers,
+    main(dt=args.inittime,
+         clyfar_fig_root=args.fig_root, clyfar_data_root=args.data_root,
+         ncpus=args.ncpus, nmembers=args.nmembers,
          visualise=True, save=True,
          verbose=args.verbose, testing=args.testing,
          # do_clyfar=not args.no_clyfar, do_gefs=not args.no_gefs
