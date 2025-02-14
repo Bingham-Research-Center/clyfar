@@ -52,6 +52,12 @@ from viz.possibility_funcs import (plot_percentile_meteogram,
                                    plot_ozone_heatmap, plot_dailymax_heatmap)
 
 ######### SETTINGS ##########
+# At the top of the file, enforce spawn context
+if mp.get_start_method() != 'spawn':
+    try:
+        mp.set_start_method('spawn', force=True)
+    except RuntimeError:
+        print("Warning: Could not set spawn context. Already initialized.")
 
 L = Lookup()
 clyfar = Clyfar()
@@ -144,14 +150,13 @@ def get_optimal_process_count(ncpus=None) -> int:
         ncpus: Number of CPUs to use. If None, use all available CPUs minus 1.
 
     Returns:
-    int: Optimal number of processes, reserving one core for system operations
+        int: Optimal number of processes
     """
-    # Just for the laptop so we don't overload it
-    # TODO - argparse to set CPUs
-    ncpus = max(1, mp.cpu_count() - 1)
-    # For testing:
-    # ncpus = 30
-    # ncpus = 10
+    if ncpus is None:
+        ncpus = max(1, mp.cpu_count() - 1)
+    else:
+        # Ensure we don't exceed available CPUs
+        ncpus = min(ncpus, mp.cpu_count())
     return ncpus
 
 def process_member_variable(args):

@@ -1,6 +1,9 @@
 import datetime
 import os
+import multiprocessing as mp
+import tempfile
 
+from filelock import FileLock
 import numpy as np
 import pandas as pd
 from cartopy import crs as ccrs
@@ -9,7 +12,16 @@ from herbie import Herbie
 
 from nwp.datafile import DataFile
 
+# At the top of the file, enforce spawn context
+if mp.get_start_method() != 'spawn':
+    try:
+        mp.set_start_method('spawn', force=True)
+    except RuntimeError:
+        print("Warning: Could not set spawn context. Already initialized.")
+
 class GEFSData(DataFile):
+    LOCK_DIR = os.path.join(tempfile.gettempdir(), 'gefs_locks')
+
     def __init__(self):
         """Download, process GEFS data.
         """
@@ -50,21 +62,49 @@ class GEFSData(DataFile):
         return H
 
     @staticmethod
-    def get_CONUS(qstr, herbie_inst, remove_grib=True):
+    def __OLD_get_CONUS(qstr, herbie_inst, remove_grib=True):
         ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
-        # variables = [i for i in list(ds) if len(ds[i].dims) > 0]
-        # ds = ds.metpy.parse_cf(varname=variables).squeeze().metpy.assign_latitude_longitude(force=True).metpy.assign_y_x(force=True)
-        # ds = ds.metpy.parse_cf(varname=variables).metpy.assign_latitude_longitude(force=True).metpy.assign_y_x(force=True)
-        # print(ds)
-        ds = ds.metpy.parse_cf()#.metpy.assign_y_x(force=False)
-        # pass
+        ds = ds.metpy.parse_cf()
         return ds
+
+    @classmethod
+    def safe_get_CONUS(cls, qstr, herbie_inst, remove_grib=True):
+        """
+        Safely download and process GRIB file using file locking.
+        """
+        # Create locks directory if it doesn't exist
+        os.makedirs(cls.LOCK_DIR, exist_ok=True)
+
+        # Create a unique lock file based on the GRIB file path
+        grib_path = herbie_inst.get_localpath()
+        lock_path = os.path.join(cls.LOCK_DIR,
+                                 f"{os.path.basename(grib_path)}.lock")
+
+        # Create a FileLock instance with 10 minute timeout
+        lock = FileLock(lock_path, timeout=600)
+
+        try:
+            with lock:
+                ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
+                ds = ds.metpy.parse_cf()
+                return ds
+        finally:
+            # Clean up lock file if possible
+            try:
+                if os.path.exists(lock_path):
+                    os.remove(lock_path)
+            except:
+                pass
+
+    @staticmethod
+    def get_CONUS(qstr, herbie_inst, remove_grib=True):
+        """
+        Maintain backward compatibility but use safe version
+        """
+        return GEFSData.safe_get_CONUS(qstr, herbie_inst, remove_grib)
 
     @staticmethod
     def get_closest_point(ds, vrbl, lat, lon):
-        # grid_crs = ds[vrbl].metpy.cartopy_crs
-        # latlon_crs = ccrs.PlateCarree(globe=ds[vrbl].metpy.cartopy_globe)
-        # x_t, y_t = grid_crs.transform_point(lon, lat, src_crs=latlon_crs)
         point_val = ds[vrbl].sel(latitude=lat, longitude=lon, method="nearest")
         return point_val
 
