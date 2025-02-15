@@ -20,7 +20,7 @@ if mp.get_start_method() != 'spawn':
         print("Warning: Could not set spawn context. Already initialized.")
 
 class GEFSData(DataFile):
-    LOCK_DIR = os.path.join(tempfile.gettempdir(), 'gefs_locks')
+    LOCK_DIR = os.getenv('FILELOCK_TMPDIR')
 
     def __init__(self):
         """Download, process GEFS data.

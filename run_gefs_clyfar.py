@@ -131,7 +131,9 @@ def weighted_average(elevation, mask):
     sum_neighbors = ndimage.convolve(masked_elevation, kernel, mode='constant', cval=0.0)
 
     # Compute the average of the surrounding cells
+    # with np.errstate(invalid='ignore'):
     avg_neighbors = np.divide(sum_neighbors,neighbor_counts)
+
 
     # Compute the final weighted average
     weighted_avg = (2 * elevation + avg_neighbors) / 3
