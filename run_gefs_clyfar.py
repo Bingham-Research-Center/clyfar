@@ -373,7 +373,7 @@ def load_forecast_data(variable: str, init_dt: datetime.datetime, member_names: 
     return dfs
 
 def visualize_results(results: Dict[str, Dict[str, pd.DataFrame]],
-                      init_dt_dict: dict):
+                      clyfar_fig_root, init_dt_dict: dict):
     """
     Generate visualization suite for processed forecast results.
 
@@ -402,8 +402,7 @@ def visualize_results(results: Dict[str, Dict[str, pd.DataFrame]],
         fname = utils.create_meteogram_fname(init_dt_dict['naive'],
                                     "UB-repr", variable, "GEFS")
 
-        rootdir = "./figures_parallel"
-        dated_rootdir = make_dated_rootdir(rootdir, init_dt_dict)
+        dated_rootdir = make_dated_rootdir(clyfar_fig_root, init_dt_dict)
         utils.try_create(dated_rootdir)
 
         fig.savefig(fpath := os.path.join(dated_rootdir, fname))
@@ -590,7 +589,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         if visualise:
             print("Visualizing GEFS data for", init_dt_dict['naive'])
             # Generate visualization suite
-            visualize_results(results, init_dt_dict)
+            visualize_results(results, clyfar_fig_root, init_dt_dict)
 
     # Run Clyfar here - GEFS time series already exists if everything went well
     # Go member by member to compute Clyfar
