@@ -80,8 +80,8 @@ class GEFSData(DataFile):
         lock_name = f"{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock"
         lock_path = os.path.join(cls.LOCK_DIR, lock_name)
 
-        # Create a FileLock instance with 10 minute timeout
-        lock = FileLock(lock_path, timeout=600)
+        # Create a FileLock instance with 5 minute timeout
+        lock = FileLock(lock_path, timeout=300)
 
         try:
             with lock:
