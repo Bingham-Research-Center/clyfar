@@ -75,10 +75,10 @@ class GEFSData(DataFile):
         # Create locks directory if it doesn't exist
         os.makedirs(cls.LOCK_DIR, exist_ok=True)
 
-        # Create a unique lock file based on the GRIB file path
-        grib_path = herbie_inst.get_localpath()
-        lock_path = os.path.join(cls.LOCK_DIR,
-                                 f"{os.path.basename(grib_path)}.lock")
+        # Create a unique lock file based on the Herbie instance details
+        # Use the GRIB file's identifying information for the lock name
+        lock_name = f"{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock"
+        lock_path = os.path.join(cls.LOCK_DIR, lock_name)
 
         # Create a FileLock instance with 10 minute timeout
         lock = FileLock(lock_path, timeout=600)
@@ -95,6 +95,7 @@ class GEFSData(DataFile):
                     os.remove(lock_path)
             except:
                 pass
+        # pass
 
     @staticmethod
     def get_CONUS(qstr, herbie_inst, remove_grib=True):
