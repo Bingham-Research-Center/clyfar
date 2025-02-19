@@ -73,29 +73,20 @@ class GEFSData(DataFile):
         Safely download and process GRIB file using file locking.
         """
         # Create locks directory if it doesn't exist
-        os.makedirs(cls.LOCK_DIR, exist_ok=True)
+        # os.makedirs(cls.LOCK_DIR, exist_ok=True)
 
         # Create a unique lock file based on the Herbie instance details
         # Use the GRIB file's identifying information for the lock name
-        lock_name = f"{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock"
-        lock_path = os.path.join(cls.LOCK_DIR, lock_name)
+        # lock_name = f"{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock"
+        # lock_path = os.path.join(cls.LOCK_DIR, lock_name)
 
-        # Create a FileLock instance with 5 minute timeout
-        lock = FileLock(lock_path, timeout=300)
+        with mp.Manager() as manager:
+            lock = manager.Lock()
 
-        try:
             with lock:
                 ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
                 ds = ds.metpy.parse_cf()
                 return ds
-        finally:
-            # Clean up lock file if possible
-            try:
-                if os.path.exists(lock_path):
-                    os.remove(lock_path)
-            except:
-                pass
-        # pass
 
     @staticmethod
     def get_CONUS(qstr, herbie_inst, remove_grib=True):
