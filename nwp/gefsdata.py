@@ -8,6 +8,7 @@ import pandas as pd
 from cartopy import crs as ccrs
 import xarray as xr
 from herbie import Herbie
+import fasteners
 
 from nwp.datafile import DataFile
 
@@ -19,8 +20,7 @@ if mp.get_start_method() != 'spawn':
         print("Warning: Could not set spawn context. Already initialized.")
 
 class GEFSData(DataFile):
-    _manager = mp.Manager()
-    _lock = _manager.Lock()
+    LOCK_DIR = os.getenv("CLYFAR_TMPDIR")
 
     def __init__(self):
         """Download, process GEFS data.
@@ -70,9 +70,17 @@ class GEFSData(DataFile):
     @classmethod
     def safe_get_CONUS(cls, qstr, herbie_inst, remove_grib=True):
         """
-        Safely download and process GRIB file using file locking.
+        Safely download and process GRIB file using fasteners.
         """
-        with cls._lock:
+        # Create unique lock file path based on the GEFS data request
+        lock_path = os.path.join(
+            cls.LOCK_DIR,
+            f"herbie_{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock"
+        )
+
+        lock = fasteners.InterProcessLock(lock_path)
+
+        with lock:
             ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
             ds = ds.metpy.parse_cf()
             return ds
