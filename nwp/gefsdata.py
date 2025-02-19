@@ -3,7 +3,6 @@ import os
 import multiprocessing as mp
 import tempfile
 
-from filelock import FileLock
 import numpy as np
 import pandas as pd
 from cartopy import crs as ccrs
@@ -72,14 +71,6 @@ class GEFSData(DataFile):
         """
         Safely download and process GRIB file using file locking.
         """
-        # Create locks directory if it doesn't exist
-        # os.makedirs(cls.LOCK_DIR, exist_ok=True)
-
-        # Create a unique lock file based on the Herbie instance details
-        # Use the GRIB file's identifying information for the lock name
-        # lock_name = f"{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock"
-        # lock_path = os.path.join(cls.LOCK_DIR, lock_name)
-
         with mp.Manager() as manager:
             lock = manager.Lock()
 
