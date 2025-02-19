@@ -19,7 +19,8 @@ if mp.get_start_method() != 'spawn':
         print("Warning: Could not set spawn context. Already initialized.")
 
 class GEFSData(DataFile):
-    LOCK_DIR = os.getenv('CLYFAR_TMPDIR')
+    _manager = mp.Manager()
+    _lock = _manager.Lock()
 
     def __init__(self):
         """Download, process GEFS data.
@@ -71,13 +72,10 @@ class GEFSData(DataFile):
         """
         Safely download and process GRIB file using file locking.
         """
-        with mp.Manager() as manager:
-            lock = manager.Lock()
-
-            with lock:
-                ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
-                ds = ds.metpy.parse_cf()
-                return ds
+        with cls._lock:
+            ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
+            ds = ds.metpy.parse_cf()
+            return ds
 
     @staticmethod
     def get_CONUS(qstr, herbie_inst, remove_grib=True):
