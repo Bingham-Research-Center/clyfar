@@ -10,8 +10,8 @@ import xarray as xr
 from herbie import Herbie
 import fasteners
 
-from nwp.download_funcs import retry_download_backoff
 from nwp.datafile import DataFile
+from utils.download_utils import retry_download_backoff
 
 # At the top of the file, enforce spawn context
 if mp.get_start_method() != 'spawn':
@@ -26,8 +26,7 @@ class GEFSData(DataFile):
     def __init__(self):
         """Download, process GEFS data.
         """
-        pass
-
+        super().__init__()
 
     @classmethod
     def generate_timeseries(cls, fxx, inittime, gefs_regex, ds_key, lat, lon,
