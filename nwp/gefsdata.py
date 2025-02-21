@@ -85,8 +85,8 @@ class GEFSData(DataFile):
             ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
             ds = ds.metpy.parse_cf()
 
-        if os.path.exists(lock_path):
-            os.remove(lock_path)
+        # if os.path.exists(lock_path):
+        #     os.remove(lock_path)
 
         return ds
 
