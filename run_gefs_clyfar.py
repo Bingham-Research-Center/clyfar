@@ -548,6 +548,12 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         do_clyfar (bool): Whether to run Clyfar. Default is True.
         do_gefs (bool): Whether to download GEFS data. Default is False.
     """
+    # Find most recent run time - would have to wait for runs to come through
+    # run = pd.Timestamp("now", tz="utc").floor('1h').replace(tzinfo=None)
+    # Can also wait, maybe for 20 min intervals.
+    # H = HerbieWait(run=run, model="rap", product="awp130pgrb",
+    #                 wait_for="10s", check_interval="1s", fxx=0)
+
     percentiles = [10, 50, 90]
 
     if verbose:

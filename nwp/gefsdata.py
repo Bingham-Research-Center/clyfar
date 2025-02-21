@@ -10,6 +10,7 @@ import xarray as xr
 from herbie import Herbie
 import fasteners
 
+from nwp.download_funcs import retry_download_backoff
 from nwp.datafile import DataFile
 
 # At the top of the file, enforce spawn context
@@ -68,6 +69,7 @@ class GEFSData(DataFile):
         return ds
 
     @classmethod
+    @retry_download_backoff(retries=3, backoff_in_seconds=1)
     def safe_get_CONUS(cls, qstr, herbie_inst, remove_grib=True):
         """
         Safely download and process GRIB file using fasteners.
