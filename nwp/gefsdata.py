@@ -30,7 +30,7 @@ class GEFSData(DataFile):
 
     @classmethod
     def generate_timeseries(cls, fxx, inittime, gefs_regex, ds_key, lat, lon,
-                                product,member="c00", remove_grib=True):
+                            product,member="c00", remove_grib=True):
         """Need more info on variable names etc
 
         product here is "0.25 deg" etc
@@ -40,7 +40,7 @@ class GEFSData(DataFile):
         for f in fxx:
             validtime = inittime + datetime.timedelta(hours=f)
             H = cls.setup_herbie(inittime, fxx=f, product=product, model="gefs",
-                                            member=member)
+                                 member=member)
             ds = cls.get_CONUS(gefs_regex, H, remove_grib=remove_grib)
             # TODO: move the cropping method to a more general script (e.g., geog_funcs)
             ds_crop = cls.crop_to_UB(ds)
@@ -84,7 +84,11 @@ class GEFSData(DataFile):
         with lock:
             ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
             ds = ds.metpy.parse_cf()
-            return ds
+
+        if os.path.exists(lock_path):
+            os.remove(lock_path)
+
+        return ds
 
     @staticmethod
     def get_CONUS(qstr, herbie_inst, remove_grib=True):
@@ -115,7 +119,7 @@ class GEFSData(DataFile):
 
     @classmethod
     def get_cropped_data(cls,inittime,fxx,q_str,product="nat", remove_grib=True,
-                            member="c00"):
+                         member="c00"):
         """JRL: I'm not sure if this is needed. Speeds up cropped data generation?
 
         Args:
