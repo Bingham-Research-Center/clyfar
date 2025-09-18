@@ -13,6 +13,35 @@ temp_stids = ['A1622', 'UINU1','KVEL', 'USWU1', 'BLAU1', 'KU69', 'UBCSP']
 # Elevation for masking NWP data as "low level"
 lowhigh_elev_split = 1850
 
+obs_vars = [
+    "wind_speed",
+    "wind_direction",
+    "air_temp",
+    "dew_point_temperature",
+    "pressure",
+    "snow_depth",
+    "solar_radiation",
+    "altimeter",
+    "soil_temp",
+    "sea_level_pressure",
+    "snow_accum",
+    "ceiling",
+    "soil_temp_ir",
+    "snow_smoothed",
+    "snow_accum_manual",
+    "snow_water_equiv",
+    "net_radiation_sw",
+    "sonic_air_temp",
+    "sonic_vertical_vel",
+    "vertical_heat_flux",
+    "outgoing_radiation_sw",
+    "PM_25_concentration",
+    "ozone_concentration",
+    "derived_aerosol_boundary_layer_depth",
+    "NOx_concentration",
+    "PM_10_concentration",
+]
+
 ##############################################
 # Things common to all versions of Clyfar
 

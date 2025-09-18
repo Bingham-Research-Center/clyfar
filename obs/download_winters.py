@@ -8,6 +8,7 @@ import numpy as np
 import pytz
 
 from obs.obsdata import ObsData
+from utils.lookups import obs_vars
 
 def download_winter_obs(start_year, end_year, start_month, end_month, start_day, end_day, obs_vars,
                                     fdir="../data", qc="all"):
@@ -80,7 +81,6 @@ if __name__ == "__main__":
     end_day = 15
     start_year = 2005
     end_year = 2024
-    obs_vars = ["wind_speed", "wind_direction", "air_temp", "dew_point_temperature", "pressure", "snow_depth", "solar_radiation", "altimeter", "soil_temp", "sea_level_pressure", "snow_accum", "ceiling", "soil_temp_ir", "snow_smoothed", "snow_accum_manual", "snow_water_equiv", "net_radiation_sw", "sonic_air_temp", "sonic_vertical_vel", "vertical_heat_flux", "outgoing_radiation_sw", "PM_25_concentration", "ozone_concentration", "derived_aerosol_boundary_layer_depth", "NOx_concentration", "PM_10_concentration"]
 
     # Run the download function with the constants
     download_winter_obs(start_year, end_year, start_month, end_month, start_day, end_day, obs_vars, fdir, qc)
