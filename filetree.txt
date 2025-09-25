@@ -1,0 +1,27 @@
+clyfar/
+├── notebooks/
+│   ├── fis/
+│   │   ├── clyfar_v0.ipynb
+│   │   ├── clyfar_v0p9.ipynb
+│   │   └── guide_to_fuzzy_inference.ipynb
+│   ├── nwp/
+│   │   ├── gefs_0p5_demo.ipynb
+│   │   └── gefs_notebook.ipynb
+│   ├── obs/
+│   │   ├── messing_with_synoptic_data.ipynb
+│   │   └── roosevelt_lidar.ipynb
+│   ├── operations/
+│   │   ├── clyfar_script.ipynb
+│   │   └── operational_clyfar_forecast.ipynb
+│   ├── postprocessing/
+│   │   └── possibility_fcsts.ipynb
+│   ├── preprocessing/
+│   │   ├── creating_rep_obs.ipynb
+│   │   └── pseudolapserate_demo.ipynb
+│   ├── reference/
+│   │   └── clyfar_explained.ipynb
+│   ├── sandbox/
+│   │   └── pandas_playground.ipynb
+│   └── viz/
+│       └── noaa_proposal_figures.ipynb
+└── ...
