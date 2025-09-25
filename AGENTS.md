@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - Core script: `run_gefs_clyfar.py` orchestrates downloads, processing, and visualization.
 - Modules:
-  - `fis/` fuzzy inference system (e.g., `v1p0.py`), Clyfar logic.
+- `fis/` fuzzy inference system (e.g., `v0p9.py`), Clyfar logic.
   - `nwp/` data acquisition/parsing for GEFS/HRRR (e.g., `download_funcs.py`).
   - `preprocessing/` feature engineering (e.g., `representative_nwp_values.py`).
   - `viz/` plotting utilities; `utils/` shared helpers; `verif/` evaluation tools.
@@ -23,7 +23,7 @@
 - Follow PEP 8, 4-space indentation, type hints where practical.
 - Names: modules `snake_case.py`; classes `CamelCase`; functions/vars `snake_case`.
 - Keep public functions documented with concise docstrings; prefer pure functions in `utils/`.
-- Versioned modules use `vXrY` pattern (e.g., `v1p0.py`); keep API-compatible shims if refactoring.
+- Versioned modules use `vXrY` pattern (e.g., `v0p9.py`); keep API-compatible shims if refactoring.
 
 ## Testing Guidelines
 - No formal test suite yet. Use the CLI `--testing` flag and small `-m`/`-n` values to validate changes quickly.

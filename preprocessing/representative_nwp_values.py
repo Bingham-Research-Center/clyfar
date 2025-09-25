@@ -410,7 +410,7 @@ def do_nwpval_temp(init_dt_naive,
 
     """We want the 50th percentile over all stations, for now!
 
-    Will be replaced by pseudo-lapse-rate in version 1.x but this allows plots
+    Will be replaced by pseudo-lapse-rate in the planned 1.0+ builds, but this allows plots
     of raw GEFS data.
 
     Temperature here is kind of useless as it's a function of height that

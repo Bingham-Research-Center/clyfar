@@ -33,7 +33,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 
 from nwp.download_funcs import check_and_create_latlon_files
-from fis.v1p0 import (
+from fis.v0p9 import (
     VARIABLE_METADATA, FORECAST_CONFIG,
     GEOGRAPHIC_CONSTANTS,
 )
@@ -46,7 +46,7 @@ from utils.geog_funcs import get_elevations_for_resolutions
 from utils.lookups import Lookup
 from utils.utils import configurable_timer
 from viz.plotting import plot_meteogram
-from fis.v1p0 import Clyfar
+from fis.v0p9 import Clyfar
 from viz.possibility_funcs import (plot_percentile_meteogram,
                                    plot_possibility_bar_timeseries,
                                    plot_ozone_heatmap, plot_dailymax_heatmap)

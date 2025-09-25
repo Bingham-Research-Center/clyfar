@@ -1,64 +1,152 @@
 # Codex Refactor & Versioning Plan
+Date updated: 2025-09-25
 
-## Goals
-- Freeze current behavior as 0.9, then evolve safely (MFs, variables).
-- Run experiments across tagged versions with repeatable outputs and metadata.
+## Mission Snapshot
+- Keep v0.9 frozen and traceable while paving the path to the v1.x family.
+- Make every workflow (ingest → preprocess → FIS → viz) configurable, testable, and documented.
+- Reduce repo noise so new collaborators and Codex agents find facts fast.
 
-## Phase Plan
-- Freeze 0.9 Baseline
-- Introduce Package Layout
-- Stabilize Public APIs
-- Add Config + Registries
-- Refactor CLI & Paths
-- Add Experiment Runner
-- CI + Release Workflow
+## Milestone Track (Essentials + Microtasks)
 
-## 1) Freeze 0.9 Baseline
-- Branch: `git checkout -b release/0.9`
-- Tag: `git tag -a v0.9.0 -m "Freeze current functionality" && git push --tags`
-- Keep `release/0.9` frozen; hotfix via `v0.9.x` tags if needed.
+### M1 · Freeze 0.9 Baseline
+- [ ] Tag `v0.9.0` from the current mainline and cut `release/0.9`.
+- [ ] Capture a `--testing` golden run; stash outputs under `data/baseline_0_9/`.
+- [ ] Snapshot representative figures into `figures_archive/v0_9/` for posterity.
+- [ ] Write `docs/baseline_0_9.md` with CLI example, git SHA, and artefact paths.
+- [ ] Copy dependencies to `constraints/baseline-0.9.txt` and freeze there.
 
-## 2) Package Layout
-- Create package:
-  - `clyfar/__init__.py` (defines `__version__`)
-  - `clyfar/core/` (orchestration from `run_gefs_clyfar.py`)
-  - `clyfar/fis/versions/{v0_9,v1_0}/` (house versioned MF logic)
-  - `clyfar/{nwp,preprocessing,viz,utils}/`
-- Re-export for backward compat where useful; add `pyproject.toml` later.
+### M2 · Package Layout
+- [ ] Scaffold `clyfar/` package (`__init__`, `core`, `fis/versions`, `nwp`, etc.).
+- [ ] Move one module family at a time; update imports + keep shims in legacy paths.
+- [ ] Add `pyproject.toml` and editable install instructions.
+- [ ] Create `tests/imports/test_package_layout.py` to guard new namespace.
+- [ ] Update docs/README snippets that reference module paths.
 
-## 3) Stabilize Public APIs
-- NWP: `clyfar.nwp.api.get_timeseries(...)`
-- Preproc: `clyfar.preprocessing.api.create_forecast_dataframe(...)`
-- FIS: `clyfar.fis.api.compute_ozone(mf_set, inputs)->outputs`
-- Default behavior maps to `v0_9` implementation.
+### M3 · Public APIs
+- [ ] Publish thin `api.py` modules for NWP, preprocessing, and FIS entry points.
+- [ ] Define TypedDict/dataclasses describing inputs/outputs consumed across stages.
+- [ ] Document each public function with runnable samples in `docs/api_samples/`.
+- [ ] Add fast contract tests (shape/dtype/nullable checks) for each API.
+- [ ] Emit deprecation warnings from legacy helpers slated for removal.
 
-## 4) Config + Registries
-- Config (YAML/JSON): select variable set, percentile methods, `mf_set`.
-- Registries:
-  - `VARIABLES.register("wind", func)`
-  - `MF_REGISTRY.register("v0_9", obj)` and new variants (e.g., `v1_0`).
+### M4 · Config & Registries
+- [ ] Implement registry helpers (`VARIABLES.register`, `MF_REGISTRY.register`).
+- [ ] Author `schemas/config.schema.json` and a loader that validates configs.
+- [ ] Ship example configs under `configs/examples/` covering core workflows.
+- [ ] Regression-test each example config resolves to concrete callables.
+- [ ] Write decorator docs + usage in `docs/configuration.md`.
 
-## 5) CLI & Paths
-- CLI `clyfar`:
-  - `clyfar run --config config.yaml --inittime 2024010100 -n 8 -m 10 -d ./data -f ./figures`
-  - `clyfar experiment run --suite suites/baseline.yaml`
-- Centralize paths in config/env; make `run_gefs_clyfar.py` a thin wrapper.
+### M5 · CLI & Paths
+- [ ] Wrap orchestration behind a `typer` or `click` CLI (`clyfar run`, `clyfar experiment`).
+- [ ] Keep `run_gefs_clyfar.py` as a shim forwarding into the new CLI.
+- [ ] Support global flags: `--dry-run`, `--verbose`, `--cache-root`.
+- [ ] Document CLI usage and completions in `docs/cli.md` (+ completion scripts).
+- [ ] Ensure path handling respects env vars and config overrides.
 
-## 6) Experiment Runner
-- Iterate versions (e.g., `mf_set in [v0_9, v1_0]`) and member/CPU grids.
-- Write under `data/<version>/<run_id>/` and `figures/<version>/<run_id>/`.
-- Save `run.json` with git tag, config hash, start/end times, and params.
+### M6 · Experiment Runner & Automation
+- [ ] Design `experiments/baseline.yaml` describing member grids & MF sets.
+- [ ] Build `clyfar.experiments` runner capable of local + batch execution.
+- [ ] Persist `run.json` metadata (git SHA, config hash, timings) per run.
+- [ ] Add checkpoint/resume logic to skip finished members on rerun.
+- [ ] Integrate metrics logging (CSV + optional wandb hook).
 
-## 7) CI + Release Workflow
-- GitHub Actions: lint + `pytest -q` on PR; build and release on tags `v*.*.*`.
-- Keep `clyfar/__init__.py` version in sync with tags.
+### M7 · CI, QA & Governance
+- [ ] Configure GitHub Actions (lint, `pytest -q`, smoke workflow).
+- [ ] Cache conda/pip layers to keep CI <10 min.
+- [ ] Require coverage thresholds; publish artefacts per run.
+- [ ] Document release checklist in `docs/release_process.md`.
+- [ ] Draft governance note for approving new FIS versions and experiment tags.
 
-## Testing Strategy (now)
-- Focus on pure helpers and API shape tests (no network by default).
-- Guard heavy tests behind env flags/markers; use `pytest.importorskip`.
+## Roadmap · 2025-09-25 Execution Plan
 
-## Next Actions
-- Create `clyfar/` skeleton, move modules with re-exports.
-- Add minimal registry + config loader; default to `v0_9`.
-- Add `pyproject.toml`; support editable install.
-- Tag `v0.9.1` after package layout stabilizes; begin `v1_0` MF work behind config.
+### 1) 0.9.x Hardening
+- Tag baseline outputs and store under `data/baseline_0p9/`.
+- Compare snow/ozone metrics between v0.9 and legacy to confirm parity.
+- Review representative station coverage vs latest obs data; adjust lists.
+- Silence Matplotlib cache warnings by exporting `MPLCONFIGDIR` in CLI entry.
+- Draft `v0.9.1` notes (snow bias + timing hotfix scope).
+
+### 2) Smoke & Regression Suite
+- Script the `--testing` workflow (`scripts/run_smoke.sh`).
+- Capture runtime logs into `performance_log.txt` and diff vs baseline.
+- Validate parquet + figure outputs exist post-smoke run.
+- Set up nightly cron/CI smoke execution using cached data.
+- Record git SHA + config hash with each smoke artefact.
+
+### 3) Packaging Prep
+- Author `pyproject.toml` and `setup.cfg` (if needed) for editable installs.
+- Expose `__version__ = "0.9.0"` in `clyfar/__init__.py`.
+- Provide install instructions in README + AGENTS.
+- Dry-run `pip install -e .` in a clean env.
+- Verify `python -c "import clyfar"` works post-install.
+
+### 4) Experiment Framework
+- Draft `experiments/baseline.yaml` grid definitions.
+- Implement `python -m clyfar.experiments run --config ...` CLI entry.
+- Log metadata to `data/<run_id>/run.json` for each execution.
+- Add resume-by-member chunking (skip completed outputs).
+- Document experiment process in `docs/experiments.md`.
+
+### 5) Data Ingest Abstraction
+- Create `clyfar/nwp/interfaces.py` with `ForecastDataset` protocol.
+- Wrap GEFS loader into `GEFSDataSource` implementing the protocol.
+- Stub `HRRRDataSource` returning mocked data for API parity tests.
+- Write tests ensuring both sources expose consistent fields/units.
+- Update workflow to pull data via the abstraction layer.
+
+### 6) FIS Optimization Hooks
+- Externalise MF parameters into YAML/JSON definitions.
+- Implement gradient-descent prototype adjusting one MF set.
+- Log loss progression to `data/experiments/`.
+- Add CLI flag `--optimize-mfs` toggling optimisation.
+- Document workflow in `docs/fis_optimization.md`.
+
+### 7) Documentation Refresh
+- Add `Date updated: YYYY-MM-DD` to README, AGENTS, docs notebooks.
+- Insert an architecture diagram (Mermaid or PNG) into README.
+- Outline version naming (0.9, 1.0, 1.1-XYZ) in `docs/versioning.md`.
+- Cross-link smoke instructions between README and AGENTS.
+- Create `notebooks/archived/INDEX.md` cataloguing legacy notebooks.
+
+### 8) Cleanup & Governance
+- Review `bkup/` and delete or archive stale scripts.
+- Reclassify notebooks by purpose (analysis/research/reference).
+- Draft contributor guidelines covering branches, reviews, coding style.
+- Establish "change proposal" template for new FIS versions.
+- Schedule weekly checkpoint to triage experiment branches.
+
+### 9) Tooling & CI Enhancements
+- Add `pre-commit` with `ruff`, `black`, `isort` hooks.
+- Create CI workflow for lint + smoke (with mocked downloads).
+- Integrate coverage reporting and publish badge-ready data.
+- Cache dependency environments (conda/pip) in CI runs.
+- Update README with CI status badges once live.
+
+### 10) Observability & Telemetry
+- Decorate critical pipeline stages with timing logs → `performance_log.txt`.
+- Optionally upload artefacts (figures/data) to S3/local archive via config flag.
+- Format logs as JSON for easier parsing.
+- Count per-variable success/failure after each run and report summary.
+- Provide dashboard notebook summarising the latest runs.
+
+## Targeted Refactor Recommendations (Top 20)
+1. Collapse duplicate utility functions by centralising date/time helpers in `utils/datetime.py`.
+2. Replace ad-hoc prints with `structlog` or standard `logging` configured for JSON output.
+3. Convert `postprocesing/` typo directory into `postprocessing/` and merge relevant modules.
+4. Introduce `attrs` or `pydantic` models for configuration validation to reduce manual checks.
+5. Move large plotting defaults into a shared `viz/style.py` for consistent aesthetics.
+6. Build a lightweight secrets loader (env or `.env`) to avoid hard-coded tokens in notebooks.
+7. Add `make targets` or `noxfile.py` covering lint, smoke, docs, and experiment runs.
+8. Split `run_gefs_clyfar.py` into orchestrator + reusable stage modules to simplify tests.
+9. Replace manual file-tree notes (`filetree.txt`) with an automated generator (`python -m clyfar.tools.tree`).
+10. Introduce `docs/kb/` backed by a separate knowledge-base repo synced via git submodule for Codex context.
+11. Enforce consistent pandas timezones by wrapping conversions in `utils/timezone.py` helpers.
+12. Replace global `Lookup()` with dependency injection or `functools.lru_cache` to avoid repeated loads.
+13. Create a minimal `clyfar.dataset` module standardising parquet schema metadata.
+14. Extract multiprocessing pool management into `clyfar/core/parallel.py` with context managers.
+15. Implement lazy import guards for heavy libs (cartopy, matplotlib) to speed CLI startup.
+16. Provide an onboarding notebook (`notebooks/onboarding/intro.ipynb`) linking to docs and quick tasks.
+17. Publish example config + output pairs in `examples/` for new contributors to sanity-check.
+18. Add `tests/fixtures/` with small, synthetic GRIB/NetCDF slices for offline testing.
+19. Use `ruff` (or similar) to auto-suppress unused imports generated by optional dependencies.
+20. Document Codex usage patterns and prompt tricks in `docs/codex_playbook.md`, referencing an external knowledge-base repo for richer context.

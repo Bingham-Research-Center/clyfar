@@ -7,7 +7,7 @@ This is independent of Clyfar version, in general.
 
 This should be for methods and functions related to fuzzy inference systems
 in general, and we import membership functions and rules from each version's
-configuration in files like "v1p0.py".
+configuration in files like "v0p9.py".
 """
 
 import os
