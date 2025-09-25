@@ -1,0 +1,40 @@
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Python cache/artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.ipynb_checkpoints/
+.mypy_cache/
+.pytest_cache/
+.cache/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE & tooling
+.idea/
+.vscode/
+*.code-workspace
+Writerside/
+
+# Logs & runtime artifacts
+*.log
+performance_log.txt
+
+# Local data & figures
+data/
+data_seth/
+figures/
+figures_parallel/
+
+# Misc
+*.swp
+*.swo
