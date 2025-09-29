@@ -228,7 +228,7 @@ class FIS:
         if total_area == 0:
             logging.getLogger(__name__).warning(
                 "Defuzzification skipped due to zero aggregated support")
-            return {p: np.nan for p in percentiles}
+            return float('nan')
 
         normalized_areas = cumulative_areas / total_area
 
