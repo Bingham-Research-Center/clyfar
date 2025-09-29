@@ -24,7 +24,7 @@ from scipy import ndimage
 # mp.set_start_method('spawn', force=True)
 print("Current start method:", mp.get_start_method())
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import logging
 import datetime
 
@@ -454,7 +454,8 @@ def gefs_to_clyfar_membername(gefs_member: str) -> str:
     else:
         raise Exception
 
-def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
+def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
+                               forecast_cache: Optional[Dict[str, Dict[str, pd.DataFrame]]]=None):
     """Run Clyfar driven by a single member of GEFS.
 
     init_dt should be naive.
@@ -472,9 +473,15 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
     all_vrbl_dfs = {}
     all_vrbls = ['snow', 'mslp', 'solar', 'wind', 'temp']
     for variable in all_vrbls:
-        # Put the dataframe for this member and variable into the dictionary
-        all_vrbl_dfs[variable] = load_forecast_data(variable, init_dt,
-                                    member_names = [member,])[member]
+        # Prefer freshly processed data when available to avoid disk I/O
+        if forecast_cache and variable in forecast_cache:
+            member_df = forecast_cache[variable].get(member)
+            if member_df is not None:
+                all_vrbl_dfs[variable] = member_df.copy()
+                continue
+
+        all_vrbl_dfs[variable] = load_forecast_data(
+            variable, init_dt, member_names=[member,])[member]
 
     # data_dict = reorganise_data(all_vrbl_dfs)
 
@@ -592,6 +599,8 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
 
     variables = ['wind', 'solar', 'snow', 'mslp', 'temp']
 
+    results = None
+
     if not no_gefs:
         print("Downloading GEFS data for", init_dt_dict['naive'])
         results = parallel_forecast_workflow(
@@ -626,7 +635,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             # TODO - no dicts; just save members in a folder for the run?
             clyfar_df_dict[clyfar_member] = run_singlemember_inference(
                 init_dt_dict['naive'], member,
-                percentiles)
+                percentiles, forecast_cache=results)
             pass
 
         print("Clyfar inference complete for", init_dt_dict['naive'])
