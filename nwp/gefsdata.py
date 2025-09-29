@@ -21,7 +21,7 @@ if mp.get_start_method() != 'spawn':
         print("Warning: Could not set spawn context. Already initialized.")
 
 class GEFSData(DataFile):
-    LOCK_DIR = os.getenv("CLYFAR_TMPDIR")
+    LOCK_DIR = os.getenv("CLYFAR_TMPDIR") or tempfile.gettempdir()
 
     def __init__(self):
         """Download, process GEFS data.
@@ -74,6 +74,7 @@ class GEFSData(DataFile):
         Safely download and process GRIB file using fasteners.
         """
         # Create unique lock file path based on the GEFS data request
+        os.makedirs(cls.LOCK_DIR, exist_ok=True)
         lock_path = os.path.join(
             cls.LOCK_DIR,
             f"herbie_{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock"
