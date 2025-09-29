@@ -75,6 +75,8 @@ logging.basicConfig(level=logging.INFO,
                    format='%(asctime)s.%(msecs)03d - %(processName)s - %(message)s',
                    datefmt='%Y-%m-%d %H:%M:%S')
 
+logger = logging.getLogger(__name__)
+
 ######### FUNCS ##########
 def initialize_geography(latlons, use_raw_elevations=False):
     """Initialize geographic masks and elevation data."""
@@ -455,7 +457,8 @@ def gefs_to_clyfar_membername(gefs_member: str) -> str:
         raise Exception
 
 def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
-                               forecast_cache: Optional[Dict[str, Dict[str, pd.DataFrame]]]=None):
+                               forecast_cache: Optional[Dict[str, Dict[str, pd.DataFrame]]]=None,
+                               diagnostics: Optional[List[Dict]] = None):
     """Run Clyfar driven by a single member of GEFS.
 
     init_dt should be naive.
@@ -489,6 +492,8 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
     indices = all_vrbl_dfs['snow'].index.copy()
     output_df = pd.DataFrame(index=indices)
 
+    poss_records: List[Dict[str, float]] = []
+
     for nt, dt in enumerate(indices):
         if nt == 0:
             print("Solar radiation is unavailable for first time.")
@@ -516,6 +521,8 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
         for cat in poss_df.index:
             output_df.loc[dt, cat] = poss_df.loc[cat].values
 
+        poss_records.append(poss_df['possibility'].to_dict())
+
         # Also include the values above ending in _val
         output_df.loc[dt, 'snow'] = snow_val
         output_df.loc[dt, 'mslp'] = mslp_val
@@ -529,6 +536,26 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
     pass
     print("Clyfar inference complete for member",
                 clyfar_member, "driven by GEFS member ", member)
+
+    if diagnostics is not None:
+        diag_entry: Dict[str, float] = {'member': clyfar_member}
+        input_cols = ['snow', 'mslp', 'wind', 'solar', 'temp']
+        for col in input_cols:
+            series = output_df[col].dropna()
+            if series.empty:
+                continue
+            diag_entry[f'{col}_p10'] = float(series.quantile(0.1))
+            diag_entry[f'{col}_p50'] = float(series.quantile(0.5))
+            diag_entry[f'{col}_p90'] = float(series.quantile(0.9))
+
+        poss_matrix = pd.DataFrame(poss_records)
+        if not poss_matrix.empty:
+            for cat in poss_matrix.columns:
+                diag_entry[f'poss_mean_{cat}'] = float(poss_matrix[cat].mean())
+                diag_entry[f'poss_active_{cat}'] = float((poss_matrix[cat] > 0).mean())
+
+        diagnostics.append(diag_entry)
+
     return output_df
 
 
@@ -539,7 +566,7 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
 def main(dt, clyfar_fig_root, clyfar_data_root,
          maxhr='all', ncpus='auto', nmembers=None, visualise=True,
          save=True, verbose=False, testing=False, no_clyfar=False,
-         no_gefs=False):
+         no_gefs=False, log_fis=False):
     """Execute parallel operational forecast workflow.
 
     Note:
@@ -624,6 +651,8 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
 
     # Run Clyfar here - GEFS time series already exists if everything went well
     # Go member by member to compute Clyfar
+    fis_diagnostics: Optional[List[Dict]] = [] if log_fis else None
+
     if not no_clyfar:
         print("Running Clyfar for", init_dt_dict['naive'])
 
@@ -637,7 +666,8 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             # TODO - no dicts; just save members in a folder for the run?
             clyfar_df_dict[clyfar_member] = run_singlemember_inference(
                 init_dt_dict['naive'], member,
-                percentiles, forecast_cache=results)
+                percentiles, forecast_cache=results,
+                diagnostics=fis_diagnostics)
             pass
 
         print("Clyfar inference complete for", init_dt_dict['naive'])
@@ -658,6 +688,12 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                 df.to_parquet(os.path.join(subdir,
                                 f"{clyfar_member}_df.parquet"))
             print("Saved Clyfar dataframes to ", subdir)
+
+        if log_fis and fis_diagnostics:
+            diag_df = pd.DataFrame(fis_diagnostics)
+            diag_means = diag_df.mean(numeric_only=True)
+            logger.info("FIS diagnostics mean values per member:\n%s",
+                        diag_means.to_string())
 
         if visualise:
             do_optim_pessim = False
@@ -752,6 +788,9 @@ if __name__ == "__main__":
     parser.add_argument(
         '-ng', '--no-gefs', action='store_true',
         help='Disable GEFS processing')
+    parser.add_argument(
+        '--log-fis', action='store_true',
+        help='Log fuzzy-system diagnostics for calibration')
 
     args = parser.parse_args()
     # Leave maxhr for now - not implemented
@@ -773,4 +812,5 @@ if __name__ == "__main__":
          visualise=True, save=True,
          verbose=args.verbose, testing=args.testing,
          no_clyfar=args.no_clyfar, no_gefs=args.no_gefs,
+         log_fis=args.log_fis,
          )
