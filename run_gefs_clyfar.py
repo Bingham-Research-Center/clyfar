@@ -62,6 +62,8 @@ if mp.get_start_method() != 'spawn':
 L = Lookup()
 clyfar = Clyfar()
 
+DEFAULT_GEFS_MEMBER_COUNT = 30
+
 # TODO - DYNAMIC PATHS
 # clyfar_data_root = './data/clyfar_output'
 # utils.try_create(clyfar_data_root)
@@ -528,7 +530,7 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
 #################################################
 
 def main(dt, clyfar_fig_root, clyfar_data_root,
-         maxhr='all', ncpus='auto', nmembers='all', visualise=True,
+         maxhr='all', ncpus='auto', nmembers=None, visualise=True,
          save=True, verbose=False, testing=False, no_clyfar=False,
          no_gefs=False):
     """Execute parallel operational forecast workflow.
@@ -562,14 +564,23 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
 
     utils.print_system_info()
 
-    member_names = [f'p{n:02d}' for n in range(1, nmembers + 1)]
-    print(member_names, nmembers)
+    member_count = (DEFAULT_GEFS_MEMBER_COUNT if nmembers in (None, 'all')
+                    else int(nmembers))
+    if member_count < 1:
+        raise ValueError("nmembers must be at least 1")
+
+    member_names = [f'p{n:02d}' for n in range(1, member_count + 1)]
+    print(member_names, member_count)
 
     if testing:
         member_names = member_names[:10]
+        member_count = len(member_names)
         ncpus = 10
     else:
-        ncpus = ncpus if ncpus != 'auto' else nmembers * 5  # Adjust for both members and variables
+        if ncpus in (None, 'auto'):
+            ncpus = member_count * 5  # Adjust for both members and variables
+        else:
+            ncpus = int(ncpus)
 
     latlons = {
         '0p25': check_and_create_latlon_files("0p25"),
