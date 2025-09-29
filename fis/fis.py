@@ -11,6 +11,7 @@ configuration in files like "v0p9.py".
 """
 
 import os
+import logging
 
 import numpy as np
 import pandas as pd
@@ -170,7 +171,8 @@ class FIS:
             total_area = np.trapezoid(y_agg, x_uod)
             cumulative_area = np.cumsum((y_agg[:-1] + y_agg[1:]) / 2 * np.diff(x_uod))
             if total_area == 0:
-                # Avoid div. by zero error
+                logging.getLogger(__name__).warning(
+                    "Defuzzification skipped due to zero aggregated support")
                 return {p: np.nan for p in percentiles}
             cumulative_area_normalized = cumulative_area / total_area
 
@@ -223,6 +225,11 @@ class FIS:
         # Compute cumulative areas and normalize
         cumulative_areas = np.concatenate(([0], np.cumsum(incremental_areas)))
         total_area = cumulative_areas[-1]
+        if total_area == 0:
+            logging.getLogger(__name__).warning(
+                "Defuzzification skipped due to zero aggregated support")
+            return {p: np.nan for p in percentiles}
+
         normalized_areas = cumulative_areas / total_area
 
         # Find bracketing indices
