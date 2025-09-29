@@ -489,7 +489,8 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles):
 
         # Hacky with units - TODO - fix this with pint package
         snow_val = all_vrbl_dfs["snow"][snow_].loc[dt] * 1000  # For m to mm
-        mslp_val = all_vrbl_dfs["mslp"][mslp_].loc[dt] * 100  # For hPa to Pa
+        # GEFS `prmsl` is already in Pa; avoid rescaling beyond the FIS domain
+        mslp_val = all_vrbl_dfs["mslp"][mslp_].loc[dt]
         wind_val = all_vrbl_dfs["wind"][wind_].loc[dt] # already in m/s?
         solar_val = all_vrbl_dfs["solar"][solar_].loc[dt] # already w/m2 TODO Crap after 240h
         temp_val = all_vrbl_dfs["temp"][temp_].loc[dt] # already in C
