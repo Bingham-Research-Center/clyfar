@@ -132,7 +132,7 @@ def weighted_average(elevation, mask):
 
     # Compute the average of the surrounding cells
     # with np.errstate(invalid='ignore'):
-    avg_neighbors = np.divide(sum_neighbors,neighbor_counts)
+    avg_neighbors = np.divide(sum_neighbors, safe_neighbor_counts)
 
 
     # Compute the final weighted average
