@@ -327,7 +327,7 @@ class ParallelEnsembleProcessor:
 
 #### END OF CLASS ####
 
-# @configurable_timer(log_file="performance_log.txt")
+@configurable_timer(log_file="performance_log.txt")
 def parallel_forecast_workflow(init_dt: datetime.datetime, masks: Dict, member_names: List[str], variables: List[str], ncpus: int = None, testing: bool = False) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
     Execute comprehensive parallel forecast workflow for all variables and members.
@@ -603,7 +603,9 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
 
     if not no_gefs:
         print("Downloading GEFS data for", init_dt_dict['naive'])
-        results = parallel_forecast_workflow(
+        workflow_fn = (parallel_forecast_workflow
+                        if verbose else parallel_forecast_workflow.__wrapped__)
+        results = workflow_fn(
             init_dt_dict['naive'], masks, member_names, variables, ncpus=ncpus,
             testing=testing)
 
