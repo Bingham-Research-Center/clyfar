@@ -72,8 +72,14 @@ def check_and_create_latlon_files(deg_res, fdir='./data/geog'):
         lat_arr = ds_ts.latitude.values
         lon_arr = ds_ts.longitude.values
         lon_grid, lat_grid = np.meshgrid(lon_arr, lat_arr)
-        pd.DataFrame(lat_grid).to_parquet(lat_file)
-        pd.DataFrame(lon_grid).to_parquet(lon_file)
+        lat_df = pd.DataFrame(lat_grid)
+        lon_df = pd.DataFrame(lon_grid)
+        lat_df.columns = lat_df.columns.astype(str)
+        lon_df.columns = lon_df.columns.astype(str)
+        lat_df.index = lat_df.index.astype(str)
+        lon_df.index = lon_df.index.astype(str)
+        lat_df.to_parquet(lat_file)
+        lon_df.to_parquet(lon_file)
         return lat_grid, lon_grid
 
     if not os.path.exists(fdir):
@@ -95,4 +101,3 @@ def check_and_create_latlon_files(deg_res, fdir='./data/geog'):
         lats, lons = generate_and_store()
 
     return {'latitudes': lats, 'longitudes': lons}
-
