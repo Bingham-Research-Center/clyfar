@@ -63,15 +63,19 @@ def load_variable(init_dt, start_h, max_h, delta_h, q_str, product,
     return ds_time_series
 
 def check_and_create_latlon_files(deg_res, fdir='./data/geog'):
-    """Check if lat/lon files exist for a given resolution, and create them if not.
+    """Check if lat/lon files exist for a given resolution, and create them if not."""
 
-    Args:
-        deg_res (str): Degree resolution (e.g., "0p25", "0p5").
-        fdir (str): Directory to save the files (default is 'data').
+    def generate_and_store():
+        ds_ts = load_variable(datetime.datetime(2023, 2, 3, 0, 0, 0),
+                              start_h=0, max_h=0, q_str=":PRMSL", delta_h=3,
+                              product=f"atmos.{deg_res[2:]}", member='p01')
+        lat_arr = ds_ts.latitude.values
+        lon_arr = ds_ts.longitude.values
+        lon_grid, lat_grid = np.meshgrid(lon_arr, lat_arr)
+        pd.DataFrame(lat_grid).to_parquet(lat_file)
+        pd.DataFrame(lon_grid).to_parquet(lon_file)
+        return lat_grid, lon_grid
 
-    Returns:
-        dict: Dictionary with latitudes and longitudes arrays.
-    """
     if not os.path.exists(fdir):
         os.makedirs(fdir)
 
@@ -79,22 +83,16 @@ def check_and_create_latlon_files(deg_res, fdir='./data/geog'):
     lon_file = os.path.join(fdir, f"gefs{deg_res}_longitudes.parquet")
 
     if os.path.exists(lat_file) and os.path.exists(lon_file):
-        lats = pd.read_parquet(lat_file).values
-        lons = pd.read_parquet(lon_file).values
+        try:
+            lats = pd.read_parquet(lat_file).values
+            lons = pd.read_parquet(lon_file).values
+        except AttributeError:
+            # Historical files written with non-string column names can confuse fastparquet
+            os.remove(lat_file)
+            os.remove(lon_file)
+            lats, lons = generate_and_store()
     else:
-        ds_ts = load_variable(datetime.datetime(2023, 2, 3, 0, 0, 0),
-                              start_h=0, max_h=0, q_str=":PRMSL", delta_h=3,
-                              product=f"atmos.{deg_res[2:]}", member='p01',)
-        lats = ds_ts.latitude.values
-        lons = ds_ts.longitude.values
-
-        # Create a meshgrid so we have indices for our grid
-        lons, lats = np.meshgrid(lons, lats)
-
-        # Save these dataframes for loading in future in parquet form
-        pd.DataFrame(lats).to_parquet(lat_file)
-        pd.DataFrame(lons).to_parquet(lon_file)
+        lats, lons = generate_and_store()
 
     return {'latitudes': lats, 'longitudes': lons}
-
 
