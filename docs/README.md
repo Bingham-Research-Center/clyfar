@@ -6,6 +6,7 @@ Use this page as the jumping-off point for orientation, planning, and deeper res
 ## Quick start
 - `README.md` — Project summary, prerequisites, and one-command smoke test.
 - `AGENTS.md` — Collaboration guardrails, coding conventions, and day-to-day workflows.
+- `docs/AI_AGENT_ONBOARDING.md` — **AI agents start here:** efficient protocol to minimize token usage and respect team conventions.
 - `docs/project_overview.md` — Narrative tour of the architecture and possibility-theory framing.
 - `docs/roadmap.md` — Current refactor milestones, microtasks, and execution plan.
 
