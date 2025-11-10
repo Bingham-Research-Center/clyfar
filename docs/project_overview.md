@@ -1,5 +1,5 @@
 # Clyfar Project Overview
-Date updated: 2025-09-25
+Date updated: 2025-10-05
 
 ## What Clyfar Does
 Clyfar is an ozone-forecasting system built for the Uinta Basin. It ingests GEFS ensemble weather forecasts, engineers representative features (wind, snow, solar, pressure, temperature), feeds them into a fuzzy inference system (FIS), and outputs:
@@ -70,7 +70,7 @@ Steps internally:
 ## Interpretation & Fit to Dubois & Prade
 - Clyfar follows the classic possibility framework: rules map meteorological situations to plausibility levels rather than probabilities.
 - The max-based aggregation and optional normalisation mirror Dubois & Prade’s treatment of possibility distributions derived from fuzzy rules.
-- Current plots show raw membership heights; planned enhancements (see `ML-IDEAS.md`) include highlighting ignorance explicitly and supporting subnormal outputs in dashboards.
+- Current plots show raw membership heights; planned enhancements (see `docs/ml_ideas.md`) include highlighting ignorance explicitly and supporting subnormal outputs in dashboards.
 
 ## Key Concepts to Know (Junior Undergraduate Level)
 - **Fuzzy sets:** Instead of yes/no categories, membership functions assign grades (0–1) indicating how well a condition is met.
@@ -82,6 +82,6 @@ Steps internally:
 ## Current Gaps & Roadmap Hooks
 - Temperature remains a placeholder; pseudo-lapse-rate integration is pending (see notebooks + roadmap).
 - Possibility heatmaps exist but daily max aggregation is incomplete (`plot_dailymax_heatmap` TODO).
-- Experiment automation, registries, and CLI refactors are planned in `CODEX-REFACTOR-PLAN.md`.
+- Experiment automation, registries, and CLI refactors are planned in `docs/roadmap.md`.
 
-Use this overview alongside `CODEX-INDEX.md`, `AGENTS.md`, and `ML-IDEAS.md` for a fuller orientation.
+Use this overview alongside `docs/README.md`, `AGENTS.md`, and `docs/ml_ideas.md` for a fuller orientation.

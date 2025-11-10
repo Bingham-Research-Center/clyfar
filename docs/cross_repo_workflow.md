@@ -1,5 +1,5 @@
 # Cross-Repo Context Workflow
-Date updated: 2025-09-25
+Date updated: 2025-10-05
 
 Clyfar work draws on three local repositories: the main codebase (this repo), a knowledge base (Scholarium), and a preprint repo. To keep coordination clean and secure:
 
@@ -12,7 +12,7 @@ Clyfar work draws on three local repositories: the main codebase (this repo), a 
 - Avoid absolute paths; refer generically (e.g., “Scholarium KB repo under personal GitHub workspace”).
 
 ## 2. Reference External Docs from the Main Repo
-- Update `CODEX-INDEX.md` or `CODEX-READING-LIST.md` with an “External Knowledge Sources” section.
+- Update `docs/README.md` with an “External Knowledge Sources” section.
 - For each source, list:
   - Repo name.
   - Relative note pointing to its `CODEX-KB.md` (e.g., “See Scholarium repo guidance doc”).

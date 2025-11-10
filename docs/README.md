@@ -1,18 +1,31 @@
-# Codex Context Index
-Date updated: 2025-09-25
+# Documentation Hub
+Date updated: 2025-10-09
 
-Use this index to orient future Codex sessions quickly. Each entry lists the key doc and what it covers.
+Use this page as the jumping-off point for orientation, planning, and deeper research. Follow the "Quick start" list first, then dive into the topical docs as needed.
 
-- `AGENTS.md` — Repository guidelines, project structure, coding conventions, testing notes.
-- `CODEX-REFACTOR-PLAN.md` — Current refactor roadmap, milestone microtasks, execution plan, and targeted recommendations.
-- `ML-IDEAS.md` — Machine-learning exploration notes, plain-language summary, optimisation ideas for FIS evolution.
-- `README.md` — High-level project introduction and setup prerequisites.
-- `CODEX-INDEX.md` — Start here; updated whenever major guidance docs change.
-- `EXPERIMENT-NEXT-STEPS.md` — Procedure for running multi-version winter experiments.
-- `notebooks/reference/` — Expanded narrative notebooks (e.g., `clyfar_explained.ipynb`).
-- `scripts/` (planned) — Placeholder for automation; see roadmap for pending additions.
+## Quick start
+- `README.md` — Project summary, prerequisites, and one-command smoke test.
+- `AGENTS.md` — Collaboration guardrails, coding conventions, and day-to-day workflows.
+- `docs/project_overview.md` — Narrative tour of the architecture and possibility-theory framing.
+- `docs/roadmap.md` — Current refactor milestones, microtasks, and execution plan.
 
-Maintenance actions:
-- Update this index whenever new context docs are added or renamed.
-- Keep `Date updated` in each doc current when changes land.
-- Remove stale entries if files are deleted or archived.
+## Topical references
+- `docs/setup_conda.md` — Step-by-step Miniforge/Conda environment setup.
+- `docs/experiments/multi_version_winter.md` — Multi-version winter experiment playbook.
+- `docs/ml_ideas.md` — Machine-learning and optimisation concepts for evolving the FIS.
+- `docs/patches_table.md` — Table of tactical fixes with notes on future relevance.
+- `docs/cross_repo_workflow.md` — Guidance for coordinating with adjacent knowledge-base repositories.
+- `docs/repo_review.md` — Snapshot of code structure, risks, and improvement opportunities.
+- `docs/validation.md` — Local smoke test command and SLURM submission template.
+- `docs/TESTING.md` — Pytest primer and conventions.
+- `docs/science-questions.md` — Concise, high‑impact questions driving MF calibration and science changes.
+
+## Optional deep dives
+- `notebooks/README.md` — Notebook index with purpose and maturity signals.
+- `notebooks/reference/clyfar_explained.ipynb` — Narrative walkthrough for stakeholders.
+- `filetree.txt` — Auto-generated view of the current repository layout.
+
+## Maintenance checklist
+- Update this hub whenever docs are added, renamed, or relocated.
+- Refresh the "Date updated" stamp and key links after significant content edits.
+- Archive or delete pointers to documents that move out of the repository.
