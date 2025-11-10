@@ -11,3 +11,4 @@ pillow>=11.0.0
 astral>=3.0
 cfgrib>=0.9.14.1
 requests>=2.32.3
+fasteners>=0.19
