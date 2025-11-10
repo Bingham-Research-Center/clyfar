@@ -53,8 +53,8 @@ FORECAST_CONFIG = {
 VARIABLE_METADATA = {
     'labels': {
         'solar': 'Solar radiation (W/m^2)',
-        'snow': 'Snow depth (cm)',
-        'mslp': 'Mean sea level pressure (hPa)',
+        'snow': 'Snow depth (mm)',
+        'mslp': 'Mean sea level pressure (Pa)',
         'wind': 'Wind speed (m/s)',
         'ozone': 'Ozone concentration (ppb)',
         'temp': 'Temperature (°C)'
@@ -184,11 +184,9 @@ class Clyfar(FIS):
         """
         Computes the ozone level based on input parameters.
 
-        TODO units may need fixing!
-
         Args:
-            snow_val (float): Snow value in cm.
-            mslp_val (float): Mean sea level pressure in hPa.
+            snow_val (float): Snow depth in mm.
+            mslp_val (float): Mean sea level pressure in Pa.
             wind_val (float): Wind speed in m/s.
             solar_val (float): Solar insolation in W/m^2
             percentiles (list): List of percentiles (float/int) to compute.
