@@ -1,7 +1,7 @@
 # Pre-v1 Roadmap (60-Hour Sprint Plan)
-Date: 2025-11-15
+Date updated: 2025-11-11
 
-Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF tuning), and align with the LaTeX technical report before declaring v1.0 ready for operational winter 2025/2026 use. The LaTeX source is not currently in this repo (no `.tex` files detected). Add its location to documentation ASAP so code + report stay synchronized.
+Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF tuning), and align with the LaTeX technical report before declaring v1.0 ready for operational winter 2025/2026 use. The LaTeX repo lives at `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9` (see `docs/EXTERNAL_RESOURCES.md`). Keep code and report synchronized at release boundaries.
 
 ## Guiding Principles
 1. **Baseline first**: finish v0.9 hardening and documentation before layering experiments.
@@ -10,11 +10,12 @@ Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF
 4. **Time-boxed execution**: assume ~60 person-hours with AI assistance; defer anything that risks derailing the freeze.
 
 ## Small Goals (≤4 hours total each)
-- Document the baseline (`docs/baseline_0_9.md`), constraints, and smoke scripts (link to LaTeX appendix section TBD).
+- Document the baseline (`docs/baseline_0_9.md`), constraints, and smoke scripts (link to LaTeX appendix section).
 - Add `clyfar/__init__.py` + `pyproject.toml` skeleton for editable installs.
 - Create `scripts/run_smoke.sh` and `scripts/run_regression.sh` wrappers; cite them in both README and LaTeX methodology.
 - Stub `configs/examples/baseline.yaml` and `data/<run_id>/run.json` writer for provenance.
 - Update onboarding docs with the LaTeX report link/reference number once available.
+- Centralize general NWP download scripts in sibling repo `../brc-tools`; reference here to avoid duplication.
 
 ## Medium Goals (4–10 hours)
 - **Solar → Random Forest prototype**:
@@ -34,7 +35,7 @@ Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF
 - **Observability + metrics parity**: enrich logging (JSON, timings), compare v0.9 vs experimental runs across a winter-season backfill, and integrate the summary tables into the technical report.
 
 ## Sequencing Recommendation
-1. **Week 1 (~30 hours)**: complete small goals + baseline documentation, ship smoke/regression scripts, tag `v0.9.0`, and ensure LaTeX references exist.
+1. **Week 1 (~30 hours)**: complete small goals + baseline documentation, ship smoke/regression scripts, tag `v0.9.5`, and ensure LaTeX references exist.
 2. **Week 2 (~20 hours)**: tackle medium goals—RFR prototype, MF tuning scaffolding, experiment runner, and data abstraction. Each experiment should have a matching section or appendix entry in LaTeX.
 3. **Final stretch (~10 hours)**: focus on large goals that unblock future work (packaging/CLI, observability). Defer CI if it jeopardizes v1 timeline; otherwise, land a minimal pipeline that runs the smoke test on PRs.
 

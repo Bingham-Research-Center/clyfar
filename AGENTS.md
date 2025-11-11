@@ -38,3 +38,13 @@
 ## Security & Configuration Tips
 - I/O is parallelized; default start method is `spawn`. Avoid global state; guard CLI entry under `if __name__ == "__main__":`.
 - External data downloads occur in `nwp/`; be mindful of locking/cache changes and long-running operations.
+
+## External Repositories & Knowledge Base
+- Technical report (LaTeX): `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
+- Knowledge base: `/Users/johnlawson/Documents/GitHub/brc-knowledge`
+- Operational tools (sibling repo): `../brc-tools`
+
+Guidance for agents
+- Discover paths on demand; read/write only when the task explicitly requires it.
+- Prefer referencing these locations in docs and comments over in-code hard links.
+- Keep the Clyfar code and the LaTeX technical report synchronized at release boundaries (see docs).

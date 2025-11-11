@@ -12,3 +12,12 @@ Lawson, Lyman, Davies, 2024
 
 ### Scope of Clyfar
 Clyfar is the name of the prediction system itself - at least the point-of-access label of information. The fuzzy inference system, coupled with the pre-processing of observation and numerical weather prediction (NWP) data, and some post-processing (TBD!) will be part of the Clyfar system. Future work, such as a larger-scale modular approach within which Clyfar is a part, will be put in a separate package and repository.
+
+## Related Repositories and Knowledge Base
+- Technical report (LaTeX, local path): `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
+- Knowledge base (local path): `/Users/johnlawson/Documents/GitHub/brc-knowledge`
+- BRC operational tools (local path): `../brc-tools` (sibling to this repo)
+
+Notes
+- These are referenced for documentation and operations; clone or mount as needed.
+- Keep them out of the token working set unless required for a task.
