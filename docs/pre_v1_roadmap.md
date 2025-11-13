@@ -6,7 +6,8 @@ Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF
 ## Guiding Principles
 1. **Baseline first**: finish v0.9 hardening and documentation before layering experiments.
 2. **Experiment scaffolding**: build reusable config/runner pieces so solar-RFR and MF gradient descent share tooling.
-3. **Two-way documentation**: every code change feeds into both Markdown docs and the LaTeX technical report (reference sections by label once paths exist).
+3. **Two-way documentation**: every code change feeds into both Markdown docs and the LaTeX technical report 
+   (reference sections by label once paths exist).
 4. **Time-boxed execution**: assume ~60 person-hours with AI assistance; defer anything that risks derailing the freeze.
 
 ## Small Goals (≤4 hours total each)

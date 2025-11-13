@@ -509,6 +509,34 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
         solar_val = all_vrbl_dfs["solar"][solar_].loc[dt] # already w/m2 TODO Crap after 240h
         temp_val = all_vrbl_dfs["temp"][temp_].loc[dt] # already in C
 
+        # UOD guard: warn/clip when inputs fall outside FIS domains
+        val_map = {
+            'snow': snow_val,
+            'mslp': mslp_val,
+            'wind': wind_val,
+            'solar': solar_val,
+        }
+        clipped_flags = {}
+        for v, val in val_map.items():
+            u = clyfar.universes.get(v)
+            if u is None:
+                continue
+            umin, umax = float(u.min()), float(u.max())
+            if not np.isfinite(val):
+                continue
+            if val < umin or val > umax:
+                logger.warning(f"UOD clip: {v}={val:.3f} outside [{umin:.3f},{umax:.3f}] at {dt}")
+                val = float(np.clip(val, umin, umax))
+                clipped_flags[v] = True
+            else:
+                clipped_flags[v] = False
+            val_map[v] = val
+
+        snow_val = val_map['snow']
+        mslp_val = val_map['mslp']
+        wind_val = val_map['wind']
+        solar_val = val_map['solar']
+
         # Use the variables in the function call
         pc_dict, poss_df = clyfar.compute_ozone(
             # Don't need temp, that's for visualising only
@@ -529,6 +557,8 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
         output_df.loc[dt, 'wind'] = wind_val
         output_df.loc[dt, 'solar'] = solar_val
         output_df.loc[dt, 'temp'] = temp_val
+        for v, was_clipped in clipped_flags.items():
+            output_df.loc[dt, f'{v}_clipped'] = was_clipped
         pass
     # Do we have columns for possibility, etc?
     # Whatever is needed for plotting data
