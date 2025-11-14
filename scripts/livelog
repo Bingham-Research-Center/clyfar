@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+# Live logging notes
+# - This does NOT auto-capture everything Codex prints.
+# - Use for curated, high-signal notes or pipe specific command output.
+#   Examples:
+#     scripts/livelog "Hotfix passed for 2024010100"
+#     yourcmd | scripts/livelog
+# - To record the entire terminal session (auto-refresh in PyCharm):
+#     script -f docs/session_log.md
+# - In tmux, capture pane output:
+#     tmux pipe-pane -o 'cat >> docs/session_log.md'
+# - Per-command full capture:
+#     yourcmd 2>&1 | tee -a docs/session_log.md
+# - Recommended: use this script for high-signal notes; use script/tee for transcripts.
 set -euo pipefail
 # Append timestamped notes or piped content to docs/session_log.md
 
