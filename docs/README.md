@@ -4,8 +4,8 @@ Date updated: 2025-10-09
 Use this page as the jumping-off point for orientation, planning, and deeper research. Follow the "Quick start" list first, then dive into the topical docs as needed.
 
 ## Quick start
-- `README.md` — Project summary, prerequisites, and one-command smoke test.
-- `AGENTS.md` — Collaboration guardrails, coding conventions, and day-to-day workflows.
+- `README.md` — Project summary, prerequisites, and the canonical smoke test (mirrored in `AGENTS.md`).
+- `AGENTS.md` — Collaboration guardrails, coding conventions, day-to-day workflows, and the same smoke command under Testing Guidelines.
 - `docs/AI_AGENT_ONBOARDING.md` — **AI agents start here:** efficient protocol to minimize token usage and respect team conventions.
 - `docs/project_overview.md` — Narrative tour of the architecture and possibility-theory framing.
 - `docs/roadmap.md` — Current refactor milestones, microtasks, and execution plan.

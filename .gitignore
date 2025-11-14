@@ -34,6 +34,7 @@ data/
 data_seth/
 figures/
 figures_parallel/
+docs/session_log.md
 
 # Misc
 *.swp

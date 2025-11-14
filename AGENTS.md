@@ -28,6 +28,7 @@
 ## Testing Guidelines
 - No formal test suite yet. Use the CLI `--testing` flag and small `-m`/`-n` values to validate changes quickly.
 - Prefer deterministic paths: write outputs under a temporary dated folder via `-d` and `-f`.
+- Example smoke: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing`
 - When adding tests, place them under `tests/` and use `pytest`; name files `test_*.py`.
 
 ## Commit & Pull Request Guidelines
