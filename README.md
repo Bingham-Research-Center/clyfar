@@ -23,5 +23,9 @@ Notes
 - Keep them out of the token working set unless required for a task.
 
 ## Live session logging
-- Append notes with `scripts/livelog` or `echo` to `docs/session_log.md`; PyCharm (or any editor) can follow that file as it changes.
-- In Vim (using the dotfiles from `~/dotfiles/vimrc`), take advantage of `tpope/vim-dispatch` and run `:Dispatch tail -f docs/session_log.md` or hit `<leader>tl` to mirror a `tail -f` view without leaving the editor.
+- Append notes with `scripts/livelog` or `echo` to `docs/session_log.md`; PyCharm (or any editor) will follow that file as it changes.
+- Capture full terminal output (AI agents or CLI apps) with standard tools:
+  - `script -f docs/session_log.md` (records everything until you exit) works on both macOS Tahoe and Ubuntu.
+  - In tmux: `tmux pipe-pane -o 'cat >> docs/session_log.md'` (enable where you want streaming, disable afterward).
+  - Per-command: `yourcmd 2>&1 | tee -a docs/session_log.md` keeps the transcript on screen while persisting it.
+- For Vim tailing, install the dotfiles (`~/dotfiles/install.sh`) so `vim-dispatch` is available; then run `:Dispatch tail -f docs/session_log.md` or `<leader>tl` while editing to keep a live tail inside the editor (see `~/dotfiles/README.md` for more detail).
