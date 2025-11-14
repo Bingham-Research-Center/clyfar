@@ -2,8 +2,13 @@
 set -euo pipefail
 # Append timestamped notes or piped content to docs/session_log.md
 
-LOG=docs/session_log.md
-mkdir -p "$(dirname "$LOG")"
+ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -z "$ROOT_DIR" ] || [ ! -d "$ROOT_DIR/docs" ]; then
+  # Silently succeed if not in a repo with docs/
+  exit 0
+fi
+
+LOG="$ROOT_DIR/docs/session_log.md"
 {
   printf "\n## %s UTC\n\n" "$(date -u +"%F %T")"
   if [ -t 0 ]; then
@@ -11,7 +16,6 @@ mkdir -p "$(dirname "$LOG")"
   else
     cat
   fi
-} >> "$LOG"
+} >> "$LOG" 2>/dev/null || true
 
-echo "Appended to $LOG" >&2
-
+>&2 echo "Appended to $LOG"
