@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Append timestamped notes or piped content to docs/session_log.md
+
+LOG=docs/session_log.md
+mkdir -p "$(dirname "$LOG")"
+{
+  printf "\n## %s UTC\n\n" "$(date -u +"%F %T")"
+  if [ -t 0 ]; then
+    printf "%s\n" "$*"
+  else
+    cat
+  fi
+} >> "$LOG"
+
+echo "Appended to $LOG" >&2
+
