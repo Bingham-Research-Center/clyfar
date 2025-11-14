@@ -784,6 +784,12 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
     return
 
 if __name__ == "__main__":
+    # Ensure Matplotlib caches land in a writable path to avoid warnings
+    if "MPLCONFIGDIR" not in os.environ:
+        default_mplconfig = os.path.join(os.getcwd(), ".mplconfig")
+        os.makedirs(default_mplconfig, exist_ok=True)
+        os.environ["MPLCONFIGDIR"] = default_mplconfig
+
     # TODO - add data & figure paths (set by environment variables at runtime)
     parser = argparse.ArgumentParser(
             description="Run the parallel operational forecast workflow.")

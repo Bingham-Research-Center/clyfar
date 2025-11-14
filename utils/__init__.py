@@ -12,10 +12,7 @@ __all__ = [
     "utils",
     "download_utils",
     "geog_funcs",
-    "io_utils",
     "lookups",
-    "maths_funcs",
-    "runlog",
 ]
 
 _MODULE_MAP: Dict[str, str] = {name: f".{name}" for name in __all__}

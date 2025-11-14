@@ -1,27 +1,53 @@
+Repository tree snapshot
+Date updated: 2025-11-15
+
+Run `python -m clyfar.tools.tree` once that helper exists; until then, this hand-curated view highlights the primary entry points (depth ≤2).
+
 clyfar/
+├── AGENTS.md
+├── README.md
+├── docs/
+│   ├── README.md
+│   ├── roadmap.md
+│   ├── microtasks_v09.md
+│   └── … (AI onboarding, experiments, setup guides, etc.)
+├── fis/
+│   ├── v0p9.py
+│   ├── v0p1.py
+│   └── … (legacy versions)
+├── nwp/
+│   ├── download_funcs.py
+│   ├── gefsdata.py
+│   └── …
+├── preprocessing/
+│   ├── representative_nwp_values.py
+│   ├── representative_obs.py
+│   └── …
+├── utils/
+│   ├── utils.py
+│   ├── download_utils.py
+│   ├── geog_funcs.py
+│   └── …
+├── viz/
+│   ├── plotting.py
+│   ├── possibility_funcs.py
+│   └── …
+├── obs/
+│   ├── obsdata.py
+│   └── download_winters.py
+├── verif/
+│   └── … (verification helpers)
 ├── notebooks/
+│   ├── README.md
 │   ├── fis/
-│   │   ├── clyfar_v0.ipynb
-│   │   ├── clyfar_v0p9.ipynb
-│   │   └── guide_to_fuzzy_inference.ipynb
 │   ├── nwp/
-│   │   ├── gefs_0p5_demo.ipynb
-│   │   └── gefs_notebook.ipynb
-│   ├── obs/
-│   │   ├── messing_with_synoptic_data.ipynb
-│   │   └── roosevelt_lidar.ipynb
-│   ├── operations/
-│   │   ├── clyfar_script.ipynb
-│   │   └── operational_clyfar_forecast.ipynb
-│   ├── postprocessing/
-│   │   └── possibility_fcsts.ipynb
 │   ├── preprocessing/
-│   │   ├── creating_rep_obs.ipynb
-│   │   └── pseudolapserate_demo.ipynb
-│   ├── reference/
-│   │   └── clyfar_explained.ipynb
-│   ├── sandbox/
-│   │   └── pandas_playground.ipynb
-│   └── viz/
-│       └── noaa_proposal_figures.ipynb
-└── ...
+│   └── …
+├── scripts/
+│   └── … (automation helpers)
+├── tests/
+│   ├── test_lookups.py
+│   ├── test_preprocessing_dataframe.py
+│   └── …
+├── data/ (artefacts, gitignored contents)
+└── figures*/ (artefacts, gitignored contents)
