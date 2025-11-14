@@ -21,3 +21,7 @@ Clyfar is the name of the prediction system itself - at least the point-of-acces
 Notes
 - These are referenced for documentation and operations; clone or mount as needed.
 - Keep them out of the token working set unless required for a task.
+
+## Live session logging
+- Append notes with `scripts/livelog` or `echo` to `docs/session_log.md`; PyCharm (or any editor) can follow that file as it changes.
+- In Vim (using the dotfiles from `~/dotfiles/vimrc`), take advantage of `tpope/vim-dispatch` and run `:Dispatch tail -f docs/session_log.md` or hit `<leader>tl` to mirror a `tail -f` view without leaving the editor.
