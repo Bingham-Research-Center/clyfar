@@ -10,10 +10,9 @@ Date updated: 2025-09-25
 
 ### M1 · Freeze 0.9 Baseline
 - [ ] Tag `v0.9.0` from the current mainline and cut `release/0.9`.
-- [ ] Capture a `--testing` golden run; stash outputs under `data/baseline_0_9/`.
-- [ ] Snapshot representative figures into `figures_archive/v0_9/` for posterity.
-- [ ] Write `docs/baseline_0_9.md` with CLI example, git SHA, and artefact paths.
-- [ ] Copy dependencies to `constraints/baseline-0.9.txt` and freeze there.
+- [ ] Capture a `--testing` golden run + regression trio (see `docs/baseline_0_9.md` for commands, artefacts, SHA tracking).
+- [ ] Snapshot representative figures into `figures_archive/v0_9/`.
+- [ ] Freeze dependency set in `constraints/baseline-0.9.txt`.
 
 ### M2 · Package Layout
 - [ ] Scaffold `clyfar/` package (`__init__`, `core`, `fis/versions`, `nwp`, etc.).

@@ -80,8 +80,13 @@ Each notebook lives in a domain-specific subfolder. For every file you will find
 ## sandbox/
 - `pandas_playground.ipynb`
   - Contains: Ad-hoc pandas experiments and quick data sanity checks.
-  - Stage: exploration.
+  - Stage: exploration (stale since early 2024).
   - Next step: Promote any recurring patterns into `utils/dataframe_tools.py`; archive the rest when stable.
+
+## Archive candidates
+- `operations/clyfar_script.ipynb` — superseded by `run_gefs_clyfar.py`; keep only if specific inline commentary is still needed.
+- `postprocessing/possibility_fcsts.ipynb` — plots migrated into `viz/possibility_funcs.py`; archive once verification finishes.
+- `sandbox/pandas_playground.ipynb` — token-heavy scratchpad; trim or move to `notebooks/archived/` before next cleanup pass.
 
 Maintenance tips:
 - Update this README when notebooks move, change focus, or graduate stages.

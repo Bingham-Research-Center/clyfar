@@ -9,8 +9,15 @@ Date updated: 2025-11-11
 
 ## Repro (Smoke)
 - Env: Python 3.11.9 (conda), `pip install -r requirements.txt`.
-- Command: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing`.
+- Command: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing` (or `scripts/run_smoke.sh 2024010100`).
 - Artefacts: `data/<run_id>/*.parquet`, `figures/<run_id>/*.png`.
+- Git SHA (baseline build): `TODO_SHA` (update after golden run).
+- Run metadata lives in `data/baseline_0_9/<run_id>/run.json` (see Logging section).
+
+## Repro (Regression sample)
+- Command template: `python run_gefs_clyfar.py -i <YYYYMMDDHH> -n 8 -m 10 -d ./data -f ./figures --log-fis`.
+- Coverage: run at least three inits (`2024010100`, `2024021500`, `2024030500`) to span inversion, storm, clear regimes.
+- Store outputs under `data/baseline_0_9/<YYYYMMDDHH>/` and `figures_archive/v0_9/<YYYYMMDDHH>/`.
 
 ## Inputs and Units
 - Snow: GEFS `sde` converted m → mm; label “mm”.
@@ -37,6 +44,17 @@ Date updated: 2025-11-11
 - Record code commit and LaTeX commit/Overleaf version here.
 - LaTeX repo: `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`.
 - External refs: `docs/EXTERNAL_RESOURCES.md`.
+- Section to update per release:
+  - `Code SHA:` `TODO_SHA`
+  - `Report SHA/tag:` `TODO_report_ref`
+  - `Constraints file:` `constraints/baseline-0.9.txt`
+
+## Logging & Artefact Map
+- Smoke run outputs: `data/baseline_0_9/smoke_<YYYYMMDDHH>/` (parquet) + `figures_archive/v0_9/smoke_<YYYYMMDDHH>/`.
+- Regression outputs: `data/baseline_0_9/<init>/` + `figures_archive/v0_9/<init>/`.
+- Logs: `data/baseline_0_9/logs/<init>.log` (stdout/stderr) and `performance_log.txt` (global timings).
+- Metadata: each run writes `run.json` with git SHA, CLI args, env hash, and timestamp.
+- Automation: `scripts/run_smoke.sh` wraps the smoke CLI (defaults to init `2024010100`, `NCPUS=2`, `NMEMBERS=2`) and mirrors log lines into `performance_log.txt`.
 
 ## Notes
 - No tagging until hotfix checks pass; target freeze: `v0.9.5`.

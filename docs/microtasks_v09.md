@@ -18,8 +18,8 @@ Use this list to work in tight focus blocks. Tasks are grouped by expected effor
 ## Medium (1–3 hours)
 1. `bkup/`: review scripts, migrate any still-useful helper into `utils/` or delete; document outcomes in `docs/bloat_reduction.md`.
 2. `postprocesing/`: rename directory to `postprocessing/`, fix imports, and leave a shim module to avoid breaking references.
-3. `docs/baseline_0_9.md`: create file capturing `--testing` command, git SHA, dataset + figure archive locations, and dependency snapshot path.
-4. `scripts/run_smoke.sh`: new script that wraps the `--testing` CLI, captures logs to `performance_log.txt`, and exits non-zero on failure.
+3. `docs/baseline_0_9.md`: populate CLI commands, git SHA placeholder, artefact map, and regression notes (done; update metrics after first golden run).
+4. `scripts/run_smoke.sh`: new script that wraps the `--testing` CLI, captures logs to `performance_log.txt`, and exits non-zero on failure (done; keep parameters synced with README).
 5. `constraints/baseline-0.9.txt`: freeze dependencies via `pip freeze > constraints/baseline-0.9.txt` after running in clean env.
 6. `docs/experiments/baseline.yaml`: define minimal experiment config (2 members, 2 stations) to seed the upcoming runner.
 7. `clyfar/__init__.py`: scaffold package namespace, expose `__version__ = "0.9.0"`, and add editable-install instructions to README.

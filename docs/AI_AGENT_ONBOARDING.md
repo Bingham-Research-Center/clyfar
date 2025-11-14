@@ -32,6 +32,11 @@ Based on your specific task, read **exactly one** of these:
 - **Refactor planning?** → `docs/roadmap.md` (152 lines)
 - **Environment setup?** → `docs/setup_conda.md` (47 lines)
 
+### **Step 4: Know the external LaTeX source**
+- The technical report lives **outside this repo** at `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9` (GitHub: `bingham-research-center/preprint-clyfar-v0p9`).
+- Treat that repo as the narrative source of truth; sync major code changes with the report at release checkpoints.
+- Do **not** copy large LaTeX files into this repo—reference the path above in docs/commits and summarize changes instead.
+
 ---
 
 ## 2. Token-Saving Rules
