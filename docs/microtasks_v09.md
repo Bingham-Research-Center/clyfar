@@ -4,30 +4,33 @@ Date: 2025-11-15
 Use this list to work in tight focus blocks. Tasks are grouped by expected effort assuming AI-assisted editing. Always run the `--testing` smoke when touching pipeline logic.
 
 ## Small (≤1 hour)
-1. `run_gefs_clyfar.py`: add `MPLCONFIGDIR` environment export near the CLI entry to stop matplotlib cache warnings (docs/roadmap.md:66).
-2. `README.md`: replace TODO list with the current env setup (conda + `pip install -r requirements.txt`) and link to `docs/setup_conda.md` for consistency.
-3. `requirements.txt`: audit top-level libs vs pip freeze; drop unused deps noted in `docs/repo_review.md`.
-4. `docs/README.md`: cross-link smoke instructions between README/AGENTS per roadmap item 7.
-5. `utils/__init__.py`: ensure `__all__` only exposes actively-used helpers to cut import time.
-6. `filetree.txt`: regenerate via `python -m clyfar.tools.tree` placeholder or remove stale entries; add date stamp.
-7. `AGENTS.md`: add CLI example under Testing with the canonical paths (`-d ./data -f ./figures`).
-8. `notebooks/README.md`: mark outdated notebooks for archival (prep for cleanup task below).
-9. `docs/AI_AGENT_ONBOARDING.md`: append pointer to the LaTeX technical report location once determined (currently missing, see docs/bloat_reduction.md).
-10. `pytest.ini`: ensure `testpaths = tests` so stray notebooks aren’t auto-collected.
+- [ ] `run_gefs_clyfar.py`: add `MPLCONFIGDIR` export near the CLI entry to stop matplotlib cache warnings (docs/roadmap.md:66).
+- [ ] `README.md`: replace TODO list with the current env setup (conda + `pip install -r requirements.txt`) and link to `docs/setup_conda.md`.
+- [ ] `requirements.txt`: audit vs `pip freeze`; drop unused deps noted in `docs/repo_review.md`.
+- [ ] `docs/README.md`: cross-link smoke instructions between README/AGENTS per roadmap item 7.
+- [ ] `utils/__init__.py`: ensure `__all__` only exposes actively-used helpers to cut import time.
+- [ ] `filetree.txt`: regenerate via `python -m clyfar.tools.tree` (placeholder) or remove stale entries; add date stamp.
+- [ ] `AGENTS.md`: add CLI example under Testing with canonical paths (`-d ./data -f ./figures`).
+- [ ] `notebooks/README.md`: flag outdated notebooks for archival (feeds notebook triage).
+- [ ] `docs/AI_AGENT_ONBOARDING.md`: append LaTeX technical-report pointer (see docs/bloat_reduction.md).
+- [ ] `pytest.ini`: enforce `testpaths = tests` so stray notebooks aren’t auto-collected.
 
 ## Medium (1–3 hours)
-1. `bkup/`: review scripts, migrate any still-useful helper into `utils/` or delete; document outcomes in `docs/bloat_reduction.md`.
-2. `postprocesing/`: rename directory to `postprocessing/`, fix imports, and leave a shim module to avoid breaking references.
-3. `docs/baseline_0_9.md`: populate CLI commands, git SHA placeholder, artefact map, and regression notes (done; update metrics after first golden run).
-4. `scripts/run_smoke.sh`: new script that wraps the `--testing` CLI, captures logs to `performance_log.txt`, and exits non-zero on failure (done; keep parameters synced with README).
-5. `constraints/baseline-0.9.txt`: freeze dependencies via `pip freeze > constraints/baseline-0.9.txt` after running in clean env.
-6. `docs/experiments/baseline.yaml`: define minimal experiment config (2 members, 2 stations) to seed the upcoming runner.
-7. `clyfar/__init__.py`: scaffold package namespace, expose `__version__ = "0.9.0"`, and add editable-install instructions to README.
-8. `tests/imports/test_package_layout.py`: assert new `clyfar` namespace imports without side effects.
-9. `docs/versioning.md`: summarize version scheme (0.9 hotfixes vs 1.0 freeze) and tagging expectations.
-10. `docs/experiments.md`: describe how experiment configs map to CLI runs and where outputs live.
-11. `preprocessing/representative_nwp_values.py`: confirm Uintah Basin mask erosion/edge handling prevents snow overestimates (document findings + adjustments in `docs/baseline_0_9.md`).
-12. (post-0.9.5) Re-evaluate the Uintah Basin snow mask smoothing/buffer once the baseline is frozen and document the tuned approach.
+- [ ] `bkup/`: review scripts, migrate useful helpers into `utils/` or delete; document outcomes in `docs/bloat_reduction.md`.
+- [ ] `postprocesing/`: rename directory to `postprocessing/`, fix imports, add shim module.
+- [ ] `constraints/baseline-0.9.txt`: freeze dependencies via `pip freeze > constraints/baseline-0.9.txt` in clean env.
+- [ ] `docs/experiments/baseline.yaml`: define minimal experiment config (2 members, 2 stations) to seed the runner.
+- [ ] `clyfar/__init__.py`: scaffold package namespace, expose `__version__ = "0.9.0"`, and add editable-install instructions to README.
+- [ ] `tests/imports/test_package_layout.py`: assert new `clyfar` namespace imports without side effects.
+- [ ] `docs/versioning.md`: summarize version scheme (0.9 hotfixes vs 1.0 freeze) and tagging expectations.
+- [ ] `docs/experiments.md`: describe how experiment configs map to CLI runs and where outputs live.
+- [ ] (post-0.9.5) Re-evaluate the Uintah Basin snow mask smoothing/buffer once the baseline is frozen and document the tuned approach.
+- [ ] Daily ozone maxima diagnostic: aggregate time series to Uintah Basin local-day maxima and surface the results in plots + verification scripts (ties to roadmap item).
+
+## Completed references
+- [x] Populated `docs/baseline_0_9.md` with CLI commands, SHA placeholders, artefact map, and regression notes (2025-11-15).
+- [x] Added `scripts/run_smoke.sh` wrapper with logging + provenance (2025-11-15).
+- [x] Documented Uintah Basin mask diagnostics in `docs/LOGBOOK.md` and ensured snow preprocessing reflects the intended v0.9.5 behaviour (2025-11-15).
 
 ## Large (3–6 hours)
 1. Packaging migration: move one module family (e.g., `preprocessing/`) under `clyfar/` with shims + updated imports; document in `docs/roadmap.md`.
