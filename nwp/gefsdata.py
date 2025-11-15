@@ -22,6 +22,7 @@ if mp.get_start_method() != 'spawn':
         print("Warning: Could not set spawn context. Already initialized.")
 
 class GEFSData(DataFile):
+    _LATLON_CACHE = {}
     LOCK_DIR = os.getenv("CLYFAR_TMPDIR") or tempfile.gettempdir()
 
     def __init__(self, clear_cache=False):
@@ -100,12 +101,34 @@ class GEFSData(DataFile):
                                herbie_inst.date, herbie_inst.fxx, exc)
                 import xarray as xr
                 import numpy as np
-                lat = herbie_inst.grid.lat
-                lon = herbie_inst.grid.lon
-                data_var = qstr.strip(':') or 'var'
+                lat = lon = None
+                grid = getattr(herbie_inst, "grid", None)
+                if grid is not None:
+                    lat = grid.lat
+                    lon = grid.lon
+                if lat is None or lon is None:
+                    product = getattr(herbie_inst, "product", "")
+                    if product.endswith(".25") or ".25" in product:
+                        res_key = "0p25"
+                    elif product.endswith(".5") or ".5" in product:
+                        res_key = "0p5"
+                    else:
+                        res_key = "0p25"
+                    lat, lon = cls._load_latlon_arrays(res_key)
+                if lat is None or lon is None:
+                    raise RuntimeError("No latitude/longitude grid available for fallback download") from exc
+                data_var = (qstr.strip(':') or 'var').lower()
+                data = np.full((1, lat.shape[0], lon.shape[0]), np.nan)
+                valid_time = getattr(herbie_inst, "valid_date", None)
+                if valid_time is None:
+                    valid_time = getattr(herbie_inst, "date", None)
                 ds = xr.Dataset(
-                    data_vars={data_var: (('latitude', 'longitude'), np.full((len(lat), len(lon)), np.nan))},
-                    coords={'latitude': lat, 'longitude': lon},
+                    data_vars={data_var: (('time', 'latitude', 'longitude'), data)},
+                    coords={
+                        'time': ('time', [valid_time] if valid_time is not None else [0]),
+                        'latitude': ('latitude', lat),
+                        'longitude': ('longitude', lon),
+                    },
                 )
             ds = ds.metpy.parse_cf()
 
@@ -130,13 +153,16 @@ class GEFSData(DataFile):
     def crop_to_UB(ds, ):
         sw_corner = (39.4, -110.9)
         ne_corner = (41.1, -108.5)
-        lats = ds.latitude.values
-        lons = ds.longitude.values
+        if "latitude" not in ds or "longitude" not in ds:
+            raise KeyError("Dataset missing latitude/longitude for cropping")
 
-        if np.max(lons) > 180.0:
-            lons -= 360.0
+        lons = ds.longitude
+        if float(lons.max()) > 180.0:
+            shifted = (((lons + 180.0) % 360.0) - 180.0)
+            ds = ds.assign_coords(longitude=shifted)
+            ds = ds.sortby('longitude')
 
-        # Note the reserved latitude order!
+        # Note the reversed latitude order!
         ds_sub = ds.sel(latitude=slice(ne_corner[0], sw_corner[0]),
                         longitude=slice(sw_corner[1], ne_corner[1]))
         return ds_sub
@@ -153,6 +179,27 @@ class GEFSData(DataFile):
         ds = cls.get_CONUS(q_str, H, remove_grib=remove_grib)
         ds_crop = cls.crop_to_UB(ds)
         return ds_crop
+
+    @classmethod
+    def _load_latlon_arrays(cls, res_key: str):
+        cache = cls._LATLON_CACHE.setdefault(res_key, {})
+        lat1d = cache.get('lat')
+        lon1d = cache.get('lon')
+        if lat1d is None or lon1d is None:
+            suffix = "0p25" if res_key == "0p25" else "0p5"
+            base_dir = os.path.join("data", "geog")
+            lat_file = os.path.join(base_dir, f"gefs{suffix}_latitudes.parquet")
+            lon_file = os.path.join(base_dir, f"gefs{suffix}_longitudes.parquet")
+            try:
+                lat_grid = pd.read_parquet(lat_file).values
+                lon_grid = pd.read_parquet(lon_file).values
+                lat1d = lat_grid[:, 0]
+                lon1d = lon_grid[0, :]
+            except FileNotFoundError:
+                lat1d = lon1d = None
+            cache['lat'] = lat1d
+            cache['lon'] = lon1d
+        return cache.get('lat'), cache.get('lon')
 
     @classmethod
     def get_profile_df(cls,ds_T,ds_Z,lat,lon,max_height=10E3):
