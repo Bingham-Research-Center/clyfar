@@ -181,8 +181,10 @@ def plot_dailymax_heatmap(df):
     Midmight to midnight is the grouping. Assume time is local unless
     it states otherwise.
     """
+    num_days = max(len(df.index), 1)
+    fig_width = min(24, max(6, num_days * 0.5))
     # Create figure and axis
-    fig, ax = plt.subplots(figsize=(12, 4), dpi=300)
+    fig, ax = plt.subplots(figsize=(fig_width, 4), dpi=300)
 
     # Process category colors
     categories, category_colors = process_category_colors()
@@ -217,7 +219,8 @@ def plot_dailymax_heatmap(df):
     # ax.set_yticklabels(categories)
 
     # Set x-axis ticks and labels
-    tick_locations = np.arange(0, len(df.index), len(df.index)//8)
+    step = max(1, num_days // 8) if num_days > 8 else 1
+    tick_locations = np.arange(0, len(df.index), step)
     ax.set_xticks(tick_locations)
     ax.set_xticklabels([df.index[i].strftime('%d %b %y') for i in tick_locations],
                        rotation=45, ha='right')
