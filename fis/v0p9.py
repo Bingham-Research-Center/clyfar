@@ -128,7 +128,7 @@ class Clyfar(FIS):
         self.snow_uod = np.arange(0, 251, 2)        # Snow in mm up to 250mm
         self.mslp_uod = np.arange(99500, 105010, 50)  # MSLP in Pa
         self.wind_uod = np.arange(0, 15.1, 0.25)    # Wind in m/s
-        self.solar_uod = np.arange(100, 805, 5)     # Solar in W/m²
+        self.solar_uod = np.arange(0, 805, 5)     # Solar in W/m²
         self.ozone_uod = np.arange(20, 140.1, 0.5)      # Ozone in ppb
 
         # Also hold in self.universes in format {variable: uod}

@@ -21,10 +21,10 @@ Date updated: 2025-11-11
 - Store outputs under `data/baseline_0_9/<YYYYMMDDHH>/` and `figures_archive/v0_9/<YYYYMMDDHH>/`.
 
 ## Inputs and Units
-- Snow: GEFS `sde` converted m → mm; label “mm”.
-- MSLP: GEFS `prmsl` in Pa; label “Pa”.
+- Snow: GEFS `sde` converted m → mm.
+- MSLP: GEFS `prmsl` converted Pa → hPa.
 - Wind: 10 m speed (m/s).
-- Solar: DSWRF (W/m^2).
+- Solar: DSWRF (W/m^2, min clipped at 0 W/m^2 so polar-night hours remain valid).
 - Ozone: ppb (defuzzified percentiles 10/50/90).
 
 ## Data Flow

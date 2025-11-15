@@ -17,6 +17,9 @@ Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF
 - Stub `configs/examples/baseline.yaml` and `data/<run_id>/run.json` writer for provenance.
 - Update onboarding docs with the LaTeX report link/reference number once available.
 - Centralize general NWP download scripts in sibling repo `../brc-tools`; reference here to avoid duplication.
+- **Daily ozone maxima diagnostic**:
+  - Aggregate each member’s ozone time series to a local-day maximum (Uintah Basin MST/MDT) so science deliverables match reported AQ metrics.
+  - Expose the daily-max table to both plots and verification scripts; document method in Markdown + LaTeX once baseline is frozen.
 
 ## Medium Goals (4–10 hours)
 - **Solar → Random Forest prototype**:
