@@ -55,6 +55,9 @@ from viz.possibility_funcs import (plot_percentile_meteogram,
                                    plot_ozone_heatmap, plot_dailymax_heatmap)
 
 ######### SETTINGS ##########
+# Uintah Basin (Vernal, UT) local timezone
+LOCAL_TIMEZONE = "America/Denver"
+
 # At the top of the file, enforce spawn context
 if mp.get_start_method() != 'spawn':
     try:
@@ -705,13 +708,17 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         ############################
 
         clyfar_df_dict = {}
+        dailymax_df_dict = {}
         for nm, member in enumerate(member_names):
             clyfar_member = gefs_to_clyfar_membername(member)
             # TODO - no dicts; just save members in a folder for the run?
-            clyfar_df_dict[clyfar_member] = run_singlemember_inference(
+            member_df = run_singlemember_inference(
                 init_dt_dict['naive'], member,
                 percentiles, forecast_cache=results,
                 diagnostics=fis_diagnostics)
+            clyfar_df_dict[clyfar_member] = member_df
+            dailymax_df_dict[clyfar_member] = utils.compute_local_daily_max(
+                member_df, target_tz=LOCAL_TIMEZONE)
             pass
 
         print("Clyfar inference complete for", init_dt_dict['naive'])
@@ -729,9 +736,15 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             subdir = clyfar_data_root
             utils.try_create(subdir)
             for clyfar_member, df in clyfar_df_dict.items():
-                df.to_parquet(os.path.join(subdir,
-                                f"{clyfar_member}_df.parquet"))
+                df.to_parquet(os.path.join(
+                    subdir, f"{clyfar_member}_df.parquet"))
+            dailymax_dir = os.path.join(subdir, "dailymax")
+            utils.try_create(dailymax_dir)
+            for clyfar_member, df in dailymax_df_dict.items():
+                df.to_parquet(os.path.join(
+                    dailymax_dir, f"{clyfar_member}_dailymax.parquet"))
             print("Saved Clyfar dataframes to ", subdir)
+            print("Saved daily-max ozone tables to ", dailymax_dir)
 
         if log_fis and fis_diagnostics:
             diag_df = pd.DataFrame(fis_diagnostics)
@@ -742,7 +755,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         if visualise:
             do_optim_pessim = False
             do_heatmap = True
-            do_dailymax_heatmap = False
+            do_dailymax_heatmap = True
 
             # TODO - create folders by run date and GEFS v Clyfar output
 
@@ -778,9 +791,13 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
 
             if do_dailymax_heatmap:
                 for clyfar_member in clyfar_df_dict.keys():
-                    fig, ax = plot_dailymax_heatmap(
-                                    clyfar_df_dict[clyfar_member],
-                                    )
+                    daily_df = dailymax_df_dict.get(clyfar_member)
+                    if daily_df is None or daily_df.empty:
+                        logger.warning("Skipping daily-max heatmap for %s "
+                                       "due to empty aggregation",
+                                       clyfar_member)
+                        continue
+                    fig, ax = plot_dailymax_heatmap(daily_df)
                     fname = utils.create_meteogram_fname(init_dt_dict['naive'],
                                          "UB-dailymax", "ozone",
                                          clyfar_member, actually_heatmap=True,)

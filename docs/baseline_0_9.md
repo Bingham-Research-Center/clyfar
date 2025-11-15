@@ -32,7 +32,7 @@ Date updated: 2025-11-11
 - Create elevation-based masks per resolution; for v0.9.5 we retain the legacy buffered mask (elev < threshold + 250 m, no smoothing) so behaviour matches prior runs; broadcast to grids.
 - Compute masked spatial quantiles (Hazen) → timeseries per variable.
 - Feed Clyfar v0p9; aggregate/clipped MFs → defuzz percentiles.
-- Save parquet + plots (meteogram, possibility, heatmaps).
+- Save parquet + plots (meteogram, possibility, heatmaps) plus Uintah Basin local-day maxima (`dailymax/*.parquet`) derived via America/Denver resampling for ozone percentiles + possibilities.
 
 ## Validation Checklist
 - High‑snowfall regression: confirm masked quantiles behave (no edge artefacts).

@@ -172,6 +172,41 @@ def datetime_of_previous_run(dt, do_utc=True, do_naive=True, do_local=True,
     local_t0 = new_dt_utc.astimezone(pytz.timezone('US/Mountain'))
     return new_dt_utc, init_dt_naive, local_t0
 
+def compute_local_daily_max(df, columns=None, target_tz='America/Denver'):
+    """Aggregate a time-series dataframe to local-day maxima.
+
+    Args:
+        df (pd.DataFrame): Forecast dataframe with a DatetimeIndex (naive UTC or tz-aware).
+        columns (list[str] | None): Optional subset of columns to retain; defaults to all.
+        target_tz (str): Olson tz name for the aggregation (e.g., 'America/Denver').
+
+    Returns:
+        pd.DataFrame: Daily maxima indexed by local midnight (tz-naive for convenience).
+    """
+    if df.empty:
+        return df.copy()
+
+    if columns is None:
+        columns = df.columns.tolist()
+    else:
+        columns = [col for col in columns if col in df.columns]
+        if not columns:
+            return pd.DataFrame(index=pd.Index([], name=df.index.name))
+
+    idx = pd.DatetimeIndex(df.index)
+    if idx.tz is None:
+        localized = idx.tz_localize('UTC')
+    else:
+        localized = idx
+    local_idx = localized.tz_convert(target_tz)
+
+    df_local = df.copy()
+    df_local.index = local_idx
+
+    daily_max = df_local[columns].resample('D', label='left', closed='left').max()
+    daily_max.index = daily_max.index.tz_localize(None)
+    return daily_max
+
 def get_nice_tick_spacing(data_range, quantizations):
     """Calculate a nice tick spacing for a given data range.
 

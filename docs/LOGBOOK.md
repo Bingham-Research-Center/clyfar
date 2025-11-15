@@ -23,6 +23,10 @@
 - Baseline doc updated to call out the zero floor; future RFR work can feed sub-100 W/m² values without fighting the UOD guard.
 - Logged requirement for a “daily maximum ozone” diagnostic: aggregate each local-day block from the time series (max over 00–23 local) so evaluations and plots align with reporting practice; schedule this after v0.9.5 freeze.
 
+### Daily-max ozone aggregation
+- Added `utils.compute_local_daily_max` (localizes UTC indexes → America/Denver, resamples to 1-day maxima) and wired it into the Clyfar workflow so every member now emits both 3-hourly and daily-maximum parquet outputs (`dailymax/<member>_dailymax.parquet`).
+- Enabled the daily-max heatmap path in `run_gefs_clyfar.py` so plots now visualize category possibilities by local day alongside the standard 3-hour grid.
+
 ### Notes
 - Mask smoothing fix effectively removes rim contamination without muting basin snowfall.
 - Next steps: run regression triad, attach metrics (percentile MAE, ignorance/reliability for exceedances), and mirror into LaTeX report.

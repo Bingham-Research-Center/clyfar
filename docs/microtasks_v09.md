@@ -25,12 +25,12 @@ Use this list to work in tight focus blocks. Tasks are grouped by expected effor
 - [ ] `docs/versioning.md`: summarize version scheme (0.9 hotfixes vs 1.0 freeze) and tagging expectations.
 - [ ] `docs/experiments.md`: describe how experiment configs map to CLI runs and where outputs live.
 - [ ] (post-0.9.5) Re-evaluate the Uintah Basin snow mask smoothing/buffer once the baseline is frozen and document the tuned approach.
-- [ ] Daily ozone maxima diagnostic: aggregate time series to Uintah Basin local-day maxima and surface the results in plots + verification scripts (ties to roadmap item).
 
 ## Completed references
 - [x] Populated `docs/baseline_0_9.md` with CLI commands, SHA placeholders, artefact map, and regression notes (2025-11-15).
 - [x] Added `scripts/run_smoke.sh` wrapper with logging + provenance (2025-11-15).
 - [x] Documented Uintah Basin mask diagnostics in `docs/LOGBOOK.md` and ensured snow preprocessing reflects the intended v0.9.5 behaviour (2025-11-15).
+- [x] Implemented Uintah Basin daily-max ozone aggregation + parquet outputs, enabling the `plot_dailymax_heatmap` path (2025-11-15).
 
 ## Large (3–6 hours)
 1. Packaging migration: move one module family (e.g., `preprocessing/`) under `clyfar/` with shims + updated imports; document in `docs/roadmap.md`.
