@@ -2,6 +2,7 @@ import datetime
 import os
 import multiprocessing as mp
 import tempfile
+import logging
 
 import numpy as np
 import pandas as pd
@@ -23,10 +24,11 @@ if mp.get_start_method() != 'spawn':
 class GEFSData(DataFile):
     LOCK_DIR = os.getenv("CLYFAR_TMPDIR") or tempfile.gettempdir()
 
-    def __init__(self):
+    def __init__(self, clear_cache=False):
         """Download, process GEFS data.
         """
         super().__init__()
+        self.clear_cache = clear_cache
 
     @classmethod
     def generate_timeseries(cls, fxx, inittime, gefs_regex, ds_key, lat, lon,
@@ -83,7 +85,28 @@ class GEFSData(DataFile):
         lock = fasteners.InterProcessLock(lock_path)
 
         with lock:
-            ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
+            if getattr(cls, "clear_cache", False):
+                for path in (herbie_inst.idx, herbie_inst.grib):
+                    if isinstance(path, str) and path and path.startswith("/"):
+                        try:
+                            os.remove(path)
+                        except FileNotFoundError:
+                            pass
+            try:
+                ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
+            except Exception as exc:
+                logger = logging.getLogger(__name__)
+                logger.warning("Herbie download failed for %s f%03d (%s); returning NaNs",
+                               herbie_inst.date, herbie_inst.fxx, exc)
+                import xarray as xr
+                import numpy as np
+                lat = herbie_inst.grid.lat
+                lon = herbie_inst.grid.lon
+                data_var = qstr.strip(':') or 'var'
+                ds = xr.Dataset(
+                    data_vars={data_var: (('latitude', 'longitude'), np.full((len(lat), len(lon)), np.nan))},
+                    coords={'latitude': lat, 'longitude': lon},
+                )
             ds = ds.metpy.parse_cf()
 
         # if os.path.exists(lock_path):

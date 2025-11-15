@@ -190,6 +190,7 @@ class ParallelEnsembleProcessor:
                             else get_optimal_process_count())
         self.logger = logging.getLogger(__name__)
         self.lookup = Lookup()
+        self.processor_map = self.get_processor_maps()
 
     def _process_ensemble_member_wind(self, member: str) -> Tuple[str, pd.DataFrame]:
         """Process wind forecasts with quantile-based methodology."""
@@ -312,10 +313,13 @@ class ParallelEnsembleProcessor:
         Returns:
         Nested dictionary mapping variables and member identifiers to processed DataFrames
         """
-        processor_map = self.get_processor_maps()
+        processor_map = self.processor_map
 
-        with mp.Pool(processes=self.process_count) as pool:
-            results = pool.map(process_member_variable, [(member, variable, processor_map) for member in member_names for variable in variables])
+        with mp.get_context('spawn').Pool(processes=self.process_count) as pool:
+            results = pool.map(
+                process_member_variable,
+                [(member, variable, processor_map) for member in member_names for variable in variables],
+            )
 
         nested_results = {}
         for variable, member, df in results:
@@ -328,7 +332,7 @@ class ParallelEnsembleProcessor:
 #### END OF CLASS ####
 
 @configurable_timer(log_file="performance_log.txt")
-def parallel_forecast_workflow(init_dt: datetime.datetime, masks: Dict, member_names: List[str], variables: List[str], ncpus: int = None, testing: bool = False) -> Dict[str, Dict[str, pd.DataFrame]]:
+def parallel_forecast_workflow(init_dt: datetime.datetime, masks: Dict, member_names: List[str], variables: List[str], ncpus: int = None, testing: bool = False, serial: bool = False) -> Dict[str, Dict[str, pd.DataFrame]]:
     """
     Execute comprehensive parallel forecast workflow for all variables and members.
 
@@ -342,6 +346,13 @@ def parallel_forecast_workflow(init_dt: datetime.datetime, masks: Dict, member_n
     Nested dictionary of processed forecasts by variable and member
     """
     processor = ParallelEnsembleProcessor(init_dt, masks, process_count=ncpus, testing=testing)
+    if serial:
+        out: Dict[str, Dict[str, pd.DataFrame]] = {var: {} for var in variables}
+        for member in member_names:
+            for variable in variables:
+                _, df = processor.processor_map[variable](member)
+                out[variable][member] = df
+        return out
     results = processor.process_variable_member_parallel(member_names, variables)
     return results
 
@@ -662,7 +673,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                         if verbose else parallel_forecast_workflow.__wrapped__)
         results = workflow_fn(
             init_dt_dict['naive'], masks, member_names, variables, ncpus=ncpus,
-            testing=testing)
+            testing=testing, serial=args.serial_debug)
 
         print(f"{init_dt_dict['naive']=}, {masks=}, {member_names=}, "
               f"{ncpus=}, {testing=}")
@@ -825,6 +836,9 @@ if __name__ == "__main__":
     parser.add_argument(
         '--log-fis', action='store_true',
         help='Log fuzzy-system diagnostics for calibration')
+    parser.add_argument(
+        '--serial-debug', action='store_true',
+        help='Process members sequentially (no multiprocessing) for debugging')
 
     args = parser.parse_args()
     # Leave maxhr for now - not implemented
