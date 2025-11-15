@@ -93,17 +93,12 @@ def initialize_geography(latlons, use_raw_elevations=False):
         if use_raw_elevations:
             masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
         else:
-            mask_temp = elev_df[res] < GEOGRAPHIC_CONSTANTS[
-            # Arbitrary extra 500m buffer as we're smoothing and masking anyway
-                        'elevation_threshold'] + 250
-
-            # Temporary for now
+            mask_temp = elev_df[res] < (
+                GEOGRAPHIC_CONSTANTS['elevation_threshold'] + 250
+            )
+            # For the v0.9.5 freeze, keep the buffered mask without smoothing so
+            # behaviour matches the historical runs; we'll revisit post-freeze.
             masks[res] = mask_temp
-
-            # Apply the weighted average
-            weighted_elev = weighted_average(elev_df[res], mask_temp)
-            elev_df[res] = weighted_elev
-            masks[res] = elev_df[res] < GEOGRAPHIC_CONSTANTS['elevation_threshold']
 
     return elev_df, masks
 

@@ -14,6 +14,7 @@
 - Case: GEFS init 2025-01-25 00Z, forecast hours 0–36 (6 h step).
 - Findings: `no_fix` and `new_fix` match (e.g., p01 10→50 mm through the event); `old_fix` inflates basin snow to 60–105 mm due to high-elevation spillover.
 - Figure saved to `figures/baseline_mask_comparison.png` showing both members.
+- Note: reverted to the legacy buffered mask (no smoothing) for v0.9.5 so the baseline matches historical runs; schedule mask tuning after the freeze.
 
 ### Notes
 - Mask smoothing fix effectively removes rim contamination without muting basin snowfall.

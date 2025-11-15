@@ -29,7 +29,7 @@ Date updated: 2025-11-11
 
 ## Data Flow
 - Download GEFS (0p25 to 240h, 0p5 beyond; skip duplicate 240h at 0p5).
-- Create elevation‑based masks per resolution; broadcast to grids.
+- Create elevation-based masks per resolution; for v0.9.5 we retain the legacy buffered mask (elev < threshold + 250 m, no smoothing) so behaviour matches prior runs; broadcast to grids.
 - Compute masked spatial quantiles (Hazen) → timeseries per variable.
 - Feed Clyfar v0p9; aggregate/clipped MFs → defuzz percentiles.
 - Save parquet + plots (meteogram, possibility, heatmaps).

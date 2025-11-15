@@ -27,6 +27,7 @@ Use this list to work in tight focus blocks. Tasks are grouped by expected effor
 9. `docs/versioning.md`: summarize version scheme (0.9 hotfixes vs 1.0 freeze) and tagging expectations.
 10. `docs/experiments.md`: describe how experiment configs map to CLI runs and where outputs live.
 11. `preprocessing/representative_nwp_values.py`: confirm Uintah Basin mask erosion/edge handling prevents snow overestimates (document findings + adjustments in `docs/baseline_0_9.md`).
+12. (post-0.9.5) Re-evaluate the Uintah Basin snow mask smoothing/buffer once the baseline is frozen and document the tuned approach.
 
 ## Large (3–6 hours)
 1. Packaging migration: move one module family (e.g., `preprocessing/`) under `clyfar/` with shims + updated imports; document in `docs/roadmap.md`.
