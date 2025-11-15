@@ -302,7 +302,7 @@ def plot_meteogram(df_dict, vrbl_col, title=None, fig=None, ax=None,
     # Unit conversation - TODO use pint and metpy?
     vrbl_factors = {
         'prmsl': 0.01,  # Pa to hPa
-        'sde': 100,  # m to cm
+        'sde': 1,  # values already converted to mm upstream
     }
 
     for k, v in df_dict.items():
@@ -310,6 +310,19 @@ def plot_meteogram(df_dict, vrbl_col, title=None, fig=None, ax=None,
 
     # Compute global min/max using vectorized operations
     all_values = pd.concat([df[vrbl_col] for df in df_dict.values()])
+    all_values = all_values.replace([np.inf, -np.inf], np.nan).dropna()
+    if all_values.empty:
+        ax.text(
+            0.5,
+            0.5,
+            "No finite values available",
+            ha="center",
+            va="center",
+            transform=ax.transAxes,
+            fontsize=12,
+        )
+        ax.set_axis_off()
+        return fig, ax
     y_min = all_values.min()
     y_max = all_values.max()
 
@@ -317,9 +330,16 @@ def plot_meteogram(df_dict, vrbl_col, title=None, fig=None, ax=None,
         y_min -= 5  # Add 5 hPa to the minimum
         y_max += 5  # Add 5 hPa to the maximum
 
+    delta = None
+    if np.isclose(y_max, y_min):
+        # Expand a flat line slightly so matplotlib can set limits.
+        delta = max(abs(y_max) * 0.1, 1.0)
+        y_min -= delta
+        y_max += delta
+
     # Calculate dynamic grid interval based on the range of y values
     y_range = y_max - y_min
-    grid_interval = y_range / 10  # Adjust the divisor to control the number of grid lines
+    grid_interval = y_range / 10 if y_range != 0 else (delta or 1.0)
 
     # Round to nearest grid interval for cleaner limits
     y_min = np.floor(y_min / grid_interval) * grid_interval
@@ -622,11 +642,11 @@ def add_inch_markers_and_labels(ax, y_min, y_max):
         y_min (float): The minimum y-axis value.
         y_max (float): The maximum y-axis value.
     """
-    meters_per_inch = 0.0254 * 100 # cm, from metres
+    millimeters_per_inch = 25.4
 
-    # Convert min/max to inches
-    min_inches = y_min / meters_per_inch
-    max_inches = y_max / meters_per_inch
+    # Convert min/max (in mm) to inches
+    min_inches = y_min / millimeters_per_inch
+    max_inches = y_max / millimeters_per_inch
 
     # Determine if we need quarter-inch or whole-inch markers
     if max_inches <= 1.5:
@@ -646,13 +666,13 @@ def add_inch_markers_and_labels(ax, y_min, y_max):
         decimal_places = 0  # Show whole numbers
 
     # Convert back to meters for plotting
-    inch_positions = inch_values * meters_per_inch
+    inch_positions = inch_values * millimeters_per_inch
 
     for pos in inch_positions:
         if pos < y_min or pos > y_max:
             continue
 
-        inches = round(pos / meters_per_inch, decimal_places)
+        inches = round(pos / millimeters_per_inch, decimal_places)
         if inches == 0:
             # Don't bother labelling "zero"!
             continue

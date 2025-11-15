@@ -511,7 +511,7 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
             continue
 
         # Hacky with units - TODO - fix this with pint package
-        snow_val = all_vrbl_dfs["snow"][snow_].loc[dt] * 1000  # For m to mm
+        snow_val = all_vrbl_dfs["snow"][snow_].loc[dt]  # already in mm
         # GEFS `prmsl` is already in Pa; avoid rescaling beyond the FIS domain
         mslp_val = all_vrbl_dfs["mslp"][mslp_].loc[dt]
         wind_val = all_vrbl_dfs["wind"][wind_].loc[dt] # already in m/s?
@@ -659,6 +659,11 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         '0p25': check_and_create_latlon_files("0p25"),
         '0p5': check_and_create_latlon_files("0p5")
     }
+    try:
+        from nwp.gefsdata import GEFSData
+        GEFSData.LATLONS = latlons
+    except ImportError:
+        pass
     elev_df, masks = initialize_geography(latlons)
 
     init_dt_dict = utils.get_valid_forecast_init(force_init_dt=dt)
