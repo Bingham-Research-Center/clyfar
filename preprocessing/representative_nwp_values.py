@@ -88,7 +88,29 @@ def get_latlon_timeseries_df(init_dt_naive, vrbl, q_str, v_key, lat, lon,
     clyfar_input = xr.concat([ts_early, ts_later], dim='time')
 
     print("Two time series joined. Now returning a dataframe.")
-    clyfar_input = clyfar_input.to_dataframe()[['step', v_key]]
+    df = clyfar_input.to_dataframe()
+
+    if 'step' not in df.columns:
+        # Older Herbie/xarray fallbacks sometimes lack a 'step' column, so
+        # reconstruct the lead time from the timestamp itself.
+        if isinstance(df.index, pd.MultiIndex) and 'time' in df.index.names:
+            time_index = df.index.get_level_values('time')
+        elif isinstance(df.index, pd.DatetimeIndex):
+            time_index = df.index
+        elif 'time' in df.columns:
+            time_index = pd.to_datetime(df['time'])
+        else:
+            raise KeyError(
+                "Unable to derive forecast step because 'time' is missing"
+            )
+        time_index = pd.to_datetime(time_index)
+        step = (
+            (time_index - pd.Timestamp(init_dt_naive)).total_seconds() // 3600
+        ).astype(int)
+        df = df.copy()
+        df['step'] = step
+
+    clyfar_input = df[['step', v_key]]
 
     return clyfar_input
 
@@ -281,7 +303,8 @@ def do_nwpval_snow(init_dt_naive: datetime.datetime,
         # Set negative snow-depths to zero
         snow_ts = snow_ts.where(snow_ts > 0, 0)
 
-    pass
+    # Convert metres -> millimetres for downstream use
+    snow_ts = snow_ts * 1000.0
     return snow_ts
 
 def do_nwpval_wind(init_dt_naive: datetime.datetime,
@@ -465,7 +488,8 @@ def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
     # pc_ts = ds_ts.quantile(quantile, dim=("latitude", "longitude"))
 
     # Currently only using KVEL so just return this!
-    pc_ts = ds_ts
+    # Convert Pa -> hPa for downstream use
+    pc_ts = ds_ts / 100.0
     return pc_ts
 
 
