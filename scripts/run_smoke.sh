@@ -12,9 +12,15 @@ FIG_ROOT="${FIG_ROOT:-./figures}"
 LOG_DIR="${DATA_ROOT}/baseline_0_9/logs"
 LOG_FILE="${LOG_DIR}/smoke_${INIT_TIME}.log"
 PYTHON_BIN="${PYTHON_BIN:-python}"
+OVERWRITE="${OVERWRITE:-0}"
 
 mkdir -p "${LOG_DIR}"
 echo "[run_smoke] $(date -Iseconds) init=${INIT_TIME} ncpus=${NCPUS} nmembers=${NMEMBERS}" | tee -a "${LOG_FILE}" >> performance_log.txt
+
+if [[ "${OVERWRITE}" == "1" ]]; then
+  rm -rf "${DATA_ROOT}/${INIT_TIME:0:8}_0000Z"
+  rm -rf "${FIG_ROOT}/${INIT_TIME:0:8}_00Z"
+fi
 
 "${PYTHON_BIN}" run_gefs_clyfar.py \
   -i "${INIT_TIME}" \
