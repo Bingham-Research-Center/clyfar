@@ -8,10 +8,11 @@ Date updated: 2025-11-11
 - Goal: freeze hotfixes into 0.9.5 before v1.0 refactor.
 
 ## Repro (Smoke)
-- Env: Python 3.11.9 (conda), `pip install -r requirements.txt`.
+- Env: Python 3.11.9 (Miniforge `clyfar-2025` env), `pip install -r requirements.txt`.
 - Command: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing` (or `scripts/run_smoke.sh 2024010100`).
-- Artefacts: `data/<run_id>/*.parquet`, `figures/<run_id>/*.png`.
-- Git SHA (baseline build): `TODO_SHA` (update after golden run).
+- Artefacts: `data/20240101_0000Z/*.parquet`, `figures/20240101_00Z/*.png`.
+- Git SHA (baseline build): `83a2298`.
+- Log file: `data/baseline_0_9/logs/smoke_2024010100.log`.
 - Run metadata lives in `data/baseline_0_9/<run_id>/run.json` (see Logging section).
 
 ## Repro (Regression sample)

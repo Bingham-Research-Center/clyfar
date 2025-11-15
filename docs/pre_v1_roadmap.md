@@ -20,15 +20,19 @@ Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF
 
 ## Medium Goals (4–10 hours)
 - **Solar → Random Forest prototype**:
-  - Gather solar predictors from existing preprocessing outputs.
-  - Train an RFR (scikit-learn) offline, serialize under `models/solar_rfr.joblib`.
-  - Add feature flag in FIS preprocessing to consume RFR output; document method in LaTeX (e.g., Section “Solar Proxy”).
+  - Replace the current near-zenith heuristic/GEFS scalar with an RFR trained on representative predictors (forecast local time, cos(zenith), cloud proxies, persistence terms) so timezone offsets stop leaking into the MF inputs.
+  - Gather training data from the existing preprocessing outputs plus observed solar summaries; serialize the fitted model under `models/solar_rfr.joblib`.
+  - Add a feature flag in preprocessing to consume the RFR estimate (and log fallback values) before entering FIS; document methodology + validation in both Markdown and LaTeX (Section “Solar Proxy”).
+  - Use this pipeline as the template for future RFR experiments (e.g., pseudo-lapse-rate) so we reuse data plumbing and evaluation scripts.
 - **MF gradient-descent tuning**:
   - Externalize membership parameters into YAML.
   - Implement loss function + gradient descent loop (potentially using autograd or manual derivative) for one pollutant.
   - Capture experiment logs and summarize findings in both Markdown (`docs/fis_optimization.md`) and LaTeX.
 - **Experiment runner**: implement `python -m clyfar.experiments run --config ...`, log metadata, and support resume-by-member.
 - **Data abstraction**: introduce `ForecastDataset` protocol + GEFS wrapper, prepping for HRRR integration post-v1.
+- **Snow bias assimilation**:
+  - Implement the GEFS snow offset correction (subtract/add the initial observed-minus-forecast delta to the entire time series until the adjusted signal hits zero, then stop) to crudely assimilate representative observations.
+  - Evaluate whether HRRR lagged ensembles can supply complementary snow deltas; design hooks so the same adjustment pipeline can swap in higher-resolution sources during v1.1.
 
 ## Large Goals (10–20 hours)
 - **Packaging & CLI overhaul**: migrate major module families into `clyfar/`, add Typer/Click CLI (`clyfar run`, `clyfar experiment`), keep `run_gefs_clyfar.py` as shim, and document commands in both README + LaTeX.

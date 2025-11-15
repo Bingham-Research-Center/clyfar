@@ -26,6 +26,7 @@ Use this list to work in tight focus blocks. Tasks are grouped by expected effor
 8. `tests/imports/test_package_layout.py`: assert new `clyfar` namespace imports without side effects.
 9. `docs/versioning.md`: summarize version scheme (0.9 hotfixes vs 1.0 freeze) and tagging expectations.
 10. `docs/experiments.md`: describe how experiment configs map to CLI runs and where outputs live.
+11. `preprocessing/representative_nwp_values.py`: confirm Uintah Basin mask erosion/edge handling prevents snow overestimates (document findings + adjustments in `docs/baseline_0_9.md`).
 
 ## Large (3–6 hours)
 1. Packaging migration: move one module family (e.g., `preprocessing/`) under `clyfar/` with shims + updated imports; document in `docs/roadmap.md`.
@@ -38,3 +39,17 @@ Use this list to work in tight focus blocks. Tasks are grouped by expected effor
 8. Contributor guide: author `docs/contributing.md` covering branch strategy, review expectations, and change proposal template for new FIS rules.
 9. Pre-commit tooling: configure `.pre-commit-config.yaml` with `ruff`, `black`, `isort`, and hook instructions in README.
 10. Metrics parity check: compare snow/ozone metrics between v0.9 outputs and legacy results; write summary in `docs/baseline_0_9.md` and attach figures under `figures_archive/v0_9/`.
+
+## Milestone Plan · Baseline Freeze (target: v0.9.5)
+- Smoke validation
+  - [x] Freeze dependency snapshot: `pip freeze > constraints/baseline-0.9.txt`.
+  - [x] Run `scripts/run_smoke.sh 2024010100` and capture git SHA + log pointers for the baseline doc (add `run.json` provenance once writer exists).
+  - [x] Populate `docs/baseline_0_9.md` SHA fields + smoke artefact pointers.
+- Regression triad
+  - [ ] Execute `run_gefs_clyfar.py` for `{2024010100, 2024021500, 2024030500}` with `-n 8 -m 10 --log-fis`.
+  - [ ] Store outputs under `data/baseline_0_9/<init>/` and `figures_archive/v0_9/<init>/`.
+  - [ ] Summarize metrics (MAE, hit rate, exceedance accuracy) in `docs/baseline_0_9.md`; mirror highlights into the LaTeX report.
+- Documentation & report sync
+  - [ ] Update `docs/baseline_0_9.md` Logging section with run.json samples and links.
+  - [ ] Add matching methodology paragraphs + references in the LaTeX repo (appendix baseline section).
+  - [ ] Tag `v0.9.5` once smoke + regression checklists pass (`docs/v0p9_testing_checklist.md`).

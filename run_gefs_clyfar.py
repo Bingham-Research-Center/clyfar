@@ -27,6 +27,8 @@ import os
 from typing import Dict, List, Tuple, Optional
 import logging
 import datetime
+import platform
+import sys
 
 import numpy as np
 import pandas as pd
@@ -45,6 +47,7 @@ from utils import utils
 from utils.geog_funcs import get_elevations_for_resolutions
 from utils.lookups import Lookup
 from utils.utils import configurable_timer
+from utils.runlog import write_run_summary
 from viz.plotting import plot_meteogram
 from fis.v0p9 import Clyfar
 from viz.possibility_funcs import (plot_percentile_meteogram,
@@ -842,11 +845,69 @@ if __name__ == "__main__":
     print("Saving data to root directory:", args.data_root)
     print("Saving figures to root:", args.fig_root)
 
-    main(dt=args.inittime,
-         clyfar_fig_root=args.fig_root, clyfar_data_root=args.data_root,
-         ncpus=args.ncpus, nmembers=args.nmembers,
-         visualise=True, save=True,
-         verbose=args.verbose, testing=args.testing,
-         no_clyfar=args.no_clyfar, no_gefs=args.no_gefs,
-         log_fis=args.log_fis,
-         )
+    run_label = args.inittime.strftime('%Y%m%d_%H%MZ')
+    run_suffix = "smoke" if args.testing else "run"
+    run_id = f"{run_label}_{run_suffix}"
+    summary_root = (os.path.join(args.data_root, "baseline_0_9")
+                    if args.testing else args.data_root)
+    started_utc = datetime.datetime.utcnow()
+    run_failed = False
+    try:
+        main(dt=args.inittime,
+             clyfar_fig_root=args.fig_root, clyfar_data_root=args.data_root,
+             ncpus=args.ncpus, nmembers=args.nmembers,
+             visualise=True, save=True,
+             verbose=args.verbose, testing=args.testing,
+             no_clyfar=args.no_clyfar, no_gefs=args.no_gefs,
+             log_fis=args.log_fis,
+             )
+    except Exception:
+        run_failed = True
+        raise
+    finally:
+        if not run_failed:
+            finished_utc = datetime.datetime.utcnow()
+            cli_args = {
+                "inittime": args.inittime.strftime("%Y%m%d%H"),
+                "ncpus": args.ncpus,
+                "nmembers": args.nmembers,
+                "data_root": args.data_root,
+                "fig_root": args.fig_root,
+                "testing": args.testing,
+                "no_clyfar": args.no_clyfar,
+                "no_gefs": args.no_gefs,
+                "log_fis": args.log_fis,
+            }
+            artifacts = {
+                "forecast_data_dir": os.path.join(args.data_root, run_label),
+                "figures_dir": os.path.join(
+                    args.fig_root, args.inittime.strftime("%Y%m%d_%HZ")),
+                "log_file": None,
+                "performance_log": os.path.abspath("performance_log.txt"),
+            }
+            if args.testing:
+                smoke_log = os.path.join(
+                    args.data_root, "baseline_0_9", "logs",
+                    f"smoke_{args.inittime.strftime('%Y%m%d%H')}.log")
+                if os.path.exists(smoke_log):
+                    artifacts["log_file"] = smoke_log
+            env_info = {
+                "python": platform.python_version(),
+                "platform": platform.platform(),
+                "conda_prefix": os.environ.get("CONDA_PREFIX"),
+            }
+            summary = {
+                "run_id": run_id,
+                "run_type": "smoke" if args.testing else "operational",
+                "cli": {"argv": sys.argv, "args": cli_args},
+                "timing": {
+                    "started_utc": started_utc.isoformat() + "Z",
+                    "finished_utc": finished_utc.isoformat() + "Z",
+                    "duration_seconds": (finished_utc - started_utc).total_seconds(),
+                },
+                "artifacts": artifacts,
+                "environment": env_info,
+                "notes": "Baseline smoke run" if args.testing else "",
+            }
+            runlog_path = write_run_summary(summary_root, run_id, summary)
+            print(f"Run metadata written to {runlog_path}")
