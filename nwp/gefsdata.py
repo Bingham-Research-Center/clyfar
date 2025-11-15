@@ -93,43 +93,56 @@ class GEFSData(DataFile):
                             os.remove(path)
                         except FileNotFoundError:
                             pass
-            try:
-                ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
-            except Exception as exc:
-                logger = logging.getLogger(__name__)
-                logger.warning("Herbie download failed for %s f%03d (%s); returning NaNs",
-                               herbie_inst.date, herbie_inst.fxx, exc)
-                import xarray as xr
-                import numpy as np
-                lat = lon = None
-                grid = getattr(herbie_inst, "grid", None)
-                if grid is not None:
-                    lat = grid.lat
-                    lon = grid.lon
-                if lat is None or lon is None:
-                    product = getattr(herbie_inst, "product", "")
-                    if product.endswith(".25") or ".25" in product:
-                        res_key = "0p25"
-                    elif product.endswith(".5") or ".5" in product:
-                        res_key = "0p5"
-                    else:
-                        res_key = "0p25"
-                    lat, lon = cls._load_latlon_arrays(res_key)
-                if lat is None or lon is None:
-                    raise RuntimeError("No latitude/longitude grid available for fallback download") from exc
-                data_var = (qstr.strip(':') or 'var').lower()
-                data = np.full((1, lat.shape[0], lon.shape[0]), np.nan)
-                valid_time = getattr(herbie_inst, "valid_date", None)
-                if valid_time is None:
-                    valid_time = getattr(herbie_inst, "date", None)
-                ds = xr.Dataset(
-                    data_vars={data_var: (('time', 'latitude', 'longitude'), data)},
-                    coords={
-                        'time': ('time', [valid_time] if valid_time is not None else [0]),
-                        'latitude': ('latitude', lat),
-                        'longitude': ('longitude', lon),
-                    },
-                )
+            attempts = 2
+            last_exc = None
+            for attempt in range(attempts):
+                try:
+                    ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt < attempts - 1:
+                        for path in (herbie_inst.idx, herbie_inst.grib):
+                            if isinstance(path, str) and path and os.path.exists(path):
+                                try:
+                                    os.remove(path)
+                                except FileNotFoundError:
+                                    pass
+                        continue
+                    logger = logging.getLogger(__name__)
+                    logger.warning("Herbie download failed for %s f%03d (%s); returning NaNs",
+                                   herbie_inst.date, herbie_inst.fxx, exc)
+                    import xarray as xr
+                    import numpy as np
+                    lat = lon = None
+                    grid = getattr(herbie_inst, "grid", None)
+                    if grid is not None:
+                        lat = grid.lat
+                        lon = grid.lon
+                    if lat is None or lon is None:
+                        product = getattr(herbie_inst, "product", "")
+                        if product.endswith(".25") or ".25" in product:
+                            res_key = "0p25"
+                        elif product.endswith(".5") or ".5" in product:
+                            res_key = "0p5"
+                        else:
+                            res_key = "0p25"
+                        lat, lon = cls._load_latlon_arrays(res_key)
+                    if lat is None or lon is None:
+                        raise RuntimeError("No latitude/longitude grid available for fallback download") from exc
+                    data_var = (qstr.strip(':') or 'var').lower()
+                    data = np.full((1, lat.shape[0], lon.shape[0]), np.nan)
+                    valid_time = getattr(herbie_inst, "valid_date", None)
+                    if valid_time is None:
+                        valid_time = getattr(herbie_inst, "date", None)
+                    ds = xr.Dataset(
+                        data_vars={data_var: (('time', 'latitude', 'longitude'), data)},
+                        coords={
+                            'time': ('time', [valid_time] if valid_time is not None else [0]),
+                            'latitude': ('latitude', lat),
+                            'longitude': ('longitude', lon),
+                        },
+                    )
             ds = ds.metpy.parse_cf()
 
         # if os.path.exists(lock_path):
