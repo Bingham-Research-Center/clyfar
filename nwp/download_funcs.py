@@ -52,7 +52,7 @@ def load_variable(init_dt, start_h, max_h, delta_h, q_str, product,
         resol = "atmos.5" if f>240 else product
         ds_ts = GEFSData.get_cropped_data(init_dt, fxx=f, q_str=q_str, product=resol,
                                           remove_grib=remove_grib, member=member)
-        ds_ts = ds_ts.assign_coords(time=init_dt + datetime.timedelta(hours=f))
+        ds_ts = ds_ts.assign_coords(time=[init_dt + datetime.timedelta(hours=f)])
         data_slices.append(ds_ts)
 
     # Concatenate the list of data slices along a new time dimension

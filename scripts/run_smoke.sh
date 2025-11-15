@@ -4,7 +4,7 @@ set -euo pipefail
 # Minimal smoke wrapper for the --testing CLI workflow.
 # Usage: scripts/run_smoke.sh [YYYYMMDDHH]
 
-INIT_TIME="${1:-2024010100}"
+INIT_TIME="${1:-2025012506}"
 NCPUS="${NCPUS:-2}"
 NMEMBERS="${NMEMBERS:-2}"
 DATA_ROOT="${DATA_ROOT:-./data}"

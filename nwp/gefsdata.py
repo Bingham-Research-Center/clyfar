@@ -3,6 +3,7 @@ import os
 import multiprocessing as mp
 import tempfile
 import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -24,6 +25,20 @@ if mp.get_start_method() != 'spawn':
 class GEFSData(DataFile):
     _LATLON_CACHE = {}
     LOCK_DIR = os.getenv("CLYFAR_TMPDIR") or tempfile.gettempdir()
+    _HERBIE_CACHE_DIR = Path(
+        os.environ.get(
+            "CLYFAR_HERBIE_CACHE",
+            Path(__file__).resolve().parents[1] / "data" / "herbie_cache"
+        )
+    ).expanduser()
+    try:
+        _HERBIE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Directory creation can fail on read-only filesystems; fall back to tmp.
+        _HERBIE_CACHE_DIR = Path(tempfile.gettempdir()) / "clyfar_herbie"
+        _HERBIE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _CFGRIB_INDEX_DIR = _HERBIE_CACHE_DIR / "cfgrib_indexes"
+    _CFGRIB_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
     def __init__(self, clear_cache=False):
         """Download, process GEFS data.
@@ -61,6 +76,7 @@ class GEFSData(DataFile):
             product=product,
             fxx=fxx,
             member=member,
+            save_dir=str(GEFSData._HERBIE_CACHE_DIR),
         )
         return H
 
@@ -97,7 +113,18 @@ class GEFSData(DataFile):
             last_exc = None
             for attempt in range(attempts):
                 try:
-                    ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
+                    backend_kwargs = {}
+                    qstr_lower = (qstr or "").lower()
+                    if "prmsl" in qstr_lower:
+                        backend_kwargs["errors"] = "ignore"
+                        backend_kwargs.setdefault("filter_by_keys", {})
+                        backend_kwargs["filter_by_keys"].setdefault("typeOfLevel", "meanSea")
+                    backend_kwargs.setdefault("indexpath", str(cls._CFGRIB_INDEX_DIR))
+                    ds = herbie_inst.xarray(
+                        qstr,
+                        remove_grib=remove_grib,
+                        backend_kwargs=backend_kwargs,
+                    )
                     break
                 except Exception as exc:
                     last_exc = exc
@@ -110,8 +137,23 @@ class GEFSData(DataFile):
                                     pass
                         continue
                     logger = logging.getLogger(__name__)
-                    logger.warning("Herbie download failed for %s f%03d (%s); returning NaNs",
-                                   herbie_inst.date, herbie_inst.fxx, exc)
+                    logger.warning(
+                        "Herbie download failed for %s f%03d (%s); returning NaNs",
+                        herbie_inst.date,
+                        herbie_inst.fxx,
+                        exc,
+                    )
+                    try:
+                        grib_path = getattr(herbie_inst, "grib", None)
+                        idx_path = getattr(herbie_inst, "idx", None)
+                        meta_msg = (
+                            f"[Herbie debug] var={qstr} model={herbie_inst.model} "
+                            f"product={herbie_inst.product} member={herbie_inst.member} "
+                            f"fxx={herbie_inst.fxx} grib={grib_path} idx={idx_path}"
+                        )
+                        print(meta_msg)
+                    except Exception:
+                        pass
                     import xarray as xr
                     import numpy as np
                     lat = lon = None
