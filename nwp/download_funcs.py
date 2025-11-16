@@ -52,6 +52,10 @@ def load_variable(init_dt, start_h, max_h, delta_h, q_str, product,
         resol = "atmos.5" if f>240 else product
         ds_ts = GEFSData.get_cropped_data(init_dt, fxx=f, q_str=q_str, product=resol,
                                           remove_grib=remove_grib, member=member)
+        if "number" in ds_ts.coords or "number" in ds_ts.dims:
+            # Each call targets a single ensemble member; drop the unused coord so
+            # xr.concat doesn't fail when some GRIBs omit it (see run_gefs_clyfar.py).
+            ds_ts = ds_ts.drop_vars("number")
         ds_ts = ds_ts.assign_coords(time=[init_dt + datetime.timedelta(hours=f)])
         data_slices.append(ds_ts)
 
