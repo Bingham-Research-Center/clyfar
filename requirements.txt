@@ -8,6 +8,7 @@ pytz>=2024.2
 scipy>=1.14.1
 astral>=3.0
 cfgrib>=0.9.14.1
+pygrib>=2.1.5
 requests>=2.32.3
 fasteners>=0.19
 matplotlib>=3.8.0

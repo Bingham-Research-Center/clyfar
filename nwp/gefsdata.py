@@ -39,6 +39,14 @@ class GEFSData(DataFile):
         _HERBIE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     _CFGRIB_INDEX_DIR = _HERBIE_CACHE_DIR / "cfgrib_indexes"
     _CFGRIB_INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    _PRESSURE_VAR_NAME = "prmsl"
+    _PRESSURE_STANDARD_NAME = "air_pressure_at_mean_sea_level"
+    _PRESSURE_FILTER_KEYS = {
+        "shortName": "prmsl",
+        "typeOfLevel": "meanSea",
+        "level": 0,
+        "dataType": "fc",
+    }
 
     def __init__(self, clear_cache=False):
         """Download, process GEFS data.
@@ -198,6 +206,161 @@ class GEFSData(DataFile):
         Maintain backward compatibility but use safe version
         """
         return GEFSData.safe_get_CONUS(qstr, herbie_inst, remove_grib)
+
+    @classmethod
+    @retry_download_backoff(retries=3, backoff_in_seconds=1)
+    def fetch_pressure(
+        cls,
+        inittime,
+        fxx,
+        product="atmos.25",
+        member="c00",
+        remove_grib=True,
+    ):
+        """
+        Download PRMSL for the requested GEFS forecast with explicit filter keys.
+        """
+        herbie_inst = cls.setup_herbie(
+            inittime,
+            fxx=fxx,
+            product=product,
+            model="gefs",
+            member=member,
+        )
+        ds = cls._fetch_pressure_dataset(herbie_inst, remove_grib=remove_grib)
+        return cls.crop_to_UB(ds)
+
+    @classmethod
+    def _fetch_pressure_dataset(cls, herbie_inst, remove_grib=True):
+        os.makedirs(cls.LOCK_DIR, exist_ok=True)
+        lock_path = os.path.join(
+            cls.LOCK_DIR,
+            f"prmsl_{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock",
+        )
+        backend_kwargs = cls._build_pressure_backend_kwargs()
+        lock = fasteners.InterProcessLock(lock_path)
+        with lock:
+            if getattr(cls, "clear_cache", False):
+                cls._purge_cached_files(herbie_inst)
+            attempts = 2
+            last_exc = None
+            for attempt in range(attempts):
+                try:
+                    ds = cls._pressure_cfgrib_request(
+                        herbie_inst,
+                        backend_kwargs,
+                        remove_grib=remove_grib,
+                    )
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    cls._purge_cached_files(herbie_inst)
+            else:
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    "cfgrib PRMSL load failed for %s f%03d (%s); falling back to pygrib",
+                    herbie_inst.date,
+                    herbie_inst.fxx,
+                    last_exc,
+                )
+                ds = cls._pressure_pygrib_fallback(herbie_inst)
+                if remove_grib:
+                    cls._purge_cached_files(herbie_inst)
+            ds = ds.metpy.parse_cf()
+        return ds
+
+    @classmethod
+    def _pressure_cfgrib_request(cls, herbie_inst, backend_kwargs, remove_grib=True):
+        ds = herbie_inst.xarray(
+            None,
+            remove_grib=remove_grib,
+            backend_kwargs=backend_kwargs,
+        )
+        if cls._PRESSURE_VAR_NAME not in ds.data_vars and ds.data_vars:
+            first_var = list(ds.data_vars)[0]
+            ds = ds.rename({first_var: cls._PRESSURE_VAR_NAME})
+        return ds
+
+    @classmethod
+    def _pressure_pygrib_fallback(cls, herbie_inst):
+        try:
+            import pygrib
+        except ImportError as exc:
+            raise RuntimeError(
+                "pygrib is required for PRMSL fallback; please install pygrib>=2.1.5."
+            ) from exc
+
+        grib_path = getattr(herbie_inst, "grib", None)
+        if not grib_path or not os.path.exists(grib_path):
+            download_result = herbie_inst.download()
+            if isinstance(download_result, dict):
+                grib_path = download_result.get("grib") or download_result.get("filepath")
+            elif download_result:
+                grib_path = download_result
+        if not grib_path or not os.path.exists(grib_path):
+            raise RuntimeError("Unable to locate GEFS GRIB file for pygrib fallback")
+
+        with pygrib.open(grib_path) as grib_obj:
+            try:
+                msg = grib_obj.select(shortName="prmsl", typeOfLevel="meanSea")[0]
+            except (ValueError, IndexError) as exc:
+                raise RuntimeError(
+                    "pygrib fallback could not locate PRMSL in the GRIB message"
+                ) from exc
+            values = msg.values
+            lats, lons = msg.latlons()
+            valid_time = getattr(herbie_inst, "valid_date", None) or getattr(
+                msg, "validDate", None
+            )
+
+        if valid_time is None:
+            valid_time = getattr(herbie_inst, "date", None)
+        if valid_time is None:
+            valid_time = datetime.datetime.utcnow()
+
+        latitude = lats[:, 0]
+        longitude = lons[0, :]
+        data = np.expand_dims(values, axis=0)
+        ds = xr.Dataset(
+            {
+                cls._PRESSURE_VAR_NAME: (
+                    ("time", "latitude", "longitude"),
+                    data,
+                )
+            },
+            coords={
+                "time": ("time", pd.to_datetime([valid_time])),
+                "latitude": ("latitude", latitude),
+                "longitude": ("longitude", longitude),
+            },
+        )
+        ds[cls._PRESSURE_VAR_NAME].attrs.update(
+            {
+                "units": getattr(msg, "units", "Pa"),
+                "long_name": getattr(msg, "name", "Pressure reduced to MSL"),
+                "standard_name": cls._PRESSURE_STANDARD_NAME,
+            }
+        )
+        return ds
+
+    @classmethod
+    def _build_pressure_backend_kwargs(cls):
+        backend_kwargs = {
+            "filter_by_keys": dict(cls._PRESSURE_FILTER_KEYS),
+            "indexpath": str(cls._CFGRIB_INDEX_DIR),
+            "errors": "raise",
+        }
+        return backend_kwargs
+
+    @staticmethod
+    def _purge_cached_files(herbie_inst):
+        for attr in ("idx", "grib"):
+            path = getattr(herbie_inst, attr, None)
+            if isinstance(path, (str, os.PathLike)) and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    continue
 
     @staticmethod
     def get_closest_point(ds, vrbl, lat, lon):
