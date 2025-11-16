@@ -61,6 +61,7 @@ def load_variable(init_dt, start_h, max_h, delta_h, q_str, product,
             "surface",
             "valid_time",
             "metpy_crs",
+            "gribfile_projection",
         ):
             if (coord in ds_ts.coords) or (coord in ds_ts.dims) or (coord in ds_ts.data_vars):
                 drop_candidates.append(coord)
