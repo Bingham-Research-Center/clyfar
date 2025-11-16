@@ -47,6 +47,7 @@ class GEFSData(DataFile):
         "level": 0,
         "dataType": "fc",
     }
+    _PRESSURE_QUERY = ":PRMSL:"
 
     def __init__(self, clear_cache=False):
         """Download, process GEFS data.
@@ -272,7 +273,7 @@ class GEFSData(DataFile):
     @classmethod
     def _pressure_cfgrib_request(cls, herbie_inst, backend_kwargs, remove_grib=True):
         ds = herbie_inst.xarray(
-            None,
+            cls._PRESSURE_QUERY,
             remove_grib=remove_grib,
             backend_kwargs=backend_kwargs,
         )
