@@ -3,7 +3,8 @@
 Tracking micro-tasks for the clean rewrite of the pressure download path.
 
 ## Phase 1 – Reliable data access
-- [ ] Confirm current Herbie/cfgrib versions; document exact dependencies for reproducibility.
+- [x] Confirm current Herbie/cfgrib versions; document exact dependencies for reproducibility.
+  - Verified in the clyfar Python 3.11 environment on 2025-02-14: `herbie-data==2025.11.1`, `cfgrib==0.9.15.1`. Keep these pinned in `requirements.txt` for v0.9.5 release notes.
 - [ ] Build a standalone helper (`GEFSData.fetch_pressure`) that calls `Herbie.xarray` with explicit `filter_by_keys` for PRMSL.
 - [ ] Add pygrib-based fallback for PRMSL when cfgrib still raises.
 - [ ] Create `scripts/check_mslp.py` that exercises the helper for a few forecast hours and reports success/NaN counts.
