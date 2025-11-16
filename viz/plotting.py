@@ -326,7 +326,7 @@ def plot_meteogram(df_dict, vrbl_col, title=None, fig=None, ax=None,
     y_min = all_values.min()
     y_max = all_values.max()
 
-    if vrbl_col == 'mslp':
+    if vrbl_col == 'prmsl':
         y_min -= 5  # Add 5 hPa to the minimum
         y_max += 5  # Add 5 hPa to the maximum
 
