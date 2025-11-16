@@ -18,6 +18,7 @@ Lawson, Lyman, Davies, 2024
 - Run with verbose logging/prints: helpers should log GRIB paths, filters, fallback usage, and NaN counts so a single smoke run surfaces issues.
 - Prune caches and sanity-check artifacts regularly: delete stale `data/herbie_cache/*` or old parquet files before reruns, verify outputs, and surface questions early rather than letting errors propagate between repos.
 - Document the high-value references (Herbie gallery, GEFS inventory) in AI agent lookup files and intro guides so token budgets aren’t burned rediscovering them.
+- Long-term goal: refine `Lookup` + Herbie `filter_by_keys` so every variable uses the structured loader (cfgrib/xarray) without the legacy fallback. Once those filter definitions are stable, we can upstream the helpers into `brc-tools` for reuse across repos.
 
 ### Scope of Clyfar
 Clyfar is the name of the prediction system itself - at least the point-of-access label of information. The fuzzy inference system, coupled with the pre-processing of observation and numerical weather prediction (NWP) data, and some post-processing (TBD!) will be part of the Clyfar system. Future work, such as a larger-scale modular approach within which Clyfar is a part, will be put in a separate package and repository.
