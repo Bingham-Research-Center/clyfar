@@ -164,7 +164,8 @@ def _normalize_dataset_coords(ds, init_dt, fxx):
     valid_time = np.array([np.datetime64(init_dt + datetime.timedelta(hours=int(fxx)))])
     if "time" in ds.coords:
         ds = ds.drop_vars("time", errors="ignore")
-    ds = ds.expand_dims("time")
+    if "time" not in ds.dims:
+        ds = ds.expand_dims("time")
     ds = ds.assign_coords(time=("time", valid_time))
     return ds
 
