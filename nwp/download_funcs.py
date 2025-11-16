@@ -53,7 +53,7 @@ def load_variable(init_dt, start_h, max_h, delta_h, q_str, product,
         ds_ts = GEFSData.get_cropped_data(init_dt, fxx=f, q_str=q_str, product=resol,
                                           remove_grib=remove_grib, member=member)
         drop_candidates = []
-        for coord in ("number", "step", "heightAboveGround", "heightAboveSea", "surface"):
+        for coord in ("number", "step", "heightAboveGround", "heightAboveSea", "surface", "valid_time"):
             if (coord in ds_ts.coords) or (coord in ds_ts.dims) or (coord in ds_ts.data_vars):
                 drop_candidates.append(coord)
         if drop_candidates:
