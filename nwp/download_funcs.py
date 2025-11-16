@@ -192,7 +192,7 @@ def _legacy_gefs_concat(
         resol = "atmos.5" if f > 240 else product
         ds_ts = GEFSData.get_cropped_data(
             init_dt,
-            fxx=f,
+            fxx=int(f),
             q_str=q_str,
             product=resol,
             remove_grib=remove_grib,
