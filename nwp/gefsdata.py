@@ -128,6 +128,7 @@ class GEFSData(DataFile):
                         backend_kwargs["errors"] = "ignore"
                         backend_kwargs.setdefault("filter_by_keys", {})
                         backend_kwargs["filter_by_keys"].setdefault("typeOfLevel", "meanSea")
+                        backend_kwargs["indexpath"] = str(cls._pressure_index_path(herbie_inst))
                     backend_kwargs.setdefault("indexpath", str(cls._CFGRIB_INDEX_DIR))
                     ds = herbie_inst.xarray(
                         qstr,
@@ -194,7 +195,7 @@ class GEFSData(DataFile):
                             'longitude': ('longitude', lon),
                         },
                     )
-            ds = ds.metpy.parse_cf()
+            ds = cls._parse_cf(ds)
 
         # if os.path.exists(lock_path):
         #     os.remove(lock_path)
@@ -207,6 +208,20 @@ class GEFSData(DataFile):
         Maintain backward compatibility but use safe version
         """
         return GEFSData.safe_get_CONUS(qstr, herbie_inst, remove_grib)
+
+    @staticmethod
+    def _parse_cf(dataset):
+        """
+        Parse CF metadata when MetPy is available; otherwise return dataset unchanged.
+        """
+        try:
+            import metpy  # noqa: F401  # registers the xarray accessor
+        except ImportError:
+            return dataset
+        try:
+            return dataset.metpy.parse_cf()
+        except AttributeError:
+            return dataset
 
     @classmethod
     @retry_download_backoff(retries=3, backoff_in_seconds=1)
@@ -238,7 +253,7 @@ class GEFSData(DataFile):
             cls.LOCK_DIR,
             f"prmsl_{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock",
         )
-        backend_kwargs = cls._build_pressure_backend_kwargs()
+        backend_kwargs = cls._build_pressure_backend_kwargs(herbie_inst)
         lock = fasteners.InterProcessLock(lock_path)
         with lock:
             if getattr(cls, "clear_cache", False):
@@ -267,11 +282,18 @@ class GEFSData(DataFile):
                 ds = cls._pressure_pygrib_fallback(herbie_inst)
                 if remove_grib:
                     cls._purge_cached_files(herbie_inst)
-            ds = ds.metpy.parse_cf()
+            ds = cls._parse_cf(ds)
         return ds
 
     @classmethod
     def _pressure_cfgrib_request(cls, herbie_inst, backend_kwargs, remove_grib=True):
+        logger = logging.getLogger(__name__)
+        logger.debug(
+            "Requesting PRMSL via cfgrib (init=%s fxx=%03d idx=%s)",
+            herbie_inst.date,
+            herbie_inst.fxx,
+            backend_kwargs.get("indexpath"),
+        )
         ds = herbie_inst.xarray(
             cls._PRESSURE_QUERY,
             remove_grib=remove_grib,
@@ -345,13 +367,27 @@ class GEFSData(DataFile):
         return ds
 
     @classmethod
-    def _build_pressure_backend_kwargs(cls):
+    def _build_pressure_backend_kwargs(cls, herbie_inst):
+        index_path = cls._pressure_index_path(herbie_inst)
         backend_kwargs = {
             "filter_by_keys": dict(cls._PRESSURE_FILTER_KEYS),
-            "indexpath": str(cls._CFGRIB_INDEX_DIR),
+            "indexpath": str(index_path),
             "errors": "raise",
         }
         return backend_kwargs
+
+    @classmethod
+    def _pressure_index_path(cls, herbie_inst):
+        init_time = getattr(herbie_inst, "date", None)
+        if init_time is None:
+            init_stamp = "unknown"
+        else:
+            init_stamp = f"{init_time:%Y%m%d%H}"
+        product = (getattr(herbie_inst, "product", "") or "prod").replace(".", "")
+        model = getattr(herbie_inst, "model", "model")
+        member = getattr(herbie_inst, "member", "mbr")
+        filename = f"{model}_{member}_{product}_{init_stamp}_f{herbie_inst.fxx:03d}.idx"
+        return cls._CFGRIB_INDEX_DIR / filename
 
     @staticmethod
     def _purge_cached_files(herbie_inst):
