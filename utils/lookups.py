@@ -94,46 +94,52 @@ class Lookup:
             self.string_dict (dict): Dictionary of synonym keys for variables.
         """
         self.string_dict = {
-            "snow": {
-                'array_name': 'sde',
-                'label': 'Snow depth (mm)',  # GEFS sde in m; pipeline converts to mm
-                'mf_name': 'snow',
-                'gefs_query': ':SNOD:',
-                'synoptic': 'snow_depth'
-            },
-            "mslp": {
-                'array_name': 'prmsl',
-                'label': 'Mean sea level pressure (Pa)',
-                'mf_name': 'mslp',
-                'gefs_query': ':PRMSL:',
-                'synoptic': 'sea_level_pressure'
-            },
-            "solar": {
-                'array_name': 'sdswrf',
-                'label': 'Solar radiation (W/m^2)',
-                'mf_name': 'solar',
-                'gefs_query': ':DSWRF:',
-                'synoptic': 'solar_radiation'
-            },
-            "wind": {
-                'array_name': 'si10',
-                'label': 'Wind speed (m/s)',
-                'mf_name': 'wind',
-                'gefs_query': "GRD:10 m above",
-                'synoptic': 'wind_speed'
-            },
-            "ozone": {
-                'label': 'Ozone concentration (ppb)',
-                'mf_name': 'ozone',
-                'synoptic': 'ozone_concentration'
-            },
-            "temp": {
-                'array_name': 't2m',
-                'label': 'Temperature (°C)',
-                # 'mf_name': 'temp',
-                'gefs_query': "TMP:2 m above",
-                'synoptic': 'temperature'
-            },
+        "snow": {
+            'array_name': 'sde',
+            'label': 'Snow depth (mm)',  # GEFS sde in m; pipeline converts to mm
+            'mf_name': 'snow',
+            'gefs_query': ':SNOD:',
+            'synoptic': 'snow_depth',
+            'units': 'millimeter',
+        },
+        "mslp": {
+            'array_name': 'prmsl',
+            'label': 'Mean sea level pressure (hPa)',
+            'mf_name': 'mslp',
+            'gefs_query': ':PRMSL:',
+            'synoptic': 'sea_level_pressure',
+            'units': 'hectopascal',
+        },
+        "solar": {
+            'array_name': 'sdswrf',
+            'label': 'Solar radiation (W/m^2)',
+            'mf_name': 'solar',
+            'gefs_query': ':DSWRF:',
+            'synoptic': 'solar_radiation',
+            'units': 'watt / meter ** 2',
+        },
+        "wind": {
+            'array_name': 'si10',
+            'label': 'Wind speed (m/s)',
+            'mf_name': 'wind',
+            'gefs_query': "GRD:10 m above",
+            'synoptic': 'wind_speed',
+            'units': 'meter / second',
+        },
+        "ozone": {
+            'label': 'Ozone concentration (ppb)',
+            'mf_name': 'ozone',
+            'synoptic': 'ozone_concentration',
+            'units': 'parts_per_billion',
+        },
+        "temp": {
+            'array_name': 't2m',
+            'label': 'Temperature (°C)',
+            # 'mf_name': 'temp',
+            'gefs_query': "TMP:2 m above",
+            'synoptic': 'temperature',
+            'units': 'degC',
+        },
         }
 
     def find_vrbl_keys(self, value):
