@@ -9,7 +9,8 @@ Tracking micro-tasks for the clean rewrite of the pressure download path.
   - `nwp/gefsdata.py` now exposes `fetch_pressure`, which locks per forecast, constrains `Herbie.xarray` with `shortName='prmsl'/typeOfLevel='meanSea'`, and crops to the UB domain.
 - [x] Add pygrib-based fallback for PRMSL when cfgrib still raises.
   - When cfgrib parsing blows up, `fetch_pressure` re-downloads the GRIB and uses `pygrib` to extract PRMSL before deleting cached artifacts (pygrib is now added to `requirements.txt`).
-- [ ] Create `scripts/check_mslp.py` that exercises the helper for a few forecast hours and reports success/NaN counts.
+- [x] Create `scripts/check_mslp.py` that exercises the helper for a few forecast hours and reports success/NaN counts.
+  - New CLI script prints per-hour min/max/NaN diagnostics (in hPa) so we can smoke-test `fetch_pressure` without running the full workflow.
 - [ ] Ensure the helper writes/reads from the repo-local `data/herbie_cache` and shared cfgrib index directory only.
 
 ## Phase 2 – Pipeline integration
