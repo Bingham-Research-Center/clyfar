@@ -2,6 +2,7 @@
 
 import importlib
 import datetime
+import logging
 
 import pandas as pd
 import pytz
@@ -11,6 +12,7 @@ import matplotlib.pyplot as plt
 import xarray as xr
 
 from nwp.download_funcs import load_variable
+from nwp.gefsdata import GEFSData
 from obs.download_winters import download_most_recent
 from utils.lookups import Lookup, snow_stids
 from preprocessing.representative_obs import do_repval_snow, \
@@ -458,39 +460,59 @@ def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
                      member, quantile=0.5):
     """Compute a representative forecast value for MSLP at a given lat/lon.
 
-    In future, this may use a mask instead of lat/lon point extraction.
-
-    We use nearest neighbour extraction for the lat/lon point. Too much
-    uniertainty to justify point interpolation.
-
-    TODO - quantile used to pick value for each day? Median (50)?
-
-    Args:
-        init_dt_naive (datetime): The initial datetime of the forecast.
-        lat (float): The latitude of the point.
-        lon (float): The longitude of the point.
-        member (str): The GEFS member to use.
-        quantile (float): The quantile to use for the forecast value. This
-            is currently unused as MSLP uses a single value (one station)
-
-    Returns:
-        xarray.DataArray: The time series of MSLP at the point.
-
+    Args mirror prior implementation; quantile is unused because we extract a
+    single nearest gridpoint time series for KVEL.
     """
-    L = Lookup()
-    ds_ts = get_latlon_timeseries_df(init_dt_naive, "mslp",
-                                     L.string_dict["mslp"]["gefs_query"],
-                                     L.string_dict["mslp"]["array_name"],
-                                     lat, lon, delta_h, member=member,)
-    # Group by local day (ensure it is in local time to do midnight to midnight)
+    logger = logging.getLogger(__name__)
+    delta_h = max(int(delta_h), 1)
+    delta_h_0p5 = max(delta_h, 6)
+    max_0p25 = 240
+    max_0p5 = 384
+    hours_0p25 = range(0, max_0p25 + 1, delta_h)
+    start_0p5 = 240 + delta_h_0p5
+    hours_0p5 = range(start_0p5, max_0p5 + 1, delta_h_0p5) if start_0p5 <= max_0p5 else []
+    var_name = GEFSData._PRESSURE_VAR_NAME
 
-    # Reduce time series of multiple times by taking median for day
-    # pc_ts = ds_ts.quantile(quantile, dim=("latitude", "longitude"))
+    def _collect_hours(hours, product):
+        records = []
+        for fxx in hours:
+            try:
+                ds = GEFSData.fetch_pressure(
+                    init_dt_naive,
+                    fxx,
+                    product=product,
+                    member=member,
+                    remove_grib=True,
+                )
+                field = ds[var_name].sel(latitude=lat, longitude=lon, method="nearest")
+                value = float(field.squeeze().values)
+                valid_time = pd.to_datetime(ds.time.values[0])
+            except Exception as exc:
+                logger.warning(
+                    "MSLP fetch failed for f%03d (%s); storing NaN",
+                    fxx,
+                    exc,
+                )
+                valid_time = init_dt_naive + datetime.timedelta(hours=fxx)
+                value = np.nan
+            records.append((valid_time, value))
+        return records
 
-    # Currently only using KVEL so just return this!
-    # Convert Pa -> hPa for downstream use
-    pc_ts = ds_ts / 100.0
-    return pc_ts
+    all_records = []
+    all_records.extend(_collect_hours(hours_0p25, "atmos.25"))
+    if hours_0p5:
+        all_records.extend(_collect_hours(hours_0p5, "atmos.5"))
+
+    if not all_records:
+        raise RuntimeError("No forecast hours processed for MSLP time series")
+
+    # Sort by time and drop duplicates (keep earliest)
+    all_records.sort(key=lambda rec: rec[0])
+    times, values = zip(*all_records)
+    df = pd.DataFrame({var_name: values}, index=pd.to_datetime(times))
+    df = df[~df.index.duplicated(keep="first")]
+    df.sort_index(inplace=True)
+    return df
 
 
 def create_mask(ds, mask):
