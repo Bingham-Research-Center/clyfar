@@ -161,13 +161,11 @@ def _normalize_dataset_coords(ds, init_dt, fxx):
     ]
     if drop_names:
         ds = ds.drop_vars(drop_names, errors="ignore")
-    if "time" not in ds.coords:
-        valid_time = init_dt + datetime.timedelta(hours=int(fxx))
-        ds = ds.expand_dims("time")
-        ds = ds.assign_coords(time=("time", [valid_time]))
-    else:
-        # Ensure scalar coords become unique per slice
-        ds = ds.assign_coords(time=("time", ds.time.values))
+    valid_time = np.array([np.datetime64(init_dt + datetime.timedelta(hours=int(fxx)))])
+    if "time" in ds.coords:
+        ds = ds.drop_vars("time", errors="ignore")
+    ds = ds.expand_dims("time")
+    ds = ds.assign_coords(time=("time", valid_time))
     return ds
 
 
