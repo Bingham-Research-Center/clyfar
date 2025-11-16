@@ -13,6 +13,7 @@ Tracking micro-tasks for the clean rewrite of the pressure download path.
   - New CLI script prints per-hour min/max/NaN diagnostics (in hPa) so we can smoke-test `fetch_pressure` without running the full workflow.
 - [ ] Ensure the helper writes/reads from the repo-local `data/herbie_cache` and shared cfgrib index directory only.
   - TODO: once local validation is stable, replicate these cache paths and cfgrib index permissions on the remote Unix servers so the workflow can migrate off workstation-specific paths without surprises.
+  - See `docs/mslp_debug_plan.md` for the detailed investigation steps.
 
 ## Phase 2 – Pipeline integration
 - [ ] Replace `do_nwpval_mslp` to use the new helper instead of `get_latlon_timeseries_df`.
