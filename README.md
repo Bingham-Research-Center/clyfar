@@ -11,6 +11,14 @@ Lawson, Lyman, Davies, 2024
 3. Install packages: `pip install -r requirements.txt`.
 4. Run the smoke test to validate: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing`.
 
+## Debugging guardrails
+
+- Avoid stacking silent workarounds. If a Herbie download fails, revisit the `Lookup` entry and cfgrib `filter_by_keys` using the official inventories (see `docs/external_data_references.md`) before dropping more coordinates or mutating datasets ad hoc.
+- Keep canonical working examples: each variable’s loader should reference a single helper/function so humans and AI agents know where to look. Make lookup tables explicit so adding future inventory entries is transparent.
+- Run with verbose logging/prints: helpers should log GRIB paths, filters, fallback usage, and NaN counts so a single smoke run surfaces issues.
+- Prune caches and sanity-check artifacts regularly: delete stale `data/herbie_cache/*` or old parquet files before reruns, verify outputs, and surface questions early rather than letting errors propagate between repos.
+- Document the high-value references (Herbie gallery, GEFS inventory) in AI agent lookup files and intro guides so token budgets aren’t burned rediscovering them.
+
 ### Scope of Clyfar
 Clyfar is the name of the prediction system itself - at least the point-of-access label of information. The fuzzy inference system, coupled with the pre-processing of observation and numerical weather prediction (NWP) data, and some post-processing (TBD!) will be part of the Clyfar system. Future work, such as a larger-scale modular approach within which Clyfar is a part, will be put in a separate package and repository.
 

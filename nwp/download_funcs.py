@@ -1,6 +1,7 @@
 """Helper functions to do mass downloading of NWP weather data.
 """
 import datetime
+import logging
 import os
 
 
@@ -9,73 +10,199 @@ import pandas as pd
 import xarray as xr
 
 from nwp.gefsdata import GEFSData
+from utils.lookups import Lookup
 
 def load_variable(init_dt, start_h, max_h, delta_h, q_str, product,
                   member='c00', remove_grib=False,):
     """
-    Generalized function to load a variable from GEFS data.
+    Legacy wrapper retained for backward compatibility.
 
-    If product (e.g., 0.25 deg) isn't available (past 240 hours), use 0.5 deg.
-    This will be interpolated onto the same finer grid of 0.25 deg. If product
-    is 0.5 deg, it will be used as is.
-
-    Args:
-        init_dt (datetime.datetime): Initial datetime.
-        max_h (int): Maximum forecast hour.
-        delta_h (int): Time step in hours.
-        q_str (str): Query string for the variable.
-        product (str): Product type (e.g., "atmos.5", "atmos.25").
-        member (str): Ensemble member (default is 'c00').
-        remove_grib (bool): Whether to remove the GRIB file after loading (default is True).
-
-    Returns:
-        xarray.Dataset: Concatenated dataset along the time dimension.
+    Prefer :func:`herbie_load_variable`, which normalizes coordinates and logs diagnostics.
     """
-    # Initialize an empty list to store each data slice
-    data_slices = []
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "load_variable() is deprecated; use herbie_load_variable() instead."
+    )
+    return herbie_load_variable(
+        init_dt=init_dt,
+        start_h=start_h,
+        max_h=max_h,
+        delta_h=delta_h,
+        vrbl=q_str,
+        product=product,
+        member=member,
+        remove_grib=remove_grib,
+    )
 
-    # Get a time series for each grid cell in this member
+
+def herbie_load_variable(
+    init_dt,
+    start_h,
+    max_h,
+    delta_h,
+    vrbl,
+    product,
+    member="c00",
+    remove_grib=True,
+):
+    """
+    Download GEFS data via Herbie.xarray with normalized metadata.
+
+    Args mirror load_variable but accept either a Lookup synonym or raw GEFS query.
+    """
+    logger = logging.getLogger(__name__)
+    lookup = Lookup()
+    var_info = lookup.find_vrbl_keys(vrbl) or {}
+    gefs_query = var_info.get("gefs_query", vrbl)
+    array_name = var_info.get("array_name")
     if product == "atmos.5":
         delta_h = max(delta_h, 6)
-    fchrs = [int(x) for x in np.arange(start_h, max_h+1, delta_h)]
-    # fchr2 = np.arange(240+delta_h_0p5, max_h+1, delta_h_0p5, dtype=int)
-    pass
+    hours = np.arange(start_h, max_h + 1, delta_h, dtype=int)
 
-    for nf, f in enumerate(fchrs):
-        # Now we do this above when selecting the forecast hours
-        if f < start_h:
+    slices = []
+    for fxx in hours:
+        if fxx < start_h:
+            continue
+        resol = "atmos.5" if fxx > 240 else product
+        logger.info(
+            "Herbie fetch %s f%03d member=%s product=%s",
+            gefs_query,
+            fxx,
+            member,
+            resol,
+        )
+        try:
+            ds = _herbie_fetch_slice(
+                init_dt=init_dt,
+                fxx=fxx,
+                product=resol,
+                member=member,
+                query=gefs_query,
+                remove_grib=remove_grib,
+            )
+        except Exception as exc:
+            logger.error(
+                "Herbie fetch failed for %s f%03d (%s); skipping slice",
+                gefs_query,
+                fxx,
+                exc,
+            )
             continue
 
-        # Hard coding the limit of forecast hours for 0.25 degree data
-        # Also assuming we only use GEFS, not e.g. HRRR
-        # TODO change hard coding when using non-GEFS data
-        resol = "atmos.5" if f>240 else product
-        ds_ts = GEFSData.get_cropped_data(init_dt, fxx=f, q_str=q_str, product=resol,
-                                          remove_grib=remove_grib, member=member)
-        drop_candidates = []
-        for coord in (
-            "number",
-            "step",
-            "heightAboveGround",
-            "heightAboveSea",
-            "surface",
-            "valid_time",
-            "metpy_crs",
-            "gribfile_projection",
-        ):
-            if (coord in ds_ts.coords) or (coord in ds_ts.dims) or (coord in ds_ts.data_vars):
-                drop_candidates.append(coord)
-        if drop_candidates:
-            ds_ts = ds_ts.drop_vars(drop_candidates, errors="ignore")
-        ds_ts = ds_ts.assign_coords(time=[init_dt + datetime.timedelta(hours=f)])
+        if array_name and array_name in ds:
+            ds = ds[[array_name]]
+        ds = _normalize_dataset_coords(ds, init_dt, fxx)
+        slices.append(ds)
+
+    if not slices:
+        logger.warning(
+            "Herbie loader returned no slices for %s; falling back to legacy GEFSData path.",
+            gefs_query,
+        )
+        return _legacy_gefs_concat(
+            init_dt=init_dt,
+            start_h=start_h,
+            max_h=max_h,
+            delta_h=delta_h,
+            q_str=gefs_query,
+            product=product,
+            member=member,
+            remove_grib=remove_grib,
+        )
+
+    combined = xr.concat(slices, dim="time", combine_attrs="drop")
+    return combined
+
+
+def _herbie_fetch_slice(init_dt, fxx, product, member, query, remove_grib):
+    """Call Herbie.xarray with consistent backend configuration."""
+    H = GEFSData.setup_herbie(
+        init_dt,
+        fxx=fxx,
+        product=product,
+        member=member,
+    )
+    index_name = f"{H.model}_{H.member}_{product.replace('.', '')}_{init_dt:%Y%m%d%H}_f{fxx:03d}.idx"
+    backend_kwargs = {
+        "indexpath": str(GEFSData._CFGRIB_INDEX_DIR / index_name),
+        "errors": "ignore",
+    }
+    try:
+        ds = H.xarray(
+            query,
+            remove_grib=remove_grib,
+            backend_kwargs=backend_kwargs,
+        )
+    except Exception:
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "Herbie.xarray failed for %s f%03d; falling back to GEFSData.get_cropped_data",
+            query,
+            fxx,
+        )
+        ds = GEFSData.get_cropped_data(
+            init_dt,
+            fxx=fxx,
+            q_str=query,
+            product=product,
+            member=member,
+            remove_grib=remove_grib,
+        )
+    return ds
+
+
+def _normalize_dataset_coords(ds, init_dt, fxx):
+    """
+    Drop transient coordinates and ensure we have a single time slice.
+    """
+    keep_coords = {"time", "latitude", "longitude"}
+    drop_names = [
+        name for name in ds.coords if name not in keep_coords
+    ]
+    if drop_names:
+        ds = ds.drop_vars(drop_names, errors="ignore")
+    if "time" not in ds.coords:
+        valid_time = init_dt + datetime.timedelta(hours=int(fxx))
+        ds = ds.expand_dims("time")
+        ds = ds.assign_coords(time=("time", [valid_time]))
+    else:
+        # Ensure scalar coords become unique per slice
+        ds = ds.assign_coords(time=("time", ds.time.values))
+    return ds
+
+
+def _legacy_gefs_concat(
+    init_dt,
+    start_h,
+    max_h,
+    delta_h,
+    q_str,
+    product,
+    member,
+    remove_grib,
+):
+    """Fallback to legacy GEFSData.get_cropped_data loop."""
+    data_slices = []
+    if product == "atmos.5":
+        delta_h = max(delta_h, 6)
+    fchrs = np.arange(start_h, max_h + 1, delta_h, dtype=int)
+    for f in fchrs:
+        if f < start_h:
+            continue
+        resol = "atmos.5" if f > 240 else product
+        ds_ts = GEFSData.get_cropped_data(
+            init_dt,
+            fxx=f,
+            q_str=q_str,
+            product=resol,
+            remove_grib=remove_grib,
+            member=member,
+        )
+        ds_ts = _normalize_dataset_coords(ds_ts, init_dt, f)
         data_slices.append(ds_ts)
-
-    # Concatenate the list of data slices along a new time dimension
-    ds_time_series = xr.concat(data_slices, dim='time')
-
-    # Note this means the grids are different for the 0.5 and 0.25 degree data?
-    # TODO check lat/lon where relevant.
-    return ds_time_series
+    if not data_slices:
+        raise RuntimeError(f"No GEFS slices available for {q_str} (legacy path)")
+    return xr.concat(data_slices, dim="time", combine_attrs="drop")
 
 def check_and_create_latlon_files(deg_res, fdir='./data/geog'):
     """Check if lat/lon files exist for a given resolution, and create them if not."""
