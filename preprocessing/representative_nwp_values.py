@@ -20,6 +20,39 @@ from preprocessing.representative_obs import do_repval_snow, \
     get_representative_obs
 
 
+def _convert_units(data, source_unit: str, target_unit: str):
+    """Convert arrays/series/dataframes to the desired units using Pint."""
+    if not target_unit or source_unit == target_unit:
+        return data
+    source = units.parse_units(source_unit)
+    target = units.parse_units(target_unit)
+
+    def _converted(values):
+        return (np.asarray(values) * source).to(target).magnitude
+
+    if isinstance(data, xr.DataArray):
+        data = data.copy()
+        data.data = _converted(data.data)
+        data.attrs = data.attrs or {}
+        data.attrs["units"] = str(target)
+        return data
+    if isinstance(data, pd.Series):
+        series = data.copy()
+        series.iloc[:] = _converted(series.values)
+        series.attrs = getattr(series, "attrs", {})
+        series.attrs["units"] = str(target)
+        return series
+    if isinstance(data, pd.DataFrame):
+        df = data.copy()
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        if numeric_cols.any():
+            df[numeric_cols] = _converted(df[numeric_cols].values)
+        df.attrs = getattr(df, "attrs", {})
+        df.attrs["units"] = str(target)
+        return df
+    return data
+
+
 def create_forecast_dataframe(variable_ts, variable_name,
                                 init_time=None, add_h_init_time=0):
     """
@@ -306,8 +339,11 @@ def do_nwpval_snow(init_dt_naive: datetime.datetime,
         # Set negative snow-depths to zero
         snow_ts = snow_ts.where(snow_ts > 0, 0)
 
-    # Convert metres -> millimetres for downstream use
-    snow_ts = snow_ts * 1000.0
+    snow_ts = _convert_units(
+        snow_ts,
+        source_unit="meter",
+        target_unit=Lookup().string_dict["snow"].get("units", "millimeter"),
+    )
     return snow_ts
 
 def do_nwpval_wind(init_dt_naive: datetime.datetime,
@@ -334,12 +370,18 @@ def do_nwpval_wind(init_dt_naive: datetime.datetime,
     Returns:
         xarray.DataArray: The time series of wind depth in the Basin.
     """
-    return process_nwp_timeseries(
+    wind_ts = process_nwp_timeseries(
                     init_dt_naive, start_h, max_h, masks,
                     delta_h, variable_type='wind',
                     quantile = 0.5, member = member, do_early = do_early,
                     do_late = do_late, pc_method="hazen",
                     )
+    wind_ts = _convert_units(
+        wind_ts,
+        source_unit="meter / second",
+        target_unit=Lookup().string_dict["wind"].get("units", "meter / second"),
+    )
+    return wind_ts
 
 # def do_nwpval_solar_alt():
 #     """This version uses """
@@ -385,15 +427,10 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
                         do_late = do_late, pc_method="hazen",
                         )
 
-    if approximate_0p5:
+    if approximate_0p5 and max_h > 240:
         # Use 0.9 percentile from each timestamp's collection of solar stids
         # at the given time of day to form an approximate value for hours
         # where we don't have 3-h data from 0p25 GEFS.
-
-        # Start time
-        if max_h <= 240:
-            return solar_ts
-
         datetime_arr = pd.to_datetime(solar_ts.time.values).to_pydatetime()
         # Now create a dataframe from these datetimes and the solar values
         solar_df = solar_ts.to_dataframe()
@@ -426,6 +463,11 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
         # Sort in chronological order (index, datetime)
         solar_ts = solar_df.sort_index()
 
+    solar_ts = _convert_units(
+        solar_ts,
+        source_unit="watt / meter ** 2",
+        target_unit=Lookup().string_dict["solar"].get("units", "watt / meter ** 2"),
+    )
     return solar_ts
 
 def do_nwpval_temp(init_dt_naive,
@@ -452,8 +494,11 @@ def do_nwpval_temp(init_dt_naive,
         quantile = 0.5, member = member, do_early = do_early,
         do_late = do_late, pc_method = "hazen",
     )
-    # TODO - I'm not sure if this is where to convert to C but will for now
-    temp_ts = temp_ts - 273.15
+    temp_ts = _convert_units(
+        temp_ts,
+        source_unit="kelvin",
+        target_unit=Lookup().string_dict["temp"].get("units", "degC"),
+    )
 
     return temp_ts
 
