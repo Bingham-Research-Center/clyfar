@@ -27,6 +27,12 @@ Date updated: 2025-11-11
 - Solar: DSWRF (W/m^2, min clipped at 0 W/m^2 so polar-night hours remain valid).
 - Ozone: ppb (defuzzified percentiles 10/50/90).
 
+### MSLP workflow (v0.9.5)
+- Download path lives in `GEFSData.fetch_pressure`: structured cfgrib call with explicit `filter_by_keys` (`shortName='prmsl'`, `typeOfLevel='meanSea'`, discipline/category/number, `stepType='instant'`). If cfgrib still raises (current GEFS files do), the helper auto-falls back to pygrib before NaNs reach downstream code.
+- Representative timeseries (`do_nwpval_mslp`) stitches 0.25° through 240 h plus 0.5° beyond with point selection (Ouray lat/lon). Values are converted to hPa and tagged with unit metadata prior to parquet writes.
+- Regression guard: when `save_forecast_data` writes `*_mslp_*.parquet` it now checks for all-NaN columns and logs min/median/p90 values. Smoke runs fail fast if the guard trips, so we never silently publish NaN-only pressure time series.
+- Troubleshooting: run `MPLCONFIGDIR=/tmp python scripts/check_mslp.py -i <init> -f 0 6 12 24 48 -m c00 -p atmos.25` to print per-hour min/max/NaN counts from the helper without running the full workflow.
+
 ## Data Flow
 - Download GEFS (0p25 to 240h, 0p5 beyond; skip duplicate 240h at 0p5).
 - Create elevation-based masks per resolution; for v0.9.5 we retain the legacy buffered mask (elev < threshold + 250 m, no smoothing) so behaviour matches prior runs; broadcast to grids.

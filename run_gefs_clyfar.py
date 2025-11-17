@@ -376,9 +376,25 @@ def create_forecast_fname(variable: str, member: str,
 
 def save_forecast_data(dfs: Dict[str, pd.DataFrame], variable: str, init_dt_dict: dict):
     """Save forecast data to disk."""
+    lookup = Lookup()
+    mslp_col = lookup.string_dict['mslp']["array_name"]
     for member, df in dfs.items():
         fpath = create_forecast_fname(variable, member, init_dt_dict['naive'])
         utils.try_create(os.path.dirname(fpath))
+        if variable == "mslp":
+            series = df[mslp_col]
+            if series.isna().all():
+                raise ValueError(
+                    f"MSLP dataframe for {member} contains only NaNs; "
+                    "aborting before writing parquet."
+                )
+            logger.info(
+                "MSLP stats for %s: min=%.1f hPa median=%.1f hPa p90=%.1f hPa",
+                member,
+                float(series.min()),
+                float(series.median()),
+                float(series.quantile(0.9)),
+            )
         df.to_parquet(fpath)
     return
 
