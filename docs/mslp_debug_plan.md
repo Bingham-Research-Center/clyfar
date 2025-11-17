@@ -17,6 +17,7 @@ Microtasks (ordered):
 2. **cfgrib index handling**
    - Update `_build_pressure_backend_kwargs` to generate a unique index file per GRIB (e.g., `cfgrib_indexes/<grib-basename>.idx`) instead of pointing to the directory root, preventing the PosixPath error and stale-index warnings.
    - Add debug logging describing the resolved index path and filter keys.
+   - Inspect `Herbie.inventory()` for failing hours to confirm control vs perturbed members (dataType `cf` vs `pf`) and adjust `filter_by_keys` accordingly; document the findings so we know exactly which metadata cfgrib expects.
 3. **pygrib fallback validation**
    - Confirm fallback runs end-to-end by deleting cfgrib indexes, forcing a failure, and checking `scripts/check_mslp.py` output (min/max stats should still appear).
    - Serialize a short troubleshooting section (what errors mean, how to clean caches) in `docs/baseline_0_9.md`.
