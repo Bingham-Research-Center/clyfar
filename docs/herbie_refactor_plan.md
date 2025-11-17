@@ -24,7 +24,7 @@ Tracking micro-tasks for the clean rewrite of the pressure download path.
 ## Phase 3 – Documentation & Examples
 - [ ] Document the new workflow in `docs/baseline_0_9.md` (parameters, cache paths, troubleshooting).
 - [ ] Add a short “Herbie API Cheatsheet” with the exact structured calls we use (keep under `docs/` for local lookup).
-- [ ] Capture canonical command examples (e.g., how to run `scripts/check_mslp.py` and a smoke test) for future agents.
-- [ ] Cross-reference planned `brc-tools` sharing so the helper can be ported later.
+- [x] Capture canonical command examples (e.g., how to run `scripts/check_mslp.py` and a smoke test) for future agents. (See `docs/baseline_0_9.md` → Repro + the Herbie cheatsheet.)
+- [x] Cross-reference planned `brc-tools` sharing so the helper can be ported later (note in `docs/herbie_api_cheatsheet.md`).
 - [ ] Sync any science-facing LaTeX docs with the refreshed download description.
 - [ ] Add system-admin checklist covering Unix-hosted runs (path permissions, cache cleaning, cfgrib index placement) so we can retire local path hacks in favor of a shared server workflow.

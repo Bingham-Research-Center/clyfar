@@ -11,7 +11,7 @@ Date updated: 2025-11-11
 - Env: Python 3.11.9 (Miniforge `clyfar-2025` env), `pip install -r requirements.txt`.
 - Command: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing` (or `scripts/run_smoke.sh 2024010100`).
 - Artefacts: `data/20240101_0000Z/*.parquet`, `figures/20240101_00Z/*.png`.
-- Git SHA (baseline build): `83a2298`.
+- Git SHA (baseline build): `TODO_CODE_SHA`.
 - Log file: `data/baseline_0_9/logs/smoke_2024010100.log`.
 - Run metadata lives in `data/baseline_0_9/<run_id>/run.json` (see Logging section).
 
@@ -55,6 +55,14 @@ Date updated: 2025-11-11
   - `Code SHA:` `TODO_SHA`
   - `Report SHA/tag:` `TODO_report_ref`
   - `Constraints file:` `constraints/baseline-0.9.txt`
+
+### Ops template (fill before tagging)
+- Cron host(s): `TODO_HOST`
+- Local run window: `TODO_WINDOW`
+- Env activation: `TODO_ENV_COMMAND`
+- Command: `python run_gefs_clyfar.py -i <INIT> -n <CPUS> -m <MEMBERS> -d ./data -f ./figures --log-fis`
+- Logs/artifacts: `data/baseline_0_9/<init>/`, `figures_archive/v0_9/<init>/`, `data/baseline_0_9/logs/<init>.log`
+- Downstream push/API: `TODO_API/STORAGE`
 
 ## Logging & Artefact Map
 - Smoke run outputs: `data/baseline_0_9/smoke_<YYYYMMDDHH>/` (parquet) + `figures_archive/v0_9/smoke_<YYYYMMDDHH>/`.
