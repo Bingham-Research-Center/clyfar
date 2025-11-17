@@ -44,8 +44,7 @@ class GEFSData(DataFile):
     _PRESSURE_FILTER_KEYS = {
         "shortName": "prmsl",
         "typeOfLevel": "meanSea",
-        "level": 0,
-        # dataType differs between control (cf) and perturbed (pf) members, so keep it loose.
+        # Mean sea level messages lack a numeric 'level', so omit it here to match both control and perturbed members.
     }
     _PRESSURE_QUERY = ":PRMSL:"
 
