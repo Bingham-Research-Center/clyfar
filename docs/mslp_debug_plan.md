@@ -25,6 +25,8 @@ Microtasks (ordered):
 5. **Automation + guards**
    - Update `do_nwpval_mslp` to call `fetch_pressure`, emit quantile diagnostics (p10/p50/p90), and fail fast if parquet outputs are all NaN.
    - Extend smoke tests with PRMSL stats; integrate into CI once available.
+6. **Future unit enforcement**
+   - After MSLP is stable, propagate Pint-based unit conversions (guided by `utils/lookups.py` units) across snow/wind/solar/temp so every variable enforces its units at ingestion and the logic can migrate cleanly to `brc-tools`.
 
 Supporting references:
 - External inventories and Herbie examples: `docs/external_data_references.md`.
