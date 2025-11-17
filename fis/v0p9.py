@@ -126,7 +126,7 @@ class Clyfar(FIS):
 
         # Define Universes of Discourse (UOD)
         self.snow_uod = np.arange(0, 251, 2)        # Snow in mm up to 250mm
-        self.mslp_uod = np.arange(99500, 105010, 50)  # MSLP in Pa
+        self.mslp_uod = np.arange(995, 1050.5, 0.5)  # MSLP in hPa
         self.wind_uod = np.arange(0, 15.1, 0.25)    # Wind in m/s
         self.solar_uod = np.arange(0, 805, 5)     # Solar in W/m²
         self.ozone_uod = np.arange(20, 140.1, 0.5)      # Ozone in ppb
@@ -252,11 +252,11 @@ class Clyfar(FIS):
 
         # MSLP Membership Functions
         self.mslp['low'] = self.create_piecewise_linear_sigmoid(
-                    self.mslp_uod, 1, 101000, 101500, 0)
+                    self.mslp_uod, 1, 1010, 1015, 0)
         self.mslp['moderate'] = self.create_trapz(
-                    self.mslp_uod, 101000, 101500, 103000, 103500)
+                    self.mslp_uod, 1010, 1015, 1030, 1035)
         self.mslp['high'] = self.create_piecewise_linear_sigmoid(
-                    self.mslp_uod, 0, 102500, 103500, 1)
+                    self.mslp_uod, 0, 1025, 1035, 1)
 
         # Solar Membership Functions
         self.solar['low'] = self.create_piecewise_linear_sigmoid(

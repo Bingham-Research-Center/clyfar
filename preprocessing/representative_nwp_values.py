@@ -513,8 +513,10 @@ def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
     df = pd.DataFrame({var_name: values}, index=pd.to_datetime(times))
     df = df[~df.index.duplicated(keep="first")]
     df.sort_index(inplace=True)
-    df[var_name] = (np.asarray(df[var_name].values) * units.pascal).to(units.hectopascal).magnitude
-    df[var_name].attrs = {"units": Lookup().string_dict["mslp"].get("units", "hectopascal")}
+    qty = (np.asarray(df[var_name].values) * units.pascal).to(units.hectopascal)
+    df[var_name] = qty.magnitude
+    df.attrs = df.attrs or {}
+    df.attrs[var_name] = {"units": str(qty.units)}
     return df
 
 

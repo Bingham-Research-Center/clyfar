@@ -95,6 +95,22 @@ def process_category_colors():
 
     return categories, category_colors
 
+
+def _estimate_step_hours(index):
+    """Estimate the median timestep (in hours) for a DatetimeIndex-like object."""
+    if len(index) < 2:
+        return None
+    # Convert to numpy datetime64[s] to avoid pandas dependency
+    try:
+        idx = np.asarray(index.values, dtype='datetime64[s]')
+    except AttributeError:
+        idx = np.asarray(index, dtype='datetime64[s]')
+    diffs = np.diff(idx).astype('timedelta64[s]').astype(np.int64)
+    diffs = diffs[diffs > 0]
+    if diffs.size == 0:
+        return None
+    return float(np.median(diffs)) / 3600.0
+
 def plot_ozone_heatmap(df):
     """For time series dataframe, plot ozone categories as a heatmap.
 
@@ -135,7 +151,8 @@ def plot_ozone_heatmap(df):
     # ax.set_yticklabels(categories)
 
     # Set x-axis ticks and labels
-    tick_locations = np.arange(0, len(df.index), len(df.index)//8)
+    step = max(1, len(df.index) // 8) if len(df.index) > 0 else 1
+    tick_locations = np.arange(0, len(df.index), step)
     ax.set_xticks(tick_locations)
     ax.set_xticklabels([df.index[i].strftime('%d %b %y') for i in tick_locations],
                        rotation=45, ha='right')
@@ -160,13 +177,15 @@ def plot_ozone_heatmap(df):
 
 
     # Add faint vertical grey line for 10 days (240 hours) into the forecast
-    # TODO - change from 3 to dynamic delta-h value
-    xpos = int(240/3)
-    ax.axvline(x=xpos, color='grey', linestyle='--', alpha=0.6)
-    # Annotate at the top of the axis to the right of 10 days with note
-    ax.text(xpos, len(category_colors.keys()),
-                    "10 days: coarser resolution hereon.", ha='left',
-                    va='top', fontsize=8, color='darkgray')
+    step_hours = _estimate_step_hours(df.index)
+    xpos = None
+    if step_hours and step_hours > 0:
+        xpos = 240.0 / step_hours
+    if xpos is not None and xpos <= len(df.index):
+        ax.axvline(x=xpos, color='grey', linestyle='--', alpha=0.6)
+        ax.text(xpos, len(category_colors.keys()),
+                "10 days: coarser resolution hereon.", ha='left',
+                va='top', fontsize=8, color='darkgray')
 
     # Adjust layout
     plt.tight_layout()
@@ -244,13 +263,15 @@ def plot_dailymax_heatmap(df):
     ax.tick_params(axis='y', which='both', length=0)  # Hide y-axis ticks
 
 
-    # Add faint vertical grey line for 10 days (240 hours) into the forecast
-    xpos = int(240/3)
-    ax.axvline(x=xpos, color='grey', linestyle='--', alpha=0.6)
-    # Annotate at the top of the axis to the right of 10 days with note
-    ax.text(xpos, len(category_colors.keys()),
-            "10 days: coarser resolution hereon.", ha='left',
-            va='top', fontsize=8, color='darkgray')
+    step_hours = _estimate_step_hours(df.index)
+    xpos = None
+    if step_hours and step_hours > 0:
+        xpos = 240.0 / step_hours
+    if xpos is not None and xpos <= len(df.index):
+        ax.axvline(x=xpos, color='grey', linestyle='--', alpha=0.6)
+        ax.text(xpos, len(category_colors.keys()),
+                "10 days: coarser resolution hereon.", ha='left',
+                va='top', fontsize=8, color='darkgray')
 
     # Adjust layout
     plt.tight_layout()

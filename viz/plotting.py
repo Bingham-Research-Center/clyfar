@@ -301,7 +301,7 @@ def plot_meteogram(df_dict, vrbl_col, title=None, fig=None, ax=None,
 
     # Unit conversation - TODO use pint and metpy?
     vrbl_factors = {
-        'prmsl': 0.01,  # Pa to hPa
+        'prmsl': 1,
         'sde': 1,  # values already converted to mm upstream
     }
 
