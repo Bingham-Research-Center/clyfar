@@ -39,3 +39,23 @@ docs/session_log.md
 # Misc
 *.swp
 *.swo
+
+# Environment and secrets (added 2025-11-23)
+.env
+.env.local
+
+# Test output
+test_output/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+export/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+
+# Mac
+.DS_Store

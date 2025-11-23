@@ -1,6 +1,9 @@
 # clyfar
 Bingham Research Center's (Utah State University) Ozone Prediction Model Clyfar
 
+> **Multi-Agent Development Environment:**
+> This codebase supports collaboration between multiple RAs and AI assistants (Claude, Codex, Cursor, etc.). We use clean package boundaries and shared documentation to coordinate across repos (clyfar, brc-tools, ubair-website). Each agent/human should respect existing code structure and use the integration guides provided.
+
 Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements information should be updated in `requirements.txt`.
 
 Lawson, Lyman, Davies, 2024 
@@ -23,10 +26,31 @@ Lawson, Lyman, Davies, 2024
 ### Scope of Clyfar
 Clyfar is the name of the prediction system itself - at least the point-of-access label of information. The fuzzy inference system, coupled with the pre-processing of observation and numerical weather prediction (NWP) data, and some post-processing (TBD!) will be part of the Clyfar system. Future work, such as a larger-scale modular approach within which Clyfar is a part, will be put in a separate package and repository.
 
+## BasinWx Website Integration
+
+Clyfar predictions are intended to be pushed to the BasinWx website (`basinwx.com`).
+
+**Integration Status:** IN DEVELOPMENT (as of 2025-11-22)
+- Model execution: ✓ Working (run_gefs_clyfar.py)
+- Output generation: ✓ Working (local ./data/clyfar_output/)
+- Website upload: ❌ Not yet implemented
+- Cron scheduling: ❌ Pending upload completion
+
+**For integration documentation, see:**
+- **Master Guide:** `ubair-website/CHPC-IMPLEMENTATION.md` (section 7: Clyfar Integration Status)
+- **Implementation plan:** Included in above guide
+- **Schema definition:** To be added to `ubair-website/DATA_MANIFEST.json`
+
+**Next steps:**
+1. Define forecast output schema for website consumption
+2. Implement upload function using `brc-tools/download/push_data.py` as template
+3. Configure cron to run twice daily (6am and 6pm Mountain Time)
+
 ## Related Repositories and Knowledge Base
 - Technical report (LaTeX, local path): `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
 - Knowledge base (local path): `/Users/johnlawson/Documents/GitHub/brc-knowledge`
 - BRC operational tools (local path): `../brc-tools` (sibling to this repo)
+- Website deployment: `../ubair-website` (Node.js website receiving predictions)
 
 Notes
 - These are referenced for documentation and operations; clone or mount as needed.
