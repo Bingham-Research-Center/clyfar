@@ -310,7 +310,7 @@ def export_all_products(
     results = {
         "possibility": export_possibility_heatmaps(dailymax_df_dict, init_dt, output_dir, upload),
         "exceedance": [export_exceedance_probabilities(dailymax_df_dict, init_dt, output_dir, upload=upload)],
-        "percentiles": export_percentile_scenarios(dailymax_df_dict, init_dt, output_dir, upload)
+        "percentiles": export_percentile_scenarios(dailymax_df_dict, init_dt, output_dir, upload=upload)
     }
 
     total_files = len(results["possibility"]) + len(results["exceedance"]) + len(results["percentiles"])
