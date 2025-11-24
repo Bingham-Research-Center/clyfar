@@ -1,0 +1,51 @@
+# Clyfar CHPC Environment - December 2025
+# Stable, locked versions for production deployment
+# Free for education (conda-forge channel)
+
+name: clyfar-dec2025
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Core Python
+  - python=3.11.9
+
+  # Scientific computing (STABLE, numpy < 2.0)
+  - numpy=1.26.4
+  - pandas=2.1.4
+  - scipy=1.11.4
+
+  # Geospatial/meteorology
+  - xarray=2023.12.0
+  - cfgrib=0.9.14.1
+  - eccodes=2.34.1
+  - cartopy=0.23.0
+  - netcdf4=1.6.5
+
+  # Fuzzy logic
+  - scikit-fuzzy=0.4.2
+
+  # Data handling
+  - polars=0.20.3
+  - pyarrow=14.0.2
+
+  # Utilities
+  - requests=2.31.0
+  - pint=0.23
+
+  # Multiprocessing
+  - fasteners=0.19
+
+  # Development tools
+  - pip=24.0
+
+  # Pip-only packages (installed after conda packages)
+  - pip:
+    - herbie-data==2024.3.0
+    - metpy==1.6.0
+
+# Lock file generated: 2025-11-24
+# Tested on: CHPC notchpeak (Rocky Linux 8.10)
+# Python: 3.11.9 | numpy: 1.26.4 (PRE-2.0)
