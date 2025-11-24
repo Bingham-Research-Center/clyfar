@@ -103,6 +103,43 @@ ldd --version
    export LANG=en_US.UTF-8
    ```
 
+## Partition Selection
+
+### Available Partitions
+
+**1. lawson-np** (Owner node - your group owns this)
+- **Use for:** Any job, especially low-CPU or idle interactive sessions
+- **Pros:** No restrictions, no complaints from admins, can leave idle
+- **Cons:** Limited capacity (your group's allocation only)
+- **Best for:** Debugging, testing, development work
+
+**2. notchpeak-shared-short** (Shared CHPC node - max 8 hours)
+- **Use for:** Production jobs with good CPU utilization
+- **Pros:** Fast queue, cheap, large capacity
+- **Cons:** Need to be efficient (no idle sessions or low CPU usage)
+- **Best for:** Automated 4× daily production runs
+
+**3. notchpeak** (Non-shared CHPC node - exclusive access)
+- **Use for:** Large parallel jobs needing exclusive node access
+- **Pros:** No other jobs competing for resources
+- **Cons:** Wasteful if low CPU → admin warnings
+- **Best for:** Rarely needed for our workflows (avoid unless necessary)
+
+### Recommended Usage
+
+**Interactive testing/debugging:**
+```bash
+salloc --account=lawson-np --partition=lawson-np --cpus-per-task=8 --mem=32G --time=02:00:00
+```
+
+**Production batch jobs (in Slurm scripts):**
+```bash
+#SBATCH --account=notchpeak-shared-short
+#SBATCH --partition=notchpeak-shared-short
+```
+
+**Background:** CHPC admin email (2025-11-24) clarified that low-utilization warnings are "just friendly reminders for owner node users (technically users could do whatever they want on the nodes they own)". Efficient usage is more important on shared CHPC-owned partitions.
+
 ## System Resources
 
 **To check your allocation:**

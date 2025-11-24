@@ -89,6 +89,20 @@ python test_integration.py
 ## Phase 1: Manual Test Run (Interactive)
 
 ### 1. Request Interactive Node
+
+**Option A: Use your owner node (recommended for testing/debugging)**
+```bash
+salloc \
+  --account=lawson-np \
+  --partition=lawson-np \
+  --nodes=1 \
+  --ntasks=1 \
+  --cpus-per-task=8 \
+  --mem=32G \
+  --time=02:00:00
+```
+
+**Option B: Use shared partition (must be efficient with CPU usage)**
 ```bash
 salloc \
   --account=notchpeak-shared-short \
@@ -99,6 +113,8 @@ salloc \
   --mem=8G \
   --time=01:00:00
 ```
+
+**Note:** For debugging/testing, use **lawson-np** (no complaints about idle time).
 
 ### 2. Activate Environment
 ```bash
