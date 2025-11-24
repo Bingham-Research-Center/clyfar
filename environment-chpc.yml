@@ -1,6 +1,7 @@
 # Clyfar CHPC Environment - December 2025
 # Stable, locked versions for production deployment
 # Free for education (conda-forge channel)
+# Updated for November 2025 - modern but proven stable versions
 
 name: clyfar-dec2025
 
@@ -9,43 +10,44 @@ channels:
   - defaults
 
 dependencies:
-  # Core Python
-  - python=3.11.9
+  # Core Python (stable LTS)
+  - python=3.11.10
 
-  # Scientific computing (STABLE, numpy < 2.0)
-  - numpy=1.26.4
-  - pandas=2.1.4
-  - scipy=1.11.4
+  # Scientific computing (STABLE, numpy < 2.0 for compatibility)
+  - numpy=1.26.4        # Latest 1.x - avoid numpy 2.x breaking changes
+  - pandas=2.2.3        # Stable 2.2 series (mid-2025)
+  - scipy=1.14.1        # Updated from 1.11 (2+ years of improvements)
 
   # Geospatial/meteorology
-  - xarray=2023.12.0
-  - cfgrib=0.9.14.1
-  - eccodes=2.34.1
-  - cartopy=0.23.0
-  - netcdf4=1.6.5
+  - xarray=2024.10.0    # Modern (was 2023.12 - way too old!)
+  - cfgrib=0.9.15.0     # Latest 0.9.x
+  - eccodes=2.38.0      # Updated from 2.34
+  - cartopy=0.24.0      # Updated from 0.23
+  - netcdf4=1.7.1       # Updated from 1.6.5
 
-  # Fuzzy logic
+  # Fuzzy logic (no newer version available)
   - scikit-fuzzy=0.4.2
 
-  # Data handling
-  - polars=0.20.3
-  - pyarrow=14.0.2
+  # Data handling (major updates for 2025)
+  - polars=1.12.0       # Was 0.20 - 1.x stable by mid-2025
+  - pyarrow=17.0.0      # Was 14.x - 2 years old!
 
   # Utilities
-  - requests=2.31.0
-  - pint=0.23
+  - requests=2.32.3     # Security updates
+  - pint=0.24.3         # Updated from 0.23
 
   # Multiprocessing
   - fasteners=0.19
 
   # Development tools
-  - pip=24.0
+  - pip=24.3
 
   # Pip-only packages (installed after conda packages)
   - pip:
-    - herbie-data==2024.3.0
-    - metpy==1.6.0
+    - herbie-data==2025.6.0  # Mid-2025 release (was 2024.3 - 20 months old!)
+    - metpy==1.6.3           # Updated from 1.6.0
 
 # Lock file generated: 2025-11-24
 # Tested on: CHPC notchpeak (Rocky Linux 8.10)
-# Python: 3.11.9 | numpy: 1.26.4 (PRE-2.0)
+# Python: 3.11.10 | numpy: 1.26.4 (PRE-2.0) | herbie: 2025.6.0
+# Strategy: Use spring/summer 2025 releases (proven stable, not bleeding edge)

@@ -56,12 +56,13 @@ python scripts/check_mslp.py -i 2025112300 -m p01 -f 0 6 12
 - Reproducible environment across dev/staging/prod
 
 **Locked versions (in `environment-chpc.yml`):**
-- **Python:** 3.11.9
-- **numpy:** 1.26.4 (pre-2.0, stable)
-- **pandas:** 2.1.4
-- **xarray:** 2023.12.0
-- **herbie-data:** 2024.3.0
-- **cfgrib:** 0.9.14.1
+- **Python:** 3.11.10
+- **numpy:** 1.26.4 (pre-2.0, stable - avoiding 2.x breaking changes)
+- **pandas:** 2.2.3 (stable 2025 release)
+- **xarray:** 2024.10.0 (modern - was 2023.12, too old!)
+- **herbie-data:** 2025.6.0 (mid-2025 release - was 2024.3, 20 months old!)
+- **cfgrib:** 0.9.15.0
+- **polars:** 1.12.0 (1.x series stable by 2025)
 
 ---
 
@@ -138,9 +139,10 @@ export POLARS_ALLOW_FORKING_THREAD=1
 ```bash
 python -c "
 import numpy, pandas, xarray, herbie
-print(f'numpy: {numpy.__version__}')  # Should be 1.26.4
-print(f'pandas: {pandas.__version__}')  # Should be 2.1.4
-print(f'herbie: {herbie.__version__}')  # Should be 2024.3.0
+print(f'numpy: {numpy.__version__}')    # Should be 1.26.4
+print(f'pandas: {pandas.__version__}')   # Should be 2.2.3
+print(f'xarray: {xarray.__version__}')   # Should be 2024.10.0
+print(f'herbie: {herbie.__version__}')   # Should be 2025.6.0
 "
 ```
 
