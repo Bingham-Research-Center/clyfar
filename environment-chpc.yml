@@ -32,6 +32,9 @@ dependencies:
   - polars=1.12.0       # Was 0.20 - 1.x stable by mid-2025
   - pyarrow=17.0.0      # Was 14.x - 2 years old!
 
+  # Weather APIs
+  - synopticpy>=0.4.0   # Synoptic Weather API client (conda-forge available!)
+
   # Utilities
   - requests=2.32.3     # Security updates
   - pint=0.24.3         # Updated from 0.23
@@ -42,11 +45,11 @@ dependencies:
   # Development tools
   - pip=24.3
 
-  # Pip-only packages (installed after conda packages)
+  # Pip-only packages (use ONLY when not available on conda-forge)
+  # Prefer conda/mamba for better dependency resolution!
   - pip:
-    - herbie-data==2025.6.0  # Mid-2025 release (was 2024.3 - 20 months old!)
-    - metpy==1.6.3           # Updated from 1.6.0
-    - synopticpy>=0.4.0      # Synoptic Weather API client
+    - herbie-data==2025.6.0  # Mid-2025 release (not on conda-forge)
+    - metpy==1.6.3           # Updated from 1.6.0 (available on conda, but using pip for consistency)
 
 # Lock file generated: 2025-11-24
 # Tested on: CHPC notchpeak (Rocky Linux 8.10)
