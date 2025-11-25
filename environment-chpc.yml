@@ -21,29 +21,29 @@ dependencies:
   - scipy=1.14.1        # requirements.txt: >=1.14.1 ✓
 
   # Geospatial/meteorology
-  - xarray=2024.10.0    # requirements.txt: >=2024.7.0 ✓
-  - cfgrib=0.9.15.0     # requirements.txt: >=0.9.14.1 ✓
-  - pygrib=2.1.5        # requirements.txt: >=2.1.5 ✓ (GRIB fallback)
-  - eccodes=2.38.0      # Binary dependency for cfgrib
-  - cartopy=0.24.1      # requirements.txt: >=0.24.1 ✓
-  - netcdf4=1.7.1       # Dependency for xarray
-  - metpy=1.6.3         # requirements.txt: >=1.6.3 ✓
+  - xarray>=2024.7.0    # requirements.txt: >=2024.7.0
+  - cfgrib>=0.9.14.1    # requirements.txt: >=0.9.14.1
+  - pygrib>=2.1.5       # requirements.txt: >=2.1.5 (GRIB fallback)
+  - eccodes             # Binary dependency for cfgrib (let conda resolve version)
+  - cartopy>=0.24.0     # requirements.txt: >=0.24.1 (use .0 for availability)
+  - netcdf4             # Dependency for xarray (let conda resolve)
+  - metpy>=1.6.0        # requirements.txt: >=1.6.3
 
   # Fuzzy logic
-  - scikit-fuzzy=0.5.0  # requirements.txt: >=0.5.0 ✓ (updated from 0.4.2)
+  - scikit-fuzzy>=0.4.2 # requirements.txt: >=0.5.0 (use available version)
 
   # Data handling
-  - polars=1.12.0       # Not in requirements.txt, but needed
-  - pyarrow=17.0.0      # Not in requirements.txt, but needed
+  - polars>=1.0         # Not in requirements.txt, but needed
+  - pyarrow>=15.0       # Not in requirements.txt, but needed
 
   # Weather APIs
-  - synopticpy=3.0.2    # requirements.txt: >=3.0.2 ✓ (was WRONG: had >=0.4.0!)
+  - synopticpy>=0.4.0   # requirements.txt: >=3.0.2 (use available version)
 
   # Astronomy/solar calculations
-  - astral=3.2          # requirements.txt: >=3.0 ✓
+  - astral>=3.0         # requirements.txt: >=3.0
 
   # Visualization
-  - matplotlib=3.9.0    # requirements.txt: >=3.8.0 ✓ (was MISSING!)
+  - matplotlib>=3.8.0   # requirements.txt: >=3.8.0
 
   # Utilities
   - requests=2.32.3     # requirements.txt: >=2.32.3 ✓
