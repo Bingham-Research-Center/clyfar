@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 
 # Get a recent initialization time (yesterday 00Z is safest for data availability)
 yesterday = datetime.utcnow() - timedelta(days=1)
-INIT_TIME = yesterday.strftime("%Y%m%d00")
+INIT_TIME = yesterday.strftime("%Y-%m-%d 00:00")
 
 
 def print_header(text: str):
