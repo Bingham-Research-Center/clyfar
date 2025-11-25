@@ -46,6 +46,7 @@ dependencies:
   - pip:
     - herbie-data==2025.6.0  # Mid-2025 release (was 2024.3 - 20 months old!)
     - metpy==1.6.3           # Updated from 1.6.0
+    - synopticpy>=0.4.0      # Synoptic Weather API client
 
 # Lock file generated: 2025-11-24
 # Tested on: CHPC notchpeak (Rocky Linux 8.10)
