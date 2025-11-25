@@ -46,10 +46,11 @@ dependencies:
   - matplotlib>=3.8.0   # requirements.txt: >=3.8.0
 
   # Utilities
-  - requests=2.32.3     # requirements.txt: >=2.32.3 ✓
-  - pytz=2024.2         # requirements.txt: >=2024.2 ✓ (was MISSING!)
-  - fasteners=0.19      # requirements.txt: >=0.19 ✓
-  - pint=0.24.3         # Not in requirements.txt, but needed
+  - requests>=2.32.3    # requirements.txt: >=2.32.3
+  - pytz>=2024.2        # requirements.txt: >=2024.2
+  - fasteners>=0.19     # requirements.txt: >=0.19
+  - pint>=0.24.0        # Not in requirements.txt, but needed
+  - psutil>=5.9.0       # System/process utilities (was missing!)
 
   # Development tools
   - pip=24.3
