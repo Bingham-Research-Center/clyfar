@@ -334,13 +334,10 @@ def _upload_to_basinwx(filepath: str, data_type: str):
     api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
 
     try:
-        with open(filepath, 'r') as f:
-            file_data = json.load(f)
-
         send_json_to_server(
             server_address=api_url,
             fpath=filepath,
-            file_data=file_data,
+            file_data=data_type,  # data_type is 'forecasts', not JSON content
             API_KEY=api_key
         )
         logger.info(f"Uploaded {os.path.basename(filepath)} to {api_url}")
