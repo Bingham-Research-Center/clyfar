@@ -1,0 +1,83 @@
+# Clyfar CHPC Environment - Clean Slate (Nov 2025)
+# 100% conda-forge - NO pip dependencies
+# Created: 2025-11-24
+#
+# Key fixes from previous environment:
+#   - herbie-data 2025.11.3 (fixes "Subset fails when last grid selected" bug)
+#   - synopticpy from conda-forge (not pip)
+#   - numpy <2.0 to avoid breaking changes
+#
+# Install with: mamba env create -f environment-chpc-clean.yml
+
+name: clyfar-nov2025
+
+channels:
+  - conda-forge
+  - nodefaults  # Strict conda-forge only
+
+dependencies:
+  # ===================
+  # Core Python
+  # ===================
+  - python=3.11
+
+  # ===================
+  # Scientific Computing
+  # ===================
+  # numpy <2.0 intentional - numpy 2.x has breaking changes that affect
+  # downstream packages (cfgrib, pygrib, etc.)
+  - numpy>=1.26,<2.0
+  - pandas>=2.2
+  - scipy>=1.14
+  - polars>=1.0
+  - pyarrow>=15
+
+  # ===================
+  # Meteorology / GRIB
+  # ===================
+  # herbie-data 2025.11.2+ fixes "Subset fails when last grid selected"
+  # This is likely the root cause of MSLP/atmos.5 extraction failures
+  - herbie-data>=2025.11.2
+  - cfgrib>=0.9.14
+  - pygrib>=2.1.5
+  - eccodes
+  - xarray>=2024.7
+  - netcdf4
+  - metpy>=1.6
+  - cartopy>=0.24
+
+  # ===================
+  # Weather APIs
+  # ===================
+  # synopticpy 2025.x is the modern version (replaces old 0.x/3.x naming)
+  - synopticpy>=2025.9
+
+  # ===================
+  # Fuzzy Logic
+  # ===================
+  - scikit-fuzzy>=0.5
+
+  # ===================
+  # Astronomy / Time
+  # ===================
+  - astral>=3.0
+  - pytz>=2024
+
+  # ===================
+  # Visualization
+  # ===================
+  - matplotlib>=3.8
+
+  # ===================
+  # Utilities
+  # ===================
+  - requests>=2.32
+  - fasteners>=0.19
+  - pint>=0.24
+  - psutil>=5.9
+
+  # ===================
+  # Development (optional but useful)
+  # ===================
+  - ipython
+  - rich  # Better console output for debugging
