@@ -35,6 +35,9 @@ dependencies:
   # Weather APIs
   - synopticpy>=0.4.0   # Synoptic Weather API client (conda-forge available!)
 
+  # Astronomy/solar calculations
+  - astral>=3.0         # Sun/moon position calculations (conda-forge available!)
+
   # Utilities
   - requests=2.32.3     # Security updates
   - pint=0.24.3         # Updated from 0.23
