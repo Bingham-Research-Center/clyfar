@@ -1,42 +1,17 @@
-# CHPC Quick Reference - Lawson Group
+# CHPC Quick Reference - Clyfar
 
-## Partitions (Use Owner Nodes First)
+> **Canonical CHPC reference:** `brc-tools/docs/CHPC-REFERENCE.md`
+> This file contains Clyfar-specific shortcuts only.
 
-| Partition | Nodes | Use Case |
-|-----------|-------|----------|
-| `lawson-np` | 2 | **Primary** - Notchpeak owner nodes |
-| `lawson-kp` | 4 | **Secondary** - Kingspeak owner nodes |
-| `notchpeak-shared` | shared | Fallback when owner nodes busy |
+---
 
-## Optimal salloc Commands
+## Clyfar salloc (I/O-bound workload)
 
-### Clyfar Forecast (I/O + inference)
 ```bash
-# Owner partition (preferred) - modest resources, I/O bound workload
 salloc -n 4 -N 1 --mem=16G -t 2:00:00 -p lawson-np -A lawson-np
 ```
 
-### Heavy Computation (rare)
-```bash
-# Full node when truly needed
-salloc -n 16 -N 1 --mem=64G -t 4:00:00 -p lawson-np -A lawson-np
-```
-
-### Fallback (owner nodes busy)
-```bash
-salloc -n 4 -N 1 --mem=16G -t 2:00:00 -p notchpeak-shared -A notchpeak-shared-short
-```
-
-## Storage Locations
-
-| Path | Type | Capacity | Use |
-|------|------|----------|-----|
-| `/scratch/general/vast/` | Scratch | Large | Temp data, GRIB cache |
-| `lawson-group5` | Cottonwood | 16 TiB | Persistent datasets |
-| `lawson-group6` | Cottonwood | 16 TiB | Persistent datasets |
-| `~/` | Home/Vast | 7 GiB | Code, configs only |
-
-## Environment Activation
+## Environment
 
 ```bash
 conda activate clyfar-nov2025
@@ -44,14 +19,32 @@ export PYTHONPATH="$PYTHONPATH:~/gits/clyfar"
 export POLARS_ALLOW_FORKING_THREAD=1
 ```
 
-## Common Pitfalls
+## Test Run
 
-1. **Over-allocation**: Clyfar is I/O bound (downloads), not CPU bound. Use 4 cores, not 8+.
-2. **Wrong partition**: Use `lawson-np` (owner) not `notchpeak` (shared).
-3. **Memory**: 16GB sufficient for 3-member runs, 32GB for full 31-member.
+```bash
+python ~/gits/clyfar/run_gefs_clyfar.py \
+  -i "2025-11-24 00:00" \
+  -n 4 \
+  -m 3 \
+  -d "/scratch/general/vast/clyfar_test/v0p9/$(date +%Y%m%d%H)" \
+  -f "/scratch/general/vast/clyfar_test/figs/$(date +%Y%m%d%H)"
+```
+
+## Export + Upload
+
+```bash
+python ~/gits/clyfar/export/upload_batch.py \
+  --json-dir /scratch/general/vast/clyfar_test/json/YYYYMMDD
+```
+
+## Clyfar-Specific Notes
+
+- **Resource usage:** I/O bound (GRIB downloads), not CPU intensive
+- **Memory:** 16GB for 3 members, 32GB for 31 members
+- **Runtime:** ~30 min for 3 members, ~2 hr for full ensemble
 
 ## See Also
 
-- `brc-tools/AGENT-INDEX.md` - Full CHPC deployment guide
-- `brc-tools/docs/PIPELINE-ARCHITECTURE.md` - System design
-- `clyfar/CHPC_DEPLOYMENT_CHECKLIST.md` - Deployment steps
+- `brc-tools/docs/CHPC-REFERENCE.md` - **Canonical** group resources, partitions, storage
+- `CHPC_DEPLOYMENT_CHECKLIST.md` - Full deployment phases
+- `CHPC-SETUP-GUIDE.md` - First-time environment setup
