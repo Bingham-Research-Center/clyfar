@@ -1,5 +1,5 @@
 # Clyfar CHPC Environment - December 2025
-# Stable, locked versions for production deployment
+# Based on requirements.txt with stable version locks
 # Free for education (conda-forge channel)
 # Updated for November 2025 - modern but proven stable versions
 
@@ -13,46 +13,50 @@ dependencies:
   # Core Python (stable LTS)
   - python=3.11.10
 
-  # Scientific computing (STABLE, numpy < 2.0 for compatibility)
-  - numpy=1.26.4        # Latest 1.x - avoid numpy 2.x breaking changes
-  - pandas=2.2.3        # Stable 2.2 series (mid-2025)
-  - scipy=1.14.1        # Updated from 1.11 (2+ years of improvements)
+  # Scientific computing
+  # NOTE: requirements.txt says numpy>=2.1.2, but we use 1.26.4 (latest 1.x)
+  # to avoid numpy 2.x breaking changes - this is INTENTIONAL
+  - numpy=1.26.4        # Latest 1.x - requirements.txt wants 2.x but has compatibility issues
+  - pandas=2.2.3        # requirements.txt: >=2.2.2 ✓
+  - scipy=1.14.1        # requirements.txt: >=1.14.1 ✓
 
   # Geospatial/meteorology
-  - xarray=2024.10.0    # Modern (was 2023.12 - way too old!)
-  - cfgrib=0.9.15.0     # Latest 0.9.x
-  - eccodes=2.38.0      # Updated from 2.34
-  - cartopy=0.24.0      # Updated from 0.23
-  - netcdf4=1.7.1       # Updated from 1.6.5
+  - xarray=2024.10.0    # requirements.txt: >=2024.7.0 ✓
+  - cfgrib=0.9.15.0     # requirements.txt: >=0.9.14.1 ✓
+  - pygrib=2.1.5        # requirements.txt: >=2.1.5 ✓ (GRIB fallback)
+  - eccodes=2.38.0      # Binary dependency for cfgrib
+  - cartopy=0.24.1      # requirements.txt: >=0.24.1 ✓
+  - netcdf4=1.7.1       # Dependency for xarray
+  - metpy=1.6.3         # requirements.txt: >=1.6.3 ✓
 
-  # Fuzzy logic (no newer version available)
-  - scikit-fuzzy=0.4.2
+  # Fuzzy logic
+  - scikit-fuzzy=0.5.0  # requirements.txt: >=0.5.0 ✓ (updated from 0.4.2)
 
-  # Data handling (major updates for 2025)
-  - polars=1.12.0       # Was 0.20 - 1.x stable by mid-2025
-  - pyarrow=17.0.0      # Was 14.x - 2 years old!
+  # Data handling
+  - polars=1.12.0       # Not in requirements.txt, but needed
+  - pyarrow=17.0.0      # Not in requirements.txt, but needed
 
   # Weather APIs
-  - synopticpy>=0.4.0   # Synoptic Weather API client (conda-forge available!)
+  - synopticpy=3.0.2    # requirements.txt: >=3.0.2 ✓ (was WRONG: had >=0.4.0!)
 
   # Astronomy/solar calculations
-  - astral>=3.0         # Sun/moon position calculations (conda-forge available!)
+  - astral=3.2          # requirements.txt: >=3.0 ✓
+
+  # Visualization
+  - matplotlib=3.9.0    # requirements.txt: >=3.8.0 ✓ (was MISSING!)
 
   # Utilities
-  - requests=2.32.3     # Security updates
-  - pint=0.24.3         # Updated from 0.23
-
-  # Multiprocessing
-  - fasteners=0.19
+  - requests=2.32.3     # requirements.txt: >=2.32.3 ✓
+  - pytz=2024.2         # requirements.txt: >=2024.2 ✓ (was MISSING!)
+  - fasteners=0.19      # requirements.txt: >=0.19 ✓
+  - pint=0.24.3         # Not in requirements.txt, but needed
 
   # Development tools
   - pip=24.3
 
-  # Pip-only packages (use ONLY when not available on conda-forge)
-  # Prefer conda/mamba for better dependency resolution!
+  # Pip-only packages (not available on conda-forge)
   - pip:
-    - herbie-data==2025.6.0  # Mid-2025 release (not on conda-forge)
-    - metpy==1.6.3           # Updated from 1.6.0 (available on conda, but using pip for consistency)
+    - herbie-data==2025.6.0  # requirements.txt: >=2024.7.0 ✓ (using newer stable version)
 
 # Lock file generated: 2025-11-24
 # Tested on: CHPC notchpeak (Rocky Linux 8.10)
