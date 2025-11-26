@@ -532,7 +532,9 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
             continue
 
         snow_val = all_vrbl_dfs["snow"][snow_].loc[dt]  # mm
-        mslp_val = all_vrbl_dfs["mslp"][mslp_].loc[dt]  # hPa (converted from Pa in do_nwpval_mslp)
+        # MSLP may have coarser time resolution - use nearest available value
+        mslp_series = all_vrbl_dfs["mslp"][mslp_]
+        mslp_val = mslp_series.iloc[mslp_series.index.get_indexer([dt], method='nearest')[0]]  # hPa
         wind_val = all_vrbl_dfs["wind"][wind_].loc[dt] # already in m/s?
         solar_val = all_vrbl_dfs["solar"][solar_].loc[dt] # already w/m2 TODO Crap after 240h
         temp_val = all_vrbl_dfs["temp"][temp_].loc[dt] # already in C
