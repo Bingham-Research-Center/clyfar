@@ -37,18 +37,8 @@ class GEFSData(DataFile):
         # Directory creation can fail on read-only filesystems; fall back to tmp.
         _HERBIE_CACHE_DIR = Path(tempfile.gettempdir()) / "clyfar_herbie"
         _HERBIE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    _CFGRIB_INDEX_DIR = _HERBIE_CACHE_DIR / "cfgrib_indexes"
-    _CFGRIB_INDEX_DIR.mkdir(parents=True, exist_ok=True)
     _PRESSURE_VAR_NAME = "prmsl"
     _PRESSURE_STANDARD_NAME = "air_pressure_at_mean_sea_level"
-    _PRESSURE_FILTER_KEYS = {
-        "shortName": "prmsl",
-        "typeOfLevel": "meanSea",
-        "discipline": 0,
-        "parameterCategory": 3,
-        "parameterNumber": 1,
-        "stepType": "instant",
-    }
     _PRESSURE_QUERY = ":PRMSL:"
 
     def __init__(self, clear_cache=False):
@@ -124,18 +114,8 @@ class GEFSData(DataFile):
             last_exc = None
             for attempt in range(attempts):
                 try:
-                    backend_kwargs = {}
-                    qstr_lower = (qstr or "").lower()
-                    if "prmsl" in qstr_lower:
-                        backend_kwargs["errors"] = "ignore"
-                        backend_kwargs.setdefault("filter_by_keys", {})
-                        backend_kwargs["filter_by_keys"].setdefault("typeOfLevel", "meanSea")
-                    # NOTE: Custom indexpath removed - let cfgrib use defaults
-                    ds = herbie_inst.xarray(
-                        qstr,
-                        remove_grib=remove_grib,
-                        backend_kwargs=backend_kwargs,
-                    )
+                    # Trust Herbie's defaults - no custom backend_kwargs needed
+                    ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
                     break
                 except Exception as exc:
                     last_exc = exc
@@ -249,146 +229,30 @@ class GEFSData(DataFile):
 
     @classmethod
     def _fetch_pressure_dataset(cls, herbie_inst, remove_grib=True):
-        os.makedirs(cls.LOCK_DIR, exist_ok=True)
-        lock_path = os.path.join(
-            cls.LOCK_DIR,
-            f"prmsl_{herbie_inst.date:%Y%m%d_%H}_{herbie_inst.fxx:03d}_{herbie_inst.member}.lock",
-        )
-        backend_kwargs = cls._build_pressure_backend_kwargs(herbie_inst)
-        lock = fasteners.InterProcessLock(lock_path)
-        with lock:
-            if getattr(cls, "clear_cache", False):
-                cls._purge_cached_files(herbie_inst)
-            attempts = 2
-            last_exc = None
-            for attempt in range(attempts):
-                try:
-                    ds = cls._pressure_cfgrib_request(
-                        herbie_inst,
-                        backend_kwargs,
-                        remove_grib=remove_grib,
-                    )
-                    break
-                except Exception as exc:
-                    last_exc = exc
-                    cls._purge_cached_files(herbie_inst)
-            else:
-                logger = logging.getLogger(__name__)
-                logger.warning(
-                    "cfgrib PRMSL load failed for %s f%03d (%s); falling back to pygrib",
-                    herbie_inst.date,
-                    herbie_inst.fxx,
-                    last_exc,
-                )
-                ds = cls._pressure_pygrib_fallback(herbie_inst)
-                if remove_grib:
-                    cls._purge_cached_files(herbie_inst)
-            ds = cls._parse_cf(ds)
-        return ds
+        """
+        Minimal PRMSL fetch using direct Herbie call.
 
-    @classmethod
-    def _pressure_cfgrib_request(cls, herbie_inst, backend_kwargs, remove_grib=True):
+        Herbie 2025.11.x handles cfgrib configuration internally.
+        Over-specifying filter_by_keys causes failures - trust Herbie's defaults.
+        """
         logger = logging.getLogger(__name__)
         logger.debug(
-            "Requesting PRMSL via cfgrib (init=%s fxx=%03d idx=%s)",
+            "Fetching PRMSL (init=%s fxx=%03d member=%s product=%s)",
             herbie_inst.date,
             herbie_inst.fxx,
-            backend_kwargs.get("indexpath"),
+            herbie_inst.member,
+            herbie_inst.product,
         )
-        ds = herbie_inst.xarray(
-            cls._PRESSURE_QUERY,
-            remove_grib=remove_grib,
-            backend_kwargs=backend_kwargs,
-        )
+        # Direct call - this is what works per handoff testing
+        ds = herbie_inst.xarray(cls._PRESSURE_QUERY, remove_grib=remove_grib)
+
+        # Normalize variable name if needed
         if cls._PRESSURE_VAR_NAME not in ds.data_vars and ds.data_vars:
             first_var = list(ds.data_vars)[0]
             ds = ds.rename({first_var: cls._PRESSURE_VAR_NAME})
+
+        ds = cls._parse_cf(ds)
         return ds
-
-    @classmethod
-    def _pressure_pygrib_fallback(cls, herbie_inst):
-        try:
-            import pygrib
-        except ImportError as exc:
-            raise RuntimeError(
-                "pygrib is required for PRMSL fallback; please install pygrib>=2.1.5."
-            ) from exc
-
-        grib_path = getattr(herbie_inst, "grib", None)
-        if not grib_path or not os.path.exists(grib_path):
-            download_result = herbie_inst.download()
-            if isinstance(download_result, dict):
-                grib_path = download_result.get("grib") or download_result.get("filepath")
-            elif download_result:
-                grib_path = download_result
-        if not grib_path or not os.path.exists(grib_path):
-            raise RuntimeError("Unable to locate GEFS GRIB file for pygrib fallback")
-
-        with pygrib.open(grib_path) as grib_obj:
-            try:
-                msg = grib_obj.select(shortName="prmsl", typeOfLevel="meanSea")[0]
-            except (ValueError, IndexError) as exc:
-                raise RuntimeError(
-                    "pygrib fallback could not locate PRMSL in the GRIB message"
-                ) from exc
-            values = msg.values
-            lats, lons = msg.latlons()
-            valid_time = getattr(herbie_inst, "valid_date", None) or getattr(
-                msg, "validDate", None
-            )
-
-        if valid_time is None:
-            valid_time = getattr(herbie_inst, "date", None)
-        if valid_time is None:
-            valid_time = datetime.datetime.utcnow()
-
-        latitude = lats[:, 0]
-        longitude = lons[0, :]
-        data = np.expand_dims(values, axis=0)
-        ds = xr.Dataset(
-            {
-                cls._PRESSURE_VAR_NAME: (
-                    ("time", "latitude", "longitude"),
-                    data,
-                )
-            },
-            coords={
-                "time": ("time", pd.to_datetime([valid_time])),
-                "latitude": ("latitude", latitude),
-                "longitude": ("longitude", longitude),
-            },
-        )
-        ds[cls._PRESSURE_VAR_NAME].attrs.update(
-            {
-                "units": getattr(msg, "units", "Pa"),
-                "long_name": getattr(msg, "name", "Pressure reduced to MSL"),
-                "standard_name": cls._PRESSURE_STANDARD_NAME,
-            }
-        )
-        return ds
-
-    @classmethod
-    def _build_pressure_backend_kwargs(cls, herbie_inst):
-        # NOTE: Custom indexpath removed - was causing "invalid index to scalar"
-        # errors with Herbie 2025.11.x. Let cfgrib use its defaults.
-        backend_kwargs = {
-            "filter_by_keys": dict(cls._PRESSURE_FILTER_KEYS),
-            "errors": "raise",
-        }
-        return backend_kwargs
-
-    @classmethod
-    def _pressure_index_path(cls, herbie_inst):
-        init_time = getattr(herbie_inst, "date", None)
-        if init_time is None:
-            init_stamp = "unknown"
-        else:
-            init_stamp = f"{init_time:%Y%m%d%H}"
-        product = (getattr(herbie_inst, "product", "") or "prod").replace(".", "")
-        model = getattr(herbie_inst, "model", "model")
-        member = getattr(herbie_inst, "member", "mbr")
-        filename = f"{model}_{member}_{product}_{init_stamp}_f{herbie_inst.fxx:03d}.idx"
-        return cls._CFGRIB_INDEX_DIR / filename
 
     @staticmethod
     def _purge_cached_files(herbie_inst):

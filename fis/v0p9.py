@@ -54,7 +54,7 @@ VARIABLE_METADATA = {
     'labels': {
         'solar': 'Solar radiation (W/m^2)',
         'snow': 'Snow depth (mm)',
-        'mslp': 'Mean sea level pressure (Pa)',
+        'mslp': 'Mean sea level pressure (hPa)',
         'wind': 'Wind speed (m/s)',
         'ozone': 'Ozone concentration (ppb)',
         'temp': 'Temperature (°C)'
