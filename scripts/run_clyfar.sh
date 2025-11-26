@@ -49,8 +49,7 @@ python run_gefs_clyfar.py \
     -m "$NMEMBERS" \
     -d "$DATA_ROOT" \
     -f "$FIG_ROOT" \
-    --visualise \
-    --save
+    --log-fis
 
 echo "================================================================"
 echo "Complete: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
