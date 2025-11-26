@@ -115,39 +115,15 @@ def herbie_load_variable(
 
 
 def _herbie_fetch_slice(init_dt, fxx, product, member, query, remove_grib):
-    """Call Herbie.xarray with consistent backend configuration."""
+    """Call Herbie.xarray - trust Herbie's defaults, no custom backend_kwargs."""
     H = GEFSData.setup_herbie(
         init_dt,
         fxx=fxx,
         product=product,
         member=member,
     )
-    index_name = f"{H.model}_{H.member}_{product.replace('.', '')}_{init_dt:%Y%m%d%H}_f{fxx:03d}.idx"
-    backend_kwargs = {
-        "indexpath": str(GEFSData._CFGRIB_INDEX_DIR / index_name),
-        "errors": "ignore",
-    }
-    try:
-        ds = H.xarray(
-            query,
-            remove_grib=remove_grib,
-            backend_kwargs=backend_kwargs,
-        )
-    except Exception:
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            "Herbie.xarray failed for %s f%03d; falling back to GEFSData.get_cropped_data",
-            query,
-            fxx,
-        )
-        ds = GEFSData.get_cropped_data(
-            init_dt,
-            fxx=fxx,
-            q_str=query,
-            product=product,
-            member=member,
-            remove_grib=remove_grib,
-        )
+    # Direct call - Herbie 2025.11.x handles cfgrib internally
+    ds = H.xarray(query, remove_grib=remove_grib)
     return ds
 
 

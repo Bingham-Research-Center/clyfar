@@ -81,12 +81,6 @@ class GEFSData(DataFile):
         )
         return H
 
-    @staticmethod
-    def __OLD_get_CONUS(qstr, herbie_inst, remove_grib=True):
-        ds = herbie_inst.xarray(qstr, remove_grib=remove_grib)
-        ds = ds.metpy.parse_cf()
-        return ds
-
     @classmethod
     @retry_download_backoff(retries=3, backoff_in_seconds=1)
     def safe_get_CONUS(cls, qstr, herbie_inst, remove_grib=True):
@@ -245,6 +239,14 @@ class GEFSData(DataFile):
         )
         # Direct call - this is what works per handoff testing
         ds = herbie_inst.xarray(cls._PRESSURE_QUERY, remove_grib=remove_grib)
+
+        # Debug: log dataset structure for troubleshooting
+        logger.debug(
+            "PRMSL dataset: vars=%s, time.shape=%s, time.ndim=%s",
+            list(ds.data_vars),
+            ds.time.shape if hasattr(ds, 'time') else 'N/A',
+            ds.time.values.ndim if hasattr(ds, 'time') else 'N/A',
+        )
 
         # Normalize variable name if needed
         if cls._PRESSURE_VAR_NAME not in ds.data_vars and ds.data_vars:

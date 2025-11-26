@@ -487,13 +487,18 @@ def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
                 )
                 field = ds[var_name].sel(latitude=lat, longitude=lon, method="nearest")
                 value = float(field.squeeze().values)
-                valid_time = pd.to_datetime(ds.time.values[0])
-            except Exception as exc:
+                # Handle both scalar and array time coordinates
+                time_val = ds.time.values
+                valid_time = pd.to_datetime(
+                    time_val.item() if hasattr(time_val, 'ndim') and time_val.ndim == 0 else time_val[0]
+                )
+            except (KeyError, IndexError, ValueError, RuntimeError) as exc:
                 logger.warning(
                     "MSLP fetch failed for f%03d (%s); storing NaN",
                     fxx,
                     exc,
                 )
+                logger.debug("Full traceback for f%03d:", fxx, exc_info=True)
                 valid_time = init_dt_naive + datetime.timedelta(hours=int(fxx))
                 value = np.nan
             records.append((valid_time, value))
