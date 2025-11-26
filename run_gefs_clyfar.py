@@ -662,9 +662,16 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                     else int(nmembers))
     if member_count < 1:
         raise ValueError("nmembers must be at least 1")
+    if member_count > 31:
+        raise ValueError("GEFS has max 31 members (c00 + p01-p30)")
 
-    member_names = [f'p{n:02d}' for n in range(1, member_count + 1)]
-    print(member_names, member_count)
+    # GEFS members: c00 (control) + p01-p30 (perturbations)
+    if member_count == 31:
+        member_names = ['c00'] + [f'p{n:02d}' for n in range(1, 31)]
+    else:
+        # For smaller runs, use perturbation members only
+        member_names = [f'p{n:02d}' for n in range(1, member_count + 1)]
+    print(f"Using {len(member_names)} members: {member_names}")
 
     if testing:
         member_names = member_names[:10]
