@@ -130,8 +130,7 @@ class GEFSData(DataFile):
                         backend_kwargs["errors"] = "ignore"
                         backend_kwargs.setdefault("filter_by_keys", {})
                         backend_kwargs["filter_by_keys"].setdefault("typeOfLevel", "meanSea")
-                        backend_kwargs["indexpath"] = str(cls._pressure_index_path(herbie_inst))
-                    backend_kwargs.setdefault("indexpath", str(cls._CFGRIB_INDEX_DIR))
+                    # NOTE: Custom indexpath removed - let cfgrib use defaults
                     ds = herbie_inst.xarray(
                         qstr,
                         remove_grib=remove_grib,
@@ -370,10 +369,10 @@ class GEFSData(DataFile):
 
     @classmethod
     def _build_pressure_backend_kwargs(cls, herbie_inst):
-        index_path = cls._pressure_index_path(herbie_inst)
+        # NOTE: Custom indexpath removed - was causing "invalid index to scalar"
+        # errors with Herbie 2025.11.x. Let cfgrib use its defaults.
         backend_kwargs = {
             "filter_by_keys": dict(cls._PRESSURE_FILTER_KEYS),
-            "indexpath": str(index_path),
             "errors": "raise",
         }
         return backend_kwargs
