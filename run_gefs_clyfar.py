@@ -384,17 +384,19 @@ def save_forecast_data(dfs: Dict[str, pd.DataFrame], variable: str, init_dt_dict
         if variable == "mslp":
             series = df[mslp_col]
             if series.isna().all():
-                raise ValueError(
-                    f"MSLP dataframe for {member} contains only NaNs; "
-                    "aborting before writing parquet."
+                # TODO: Fix in Herbie refactor (see TODO-HERBIE-REFACTOR.md)
+                logger.warning(
+                    "MSLP dataframe for %s contains only NaNs; writing anyway. "
+                    "Forecast will use fallback MSLP values.", member
                 )
-            logger.info(
-                "MSLP stats for %s: min=%.1f hPa median=%.1f hPa p90=%.1f hPa",
-                member,
-                float(series.min()),
-                float(series.median()),
-                float(series.quantile(0.9)),
-            )
+            else:
+                logger.info(
+                    "MSLP stats for %s: min=%.1f hPa median=%.1f hPa p90=%.1f hPa",
+                    member,
+                    float(series.min()),
+                    float(series.median()),
+                    float(series.quantile(0.9)),
+                )
         df.to_parquet(fpath)
     return
 
