@@ -67,8 +67,8 @@ class GEFSData(DataFile):
         timeseries = []
         validtimes = []
         for f in fxx:
-            validtime = inittime + datetime.timedelta(hours=f)
-            H = cls.setup_herbie(inittime, fxx=f, product=product, model="gefs",
+            validtime = inittime + datetime.timedelta(hours=int(f))
+            H = cls.setup_herbie(inittime, fxx=int(f), product=product, model="gefs",
                                  member=member)
             ds = cls.get_CONUS(gefs_regex, H, remove_grib=remove_grib)
             # TODO: move the cropping method to a more general script (e.g., geog_funcs)

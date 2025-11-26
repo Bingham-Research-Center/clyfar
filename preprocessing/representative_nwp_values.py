@@ -494,7 +494,7 @@ def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
                     fxx,
                     exc,
                 )
-                valid_time = init_dt_naive + datetime.timedelta(hours=fxx)
+                valid_time = init_dt_naive + datetime.timedelta(hours=int(fxx))
                 value = np.nan
             records.append((valid_time, value))
         return records
