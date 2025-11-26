@@ -18,6 +18,10 @@ conda activate clyfar-nov2025 || { echo "ERROR: Failed to activate clyfar-nov202
 # Set PYTHONPATH
 export PYTHONPATH="$PYTHONPATH:$CLYFAR_DIR"
 
+# Herbie cache on scratch (not home - 7.3GB quota!)
+export CLYFAR_HERBIE_CACHE="/scratch/general/vast/clyfar_test/herbie_cache"
+mkdir -p "$CLYFAR_HERBIE_CACHE"
+
 # Load API keys if available
 if [ -f ~/.bashrc_basinwx ]; then
     source ~/.bashrc_basinwx
