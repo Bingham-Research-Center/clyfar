@@ -62,16 +62,16 @@ else
 fi
 
 # Activate conda environment
-echo "Activating clyfar-2025 conda environment..."
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate clyfar-2025 || {
-    echo "ERROR: Failed to activate conda environment 'clyfar-2025'"
+echo "Activating clyfar-nov2025 conda environment..."
+source ~/software/pkg/miniforge3/etc/profile.d/conda.sh
+conda activate clyfar-nov2025 || {
+    echo "ERROR: Failed to activate conda environment 'clyfar-nov2025'"
     echo "Check conda env list"
     exit 1
 }
 
 # Set paths
-CLYFAR_DIR=~/clyfar
+CLYFAR_DIR=~/gits/clyfar
 DATA_ROOT=~/basinwx-data/clyfar
 FIG_ROOT=~/basinwx-data/clyfar/figures
 EXPORT_DIR=~/basinwx-data/clyfar/basinwx_export
