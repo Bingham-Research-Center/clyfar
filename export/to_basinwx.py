@@ -346,6 +346,89 @@ def _upload_to_basinwx(filepath: str, data_type: str):
         logger.error(f"Failed to upload {filepath}: {e}")
 
 
+def upload_png_to_basinwx(png_path: str) -> bool:
+    """Upload a PNG image to BasinWx API.
+
+    Args:
+        png_path: Path to PNG file
+
+    Returns:
+        True if upload succeeded, False otherwise
+    """
+    import requests
+
+    api_key = os.getenv('DATA_UPLOAD_API_KEY')
+    if not api_key:
+        logger.warning("DATA_UPLOAD_API_KEY not set, skipping PNG upload")
+        return False
+
+    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
+    upload_url = f"{api_url}/api/upload/images"
+
+    try:
+        with open(png_path, 'rb') as f:
+            files = {'file': (os.path.basename(png_path), f, 'image/png')}
+            headers = {'x-api-key': api_key}
+            response = requests.post(upload_url, files=files, headers=headers)
+
+        if response.status_code == 200:
+            logger.info(f"Uploaded PNG: {os.path.basename(png_path)}")
+            return True
+        else:
+            logger.error(f"PNG upload failed ({response.status_code}): {response.text}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to upload PNG {png_path}: {e}")
+        return False
+
+
+def export_figures_to_basinwx(
+    fig_root: str,
+    init_dt: datetime,
+    upload: bool = True
+) -> Dict[str, List[str]]:
+    """Export heatmap and meteogram PNGs to BasinWx.
+
+    Looks for figures in:
+    - {fig_root}/heatmap/*.png
+    - {fig_root}/*.png (meteograms)
+
+    Args:
+        fig_root: Root directory containing figures
+        init_dt: Forecast initialization datetime
+        upload: If True, upload to BasinWx API
+
+    Returns:
+        Dictionary with 'heatmaps' and 'meteograms' keys mapping to file lists
+    """
+    results = {"heatmaps": [], "meteograms": []}
+
+    # Find heatmap PNGs
+    heatmap_dir = os.path.join(fig_root, "heatmap")
+    if os.path.isdir(heatmap_dir):
+        for f in os.listdir(heatmap_dir):
+            if f.endswith('.png'):
+                fpath = os.path.join(heatmap_dir, f)
+                results["heatmaps"].append(fpath)
+                if upload:
+                    upload_png_to_basinwx(fpath)
+
+    # Find meteogram PNGs in root
+    if os.path.isdir(fig_root):
+        for f in os.listdir(fig_root):
+            if f.endswith('.png') and 'meteogram' in f.lower():
+                fpath = os.path.join(fig_root, f)
+                results["meteograms"].append(fpath)
+                if upload:
+                    upload_png_to_basinwx(fpath)
+
+    logger.info(f"Found {len(results['heatmaps'])} heatmaps, "
+                f"{len(results['meteograms'])} meteograms")
+
+    return results
+
+
 # Example usage for integration into run_gefs_clyfar.py:
 """
 from export.to_basinwx import export_all_products

@@ -839,9 +839,41 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                     plt.close(fig)
                     print("Saved daily-max heatmaps of O3 categories to ", subdir)
 
-    # TODO - the heatmaps could be normalised by baserate...
+    # Export to BasinWx website
+    if save and not no_clyfar and dailymax_df_dict:
+        try:
+            from export.to_basinwx import export_all_products, export_figures_to_basinwx
+            print("Exporting forecast products to BasinWx...")
+            export_dir = os.path.join(clyfar_data_root, "basinwx_export")
+            utils.try_create(export_dir)
 
-    pass
+            # Export JSON products (63 files)
+            results = export_all_products(
+                dailymax_df_dict=dailymax_df_dict,
+                init_dt=init_dt_dict['naive'],
+                output_dir=export_dir,
+                upload=True  # Uploads if DATA_UPLOAD_API_KEY is set
+            )
+            total = len(results.get('possibility', [])) + \
+                    len(results.get('exceedance', [])) + \
+                    len(results.get('percentiles', []))
+            print(f"Exported {total} JSON files to {export_dir}")
+
+            # Export PNG figures (heatmaps + meteograms)
+            if visualise:
+                fig_results = export_figures_to_basinwx(
+                    fig_root=clyfar_fig_root,
+                    init_dt=init_dt_dict['naive'],
+                    upload=True
+                )
+                print(f"Exported {len(fig_results.get('heatmaps', []))} heatmaps, "
+                      f"{len(fig_results.get('meteograms', []))} meteograms")
+
+        except ImportError as e:
+            logger.warning("Could not import export module: %s", e)
+        except Exception as e:
+            logger.error("Export to BasinWx failed: %s", e)
+
     print("Forecast workflow complete for", init_dt_dict['naive'])
     return
 
