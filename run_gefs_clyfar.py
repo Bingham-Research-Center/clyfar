@@ -477,14 +477,20 @@ def reorganise_data(forecast_data: dict):
 ############## CLYFAR FUNCS #####################
 
 def gefs_to_clyfar_membername(gefs_member: str) -> str:
-    # clyfar001 etc
-    if gefs_member.startswith('p'):
+    """Convert GEFS member name to Clyfar member name.
+
+    c00 -> clyfar000 (control)
+    p01 -> clyfar001
+    p30 -> clyfar030
+    """
+    if gefs_member == 'c00':
+        return 'clyfar000'
+    elif gefs_member.startswith('p'):
         return f'clyfar{int(gefs_member[1:]):03d}'
     elif isinstance(gefs_member, int):
-        # Assuming the number is correctly starting at 1!
         return f'clyfar{gefs_member:03d}'
     else:
-        raise Exception
+        raise ValueError(f"Unknown GEFS member format: {gefs_member}")
 
 def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
                                forecast_cache: Optional[Dict[str, Dict[str, pd.DataFrame]]]=None,
