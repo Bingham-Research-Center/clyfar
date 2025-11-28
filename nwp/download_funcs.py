@@ -111,6 +111,8 @@ def herbie_load_variable(
         )
 
     combined = xr.concat(slices, dim="time", combine_attrs="drop")
+    # Crop to Uintah Basin region to match mask dimensions
+    combined = GEFSData.crop_to_UB(combined)
     return combined
 
 
