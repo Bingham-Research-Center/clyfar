@@ -134,14 +134,12 @@ echo "Running Clyfar forecast for init time: $INIT_TIME"
 echo "================================================================"
 
 python3 run_gefs_clyfar.py \
-    --dt "$INIT_TIME" \
-    --clyfar_data_root "$DATA_ROOT" \
-    --clyfar_fig_root "$FIG_ROOT" \
-    --ncpus "$SLURM_CPUS_PER_TASK" \
-    --nmembers all \
-    --visualise \
-    --save \
-    --log_fis
+    -i "$INIT_TIME" \
+    -d "$DATA_ROOT" \
+    -f "$FIG_ROOT" \
+    -n "$SLURM_CPUS_PER_TASK" \
+    -m all \
+    --log-fis
 
 CLYFAR_EXIT_CODE=$?
 

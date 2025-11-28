@@ -12,7 +12,44 @@ Lawson, Lyman, Davies, 2024
 1. Install/initialize Miniforge or Conda (see [docs/setup_conda.md](docs/setup_conda.md) for platform specifics).
 2. Create the env: `conda create -n clyfar python=3.11.9 -y` then `conda activate clyfar`.
 3. Install packages: `pip install -r requirements.txt`.
-4. Run the smoke test to validate: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing`.
+4. Run the smoke test to validate: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures -t`.
+
+## CLI Usage
+
+```bash
+python run_gefs_clyfar.py -i YYYYMMDDHH -n NCPUS -m NMEMBERS -d DATA_ROOT -f FIG_ROOT [options]
+```
+
+**Required arguments:**
+| Flag | Description |
+|------|-------------|
+| `-i`, `--inittime` | Initialization time (YYYYMMDDHH format) |
+| `-n`, `--ncpus` | Number of CPUs for parallel processing |
+| `-m`, `--nmembers` | Number of ensemble members (1-31) or `all` for full GEFS ensemble |
+| `-d`, `--data-root` | Root directory for data output |
+| `-f`, `--fig-root` | Root directory for figure output |
+
+**Optional flags:**
+| Flag | Description |
+|------|-------------|
+| `-v`, `--verbose` | Enable verbose logging |
+| `-t`, `--testing` | Enable testing/smoke mode |
+| `-nc`, `--no-clyfar` | Skip Clyfar processing |
+| `-ng`, `--no-gefs` | Skip GEFS download |
+| `--log-fis` | Log fuzzy inference system diagnostics |
+| `--serial-debug` | Disable multiprocessing for debugging |
+
+**Examples:**
+```bash
+# Smoke test (2 members, testing mode)
+python run_gefs_clyfar.py -i 2025112806 -n 4 -m 2 -d ./data -f ./figures -t
+
+# Full operational run (all 31 GEFS members)
+python run_gefs_clyfar.py -i 2025112806 -n 16 -m all -d ~/basinwx-data/clyfar -f ~/basinwx-data/clyfar/figures --log-fis
+
+# SLURM submission (uses submit_clyfar.sh)
+sbatch scripts/submit_clyfar.sh 2025112806
+```
 
 ## Debugging guardrails
 
@@ -30,21 +67,21 @@ Clyfar is the name of the prediction system itself - at least the point-of-acces
 
 Clyfar predictions are intended to be pushed to the BasinWx website (`basinwx.com`).
 
-**Integration Status:** IN DEVELOPMENT (as of 2025-11-22)
+**Integration Status:** OPERATIONAL (as of 2025-11-28)
 - Model execution: ✓ Working (run_gefs_clyfar.py)
-- Output generation: ✓ Working (local ./data/clyfar_output/)
-- Website upload: ❌ Not yet implemented
-- Cron scheduling: ❌ Pending upload completion
+- Output generation: ✓ Working (parquet + PNG figures)
+- Website upload: ✓ Working (JSON + PNG via export/to_basinwx.py)
+- Cron scheduling: ✓ Configured (4× daily: 03:30, 09:30, 15:30, 21:30 UTC)
 
-**For integration documentation, see:**
-- **Master Guide:** `ubair-website/CHPC-IMPLEMENTATION.md` (section 7: Clyfar Integration Status)
-- **Implementation plan:** Included in above guide
-- **Schema definition:** To be added to `ubair-website/DATA_MANIFEST.json`
+**CHPC paths:**
+- Conda env: `clyfar-nov2025` via `~/software/pkg/miniforge3`
+- Clyfar repo: `~/gits/clyfar`
+- Data output: `~/basinwx-data/clyfar`
+- Logs: `~/logs/basinwx/clyfar_*.out`
 
-**Next steps:**
-1. Define forecast output schema for website consumption
-2. Implement upload function using `brc-tools/download/push_data.py` as template
-3. Configure cron to run twice daily (6am and 6pm Mountain Time)
+**Environment requirements (set in ~/.bashrc_basinwx):**
+- `DATA_UPLOAD_API_KEY`: 32-char hex key for BasinWx uploads
+- `BASINWX_API_URL`: https://basinwx.com (optional, defaults to this)
 
 ## Related Repositories and Knowledge Base
 - Technical report (LaTeX, local path): `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`

@@ -894,9 +894,15 @@ if __name__ == "__main__":
     parser.add_argument(
         '-n', '--ncpus', required=True, type=int,
         help='Number of CPUs to use')
+    def parse_nmembers(value):
+        """Parse nmembers: accepts int or 'all' (=31 for GEFS)."""
+        if value.lower() == 'all':
+            return 31  # GEFS: 1 control + 30 perturbations
+        return int(value)
+
     parser.add_argument(
-        '-m', '--nmembers', required=True, type=int,
-        help='Number of ensemble members to use')
+        '-m', '--nmembers', required=True, type=parse_nmembers,
+        help="Number of ensemble members to use (or 'all' for 31)")
     parser.add_argument(
         '-d', '--data-root', required=True, type=str,
         help='Root directory for data output')
