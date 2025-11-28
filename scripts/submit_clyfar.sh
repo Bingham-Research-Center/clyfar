@@ -166,7 +166,7 @@ from pathlib import Path
 # Add clyfar to path
 sys.path.insert(0, "$CLYFAR_DIR")
 
-from export.to_basinwx import export_all_products
+from export.to_basinwx import export_all_products, export_figures_to_basinwx
 import pandas as pd
 
 # Parse init time
@@ -205,6 +205,16 @@ print(f"Successfully exported {total_files} forecast files")
 print(f"  Possibility heatmaps: {len(results['possibility'])}")
 print(f"  Exceedance probabilities: {len(results['exceedance'])}")
 print(f"  Percentile scenarios: {len(results['percentiles'])}")
+
+# Export PNG figures to BasinWx
+print("Exporting PNG figures to BasinWx...")
+fig_results = export_figures_to_basinwx(
+    fig_root="$FIG_ROOT",
+    init_dt=init_dt,
+    upload=True
+)
+print(f"  Heatmap PNGs: {len(fig_results['heatmaps'])}")
+print(f"  Meteogram PNGs: {len(fig_results['meteograms'])}")
 EOF
 
 EXPORT_EXIT_CODE=$?

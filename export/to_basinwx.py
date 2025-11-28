@@ -356,6 +356,7 @@ def upload_png_to_basinwx(png_path: str) -> bool:
         True if upload succeeded, False otherwise
     """
     import requests
+    import socket
 
     api_key = os.getenv('DATA_UPLOAD_API_KEY')
     if not api_key:
@@ -364,11 +365,12 @@ def upload_png_to_basinwx(png_path: str) -> bool:
 
     api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
     upload_url = f"{api_url}/api/upload/images"
+    hostname = socket.getfqdn()
 
     try:
         with open(png_path, 'rb') as f:
             files = {'file': (os.path.basename(png_path), f, 'image/png')}
-            headers = {'x-api-key': api_key}
+            headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
             response = requests.post(upload_url, files=files, headers=headers)
 
         if response.status_code == 200:
