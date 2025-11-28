@@ -1,8 +1,9 @@
 # AI Agent Quick Reference - clyfar
 
-**Current Task:** Website integration - export module rewrite
-**Status:** Phase 1 pending (tech report review)
-**Session Date:** 2025-11-23
+**Current Task:** CHPC cron setup for 4× daily forecasts
+**Status:** Script paths fixed, awaiting cron verification
+**Last Session:** 2025-11-27
+**Branch:** `integration-clyfar-v0.9.5`
 
 ---
 
@@ -12,12 +13,16 @@
 **Integration:** Uploading forecasts to BasinWx website
 **Dependencies:** brc-tools (installed via `pip install -e`)
 
+**27 Nov Fix:** `scripts/submit_clyfar.sh` paths corrected:
+- Conda: `~/software/pkg/miniforge3` (not miniconda3)
+- Env: `clyfar-nov2025` (not clyfar-2025)
+- Dir: `~/gits/clyfar` (not ~/clyfar)
+
 **Resume work:**
 ```bash
-conda activate clyfar-2025
-cd ~/PycharmProjects/clyfar
-# Read: INTEGRATION_GUIDE.md
-# Status: Export module needs complete rewrite
+conda activate clyfar-nov2025
+cd ~/gits/clyfar  # CHPC path
+# Test: sbatch scripts/submit_clyfar.sh
 ```
 
 ---
