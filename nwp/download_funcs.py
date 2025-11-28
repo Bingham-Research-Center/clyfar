@@ -74,7 +74,7 @@ def herbie_load_variable(
         try:
             ds = _herbie_fetch_slice(
                 init_dt=init_dt,
-                fxx=fxx,
+                fxx=int(fxx),  # Convert numpy.int64 to Python int for timedelta
                 product=resol,
                 member=member,
                 query=gefs_query,

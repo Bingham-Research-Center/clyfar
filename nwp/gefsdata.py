@@ -213,7 +213,7 @@ class GEFSData(DataFile):
         """
         herbie_inst = cls.setup_herbie(
             inittime,
-            fxx=fxx,
+            fxx=int(fxx),  # Ensure Python int for Herbie timedelta
             product=product,
             model="gefs",
             member=member,
@@ -297,7 +297,7 @@ class GEFSData(DataFile):
         Args:
             inittime (datetime.datetime)
         """
-        H = cls.setup_herbie(inittime, fxx=fxx, product=product, member=member)
+        H = cls.setup_herbie(inittime, fxx=int(fxx), product=product, member=member)
         ds = cls.get_CONUS(q_str, H, remove_grib=remove_grib)
         ds_crop = cls.crop_to_UB(ds)
         return ds_crop
