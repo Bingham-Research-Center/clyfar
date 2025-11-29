@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
+import math
 
 # Import from brc-tools (installed as editable package)
 try:
@@ -33,6 +34,34 @@ except ImportError as e:
     ) from e
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_for_json(obj):
+    """Convert NaN/Inf floats to None for valid JSON serialization.
+
+    JSON spec doesn't allow NaN or Infinity. This function is used as
+    the `default` parameter for json.dump() to convert these values to null.
+    """
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+    if isinstance(obj, np.floating):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return float(obj)
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.ndarray):
+        return [_sanitize_for_json(x) for x in obj.tolist()]
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+
+def _sanitize_list(lst):
+    """Sanitize a list to replace NaN/Inf with None."""
+    return [None if (isinstance(x, (float, np.floating)) and
+            (math.isnan(x) if isinstance(x, float) else np.isnan(x)))
+            else x for x in lst]
+
 
 # Ozone category thresholds (ppb) - from fis/v0p9.py:78-117
 OZONE_CATEGORIES = {
@@ -107,7 +136,7 @@ def export_possibility_heatmaps(
         filepath = os.path.join(output_dir, filename)
 
         with open(filepath, 'w') as f:
-            json.dump(payload, f, indent=2)
+            json.dump(payload, f, indent=2, default=_sanitize_for_json)
 
         logger.info(f"Created {filename} ({len(df)} days)")
         created_files.append(filepath)
@@ -200,7 +229,7 @@ def export_exceedance_probabilities(
     filepath = os.path.join(output_dir, filename)
 
     with open(filepath, 'w') as f:
-        json.dump(payload, f, indent=2)
+        json.dump(payload, f, indent=2, default=_sanitize_for_json)
 
     logger.info(f"Created {filename} (thresholds: {thresholds} ppb)")
 
@@ -274,7 +303,7 @@ def export_percentile_scenarios(
         filepath = os.path.join(output_dir, filename)
 
         with open(filepath, 'w') as f:
-            json.dump(payload, f, indent=2)
+            json.dump(payload, f, indent=2, default=_sanitize_for_json)
 
         logger.info(f"Created {filename} ({len(df)} days)")
         created_files.append(filepath)
