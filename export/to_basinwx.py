@@ -19,6 +19,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional, List
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import numpy as np
@@ -417,7 +418,8 @@ def upload_png_to_basinwx(png_path: str) -> bool:
 def export_figures_to_basinwx(
     fig_root: str,
     init_dt: datetime,
-    upload: bool = True
+    upload: bool = True,
+    max_workers: int = 8
 ) -> Dict[str, List[str]]:
     """Export heatmap and meteogram PNGs to BasinWx.
 
@@ -429,33 +431,44 @@ def export_figures_to_basinwx(
         fig_root: Root directory containing figures
         init_dt: Forecast initialization datetime
         upload: If True, upload to BasinWx API
+        max_workers: Max parallel upload threads (default 8)
 
     Returns:
         Dictionary with 'heatmaps' and 'meteograms' keys mapping to file lists
     """
     results = {"heatmaps": [], "meteograms": []}
+    all_pngs = []
 
-    # Find heatmap PNGs
+    # Collect heatmap PNGs
     heatmap_dir = os.path.join(fig_root, "heatmap")
     if os.path.isdir(heatmap_dir):
         for f in os.listdir(heatmap_dir):
             if f.endswith('.png'):
                 fpath = os.path.join(heatmap_dir, f)
                 results["heatmaps"].append(fpath)
-                if upload:
-                    upload_png_to_basinwx(fpath)
+                all_pngs.append(fpath)
 
-    # Find meteogram PNGs in root
+    # Collect meteogram PNGs in root
     if os.path.isdir(fig_root):
         for f in os.listdir(fig_root):
             if f.endswith('.png') and 'meteogram' in f.lower():
                 fpath = os.path.join(fig_root, f)
                 results["meteograms"].append(fpath)
-                if upload:
-                    upload_png_to_basinwx(fpath)
+                all_pngs.append(fpath)
 
     logger.info(f"Found {len(results['heatmaps'])} heatmaps, "
                 f"{len(results['meteograms'])} meteograms")
+
+    # Parallel upload
+    if upload and all_pngs:
+        logger.info(f"Uploading {len(all_pngs)} PNGs with {max_workers} workers...")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(upload_png_to_basinwx, p): p for p in all_pngs}
+            success = 0
+            for future in as_completed(futures):
+                if future.result():
+                    success += 1
+        logger.info(f"Uploaded {success}/{len(all_pngs)} PNGs")
 
     return results
 
