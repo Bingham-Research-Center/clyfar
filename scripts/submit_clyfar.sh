@@ -19,12 +19,13 @@
 # Purpose: Run Clyfar v0.9.5 ozone forecasts on CHPC compute nodes
 #          instead of login nodes to avoid resource constraints
 #
-# Schedule: Run 4× daily at 03:30, 09:30, 15:30, 21:30 UTC
-#           (3.5 hours after GEFS runs at 00Z, 06Z, 12Z, 18Z)
+# Schedule: Run 4× daily at 05:00, 11:00, 17:00, 23:00 UTC
+#           (5 hours after GEFS runs at 00Z, 06Z, 12Z, 18Z)
+#           MST equivalents: 22:00, 04:00, 10:00, 16:00
 #
 # Usage:
 #   Manual:   sbatch submit_clyfar.sh [YYYYMMDDHH]
-#   Cron:     30 3,9,15,21 * * * sbatch ~/clyfar/scripts/submit_clyfar.sh
+#   Cron:     0 5,11,17,23 * * * sbatch ~/gits/clyfar/scripts/submit_clyfar.sh
 #
 # Arguments:
 #   $1: Optional forecast initialization time (YYYYMMDDHH)
@@ -98,16 +99,17 @@ else
     CURRENT_HOUR=$(date -u '+%H')
     CURRENT_DATE=$(date -u '+%Y%m%d')
 
-    # Determine which GEFS cycle to use
-    if [ "$CURRENT_HOUR" -ge 3 ] && [ "$CURRENT_HOUR" -lt 9 ]; then
+    # Determine which GEFS cycle to use (5hr after each run)
+    # 05Z->00Z, 11Z->06Z, 17Z->12Z, 23Z->18Z
+    if [ "$CURRENT_HOUR" -ge 5 ] && [ "$CURRENT_HOUR" -lt 11 ]; then
         GEFS_HOUR="00"
-    elif [ "$CURRENT_HOUR" -ge 9 ] && [ "$CURRENT_HOUR" -lt 15 ]; then
+    elif [ "$CURRENT_HOUR" -ge 11 ] && [ "$CURRENT_HOUR" -lt 17 ]; then
         GEFS_HOUR="06"
-    elif [ "$CURRENT_HOUR" -ge 15 ] && [ "$CURRENT_HOUR" -lt 21 ]; then
+    elif [ "$CURRENT_HOUR" -ge 17 ] && [ "$CURRENT_HOUR" -lt 23 ]; then
         GEFS_HOUR="12"
     else
-        # After 21Z or before 03Z - use 18Z (might be previous day)
-        if [ "$CURRENT_HOUR" -lt 3 ]; then
+        # 23Z-05Z window -> use 18Z (previous day if before 05Z)
+        if [ "$CURRENT_HOUR" -lt 5 ]; then
             CURRENT_DATE=$(date -u -d "yesterday" '+%Y%m%d')
         fi
         GEFS_HOUR="18"
