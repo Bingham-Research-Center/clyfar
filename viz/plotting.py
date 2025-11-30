@@ -457,16 +457,24 @@ def add_average(ax, df_dict, vrbl_col, average="median", multiplier=1):
 
     members = list(df_dict.keys())
     n_members = len(members)
-    arbitrary_df = df_dict[members[0]]
-    n_times = len(arbitrary_df.index)
+
+    # Find common time index across all members (handles mismatched lengths)
+    common_index = df_dict[members[0]].index
+    for member in members[1:]:
+        common_index = common_index.intersection(df_dict[member].index)
+
+    n_times = len(common_index)
 
     # Create a 2D array to put these values in
     ensemble_values = np.zeros((n_times, n_members))
 
-    # Put the data dictionary into the array
+    # Put the data dictionary into the array (reindex to common timestamps)
     for i, member in enumerate(members):
-        # The multiplier is for unit conversion - better to use pint and metpy
-        ensemble_values[:, i] = df_dict[member][vrbl_col].values # * multiplier
+        member_df = df_dict[member].reindex(common_index)
+        ensemble_values[:, i] = member_df[vrbl_col].values
+
+    # Reference df for plotting uses common index
+    arbitrary_df = df_dict[members[0]].reindex(common_index)
 
     # Calculated the average per time step (over ensemble members)
     # Average will go in a new dataframe "ave_df".
