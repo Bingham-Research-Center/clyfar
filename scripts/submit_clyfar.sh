@@ -6,7 +6,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --output=/uufs/chpc.utah.edu/common/home/%u/logs/basinwx/clyfar_%j.out
 #SBATCH --error=/uufs/chpc.utah.edu/common/home/%u/logs/basinwx/clyfar_%j.err
 #SBATCH --mail-type=FAIL
