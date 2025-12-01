@@ -139,13 +139,10 @@ def export_possibility_heatmaps(
         with open(filepath, 'w') as f:
             json.dump(payload, f, indent=2, default=_sanitize_for_json)
 
-        logger.info(f"Created {filename} ({len(df)} days)")
+        logger.debug(f"Created {filename} ({len(df)} days)")
         created_files.append(filepath)
 
-        # Upload to BasinWx
-        if upload:
-            _upload_to_basinwx(filepath, "forecasts")
-
+    logger.info(f"Created {len(created_files)} possibility heatmap files")
     return created_files
 
 
@@ -233,11 +230,6 @@ def export_exceedance_probabilities(
         json.dump(payload, f, indent=2, default=_sanitize_for_json)
 
     logger.info(f"Created {filename} (thresholds: {thresholds} ppb)")
-
-    # Upload to BasinWx
-    if upload:
-        _upload_to_basinwx(filepath, "forecasts")
-
     return filepath
 
 
@@ -306,13 +298,10 @@ def export_percentile_scenarios(
         with open(filepath, 'w') as f:
             json.dump(payload, f, indent=2, default=_sanitize_for_json)
 
-        logger.info(f"Created {filename} ({len(df)} days)")
+        logger.debug(f"Created {filename} ({len(df)} days)")
         created_files.append(filepath)
 
-        # Upload to BasinWx
-        if upload:
-            _upload_to_basinwx(filepath, "forecasts")
-
+    logger.info(f"Created {len(created_files)} percentile scenario files")
     return created_files
 
 
@@ -320,46 +309,58 @@ def export_all_products(
     dailymax_df_dict: Dict[str, pd.DataFrame],
     init_dt: datetime,
     output_dir: str,
-    upload: bool = True
+    upload: bool = True,
+    max_workers: int = 8
 ) -> Dict[str, List[str]]:
     """Export all 3 data products (63 JSON files total).
 
     Convenience function to generate all forecast products in one call.
+    Files are created first, then uploaded in parallel for better performance.
 
     Args:
         dailymax_df_dict: Dictionary mapping member names to daily-max DataFrames
         init_dt: Forecast initialization datetime (naive UTC)
         output_dir: Directory to save JSON files
-        upload: If True, upload all files to BasinWx API
+        upload: If True, upload all files to BasinWx API in parallel
+        max_workers: Max parallel upload threads (default 8)
 
     Returns:
         Dictionary with keys 'possibility', 'exceedance', 'percentiles' mapping to file lists
     """
     logger.info(f"Exporting all Clyfar forecast products for {init_dt}")
 
+    # Step 1: Create all JSON files (no uploads yet)
     results = {
-        "possibility": export_possibility_heatmaps(dailymax_df_dict, init_dt, output_dir, upload),
-        "exceedance": [export_exceedance_probabilities(dailymax_df_dict, init_dt, output_dir, upload=upload)],
-        "percentiles": export_percentile_scenarios(dailymax_df_dict, init_dt, output_dir, upload=upload)
+        "possibility": export_possibility_heatmaps(dailymax_df_dict, init_dt, output_dir),
+        "exceedance": [export_exceedance_probabilities(dailymax_df_dict, init_dt, output_dir)],
+        "percentiles": export_percentile_scenarios(dailymax_df_dict, init_dt, output_dir)
     }
 
     total_files = len(results["possibility"]) + len(results["exceedance"]) + len(results["percentiles"])
-    logger.info(f"Export complete: {total_files} JSON files created")
+    logger.info(f"Created {total_files} JSON files")
+
+    # Step 2: Upload all files in parallel
+    if upload:
+        all_files = results["possibility"] + results["exceedance"] + results["percentiles"]
+        _parallel_upload_jsons(all_files, "forecasts", max_workers=max_workers)
 
     return results
 
 
-def _upload_to_basinwx(filepath: str, data_type: str):
+def _upload_to_basinwx(filepath: str, data_type: str) -> bool:
     """Upload JSON file to BasinWx API.
 
     Args:
         filepath: Path to JSON file
         data_type: Data type for API endpoint (e.g., 'forecasts')
+
+    Returns:
+        True if upload succeeded, False otherwise
     """
     api_key = os.getenv('DATA_UPLOAD_API_KEY')
     if not api_key:
         logger.warning("DATA_UPLOAD_API_KEY not set, skipping upload")
-        return
+        return False
 
     api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
 
@@ -370,10 +371,44 @@ def _upload_to_basinwx(filepath: str, data_type: str):
             file_data=data_type,  # data_type is 'forecasts', not JSON content
             API_KEY=api_key
         )
-        logger.info(f"Uploaded {os.path.basename(filepath)} to {api_url}")
+        logger.debug(f"Uploaded {os.path.basename(filepath)} to {api_url}")
+        return True
 
     except Exception as e:
         logger.error(f"Failed to upload {filepath}: {e}")
+        return False
+
+
+def _parallel_upload_jsons(filepaths: List[str], data_type: str, max_workers: int = 8) -> int:
+    """Upload multiple JSON files in parallel.
+
+    Args:
+        filepaths: List of JSON file paths to upload
+        data_type: Data type for API endpoint (e.g., 'forecasts')
+        max_workers: Max parallel upload threads (default 8)
+
+    Returns:
+        Number of successful uploads
+    """
+    if not filepaths:
+        return 0
+
+    api_key = os.getenv('DATA_UPLOAD_API_KEY')
+    if not api_key:
+        logger.warning("DATA_UPLOAD_API_KEY not set, skipping all uploads")
+        return 0
+
+    logger.info(f"Uploading {len(filepaths)} JSON files with {max_workers} workers...")
+
+    success = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_upload_to_basinwx, fp, data_type): fp for fp in filepaths}
+        for future in as_completed(futures):
+            if future.result():
+                success += 1
+
+    logger.info(f"Uploaded {success}/{len(filepaths)} JSON files")
+    return success
 
 
 def upload_png_to_basinwx(png_path: str) -> bool:
