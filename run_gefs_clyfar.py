@@ -32,7 +32,12 @@ import sys
 
 import numpy as np
 import pandas as pd
+import requests
 from matplotlib import pyplot as plt
+
+# Special exit code for "data not available yet - retry later"
+# 75 = EX_TEMPFAIL in sysexits.h
+EXIT_CODE_RETRY = 75
 
 from nwp.download_funcs import check_and_create_latlon_files
 from fis.v0p9 import (
@@ -961,6 +966,22 @@ if __name__ == "__main__":
              no_clyfar=args.no_clyfar, no_gefs=args.no_gefs,
              log_fis=args.log_fis,
              )
+    except requests.exceptions.HTTPError as e:
+        # Check if this is a 404 "data not available yet" error
+        if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+            logging.error(f"GEFS data not yet available (404): {e}")
+            logging.info(f"Exiting with code {EXIT_CODE_RETRY} to signal retry later")
+            print(f"\n{'='*60}")
+            print(f"GEFS DATA NOT YET AVAILABLE")
+            print(f"The requested forecast data has not been published to NOMADS yet.")
+            print(f"This is normal - long lead times take longer to become available.")
+            print(f"Exiting with code {EXIT_CODE_RETRY} to trigger automatic retry.")
+            print(f"{'='*60}\n")
+            sys.exit(EXIT_CODE_RETRY)
+        else:
+            # Some other HTTP error - treat as failure
+            run_failed = True
+            raise
     except Exception:
         run_failed = True
         raise

@@ -125,16 +125,22 @@ if ! [[ "$INIT_TIME" =~ ^[0-9]{10}$ ]]; then
     exit 1
 fi
 
-# Check if GEFS data is available (optional pre-check)
-echo "Checking for GEFS data availability..."
-# TODO: Add Herbie check here to verify data exists before running
-# herbie latest --model gefs --product pgrb2a --fxx 0
+# Retry configuration
+# RETRY_COUNT is passed via --export when resubmitting
+RETRY_COUNT=${RETRY_COUNT:-0}
+MAX_RETRIES=3
+RETRY_DELAY_MINUTES=30
+EXIT_CODE_RETRY=75  # Must match run_gefs_clyfar.py
+
+echo "Retry status: attempt $((RETRY_COUNT + 1)) of $((MAX_RETRIES + 1))"
 
 # Run Clyfar forecast
 echo "================================================================"
 echo "Running Clyfar forecast for init time: $INIT_TIME"
 echo "================================================================"
 
+# Disable pipefail temporarily so we can capture exit code
+set +e
 python3 run_gefs_clyfar.py \
     -i "$INIT_TIME" \
     -d "$DATA_ROOT" \
@@ -144,8 +150,36 @@ python3 run_gefs_clyfar.py \
     --log-fis
 
 CLYFAR_EXIT_CODE=$?
+set -e
 
-if [ $CLYFAR_EXIT_CODE -ne 0 ]; then
+# Handle exit codes
+if [ $CLYFAR_EXIT_CODE -eq $EXIT_CODE_RETRY ]; then
+    # Data not available yet - schedule retry
+    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+        NEW_RETRY_COUNT=$((RETRY_COUNT + 1))
+        echo "================================================================"
+        echo "GEFS data not available yet."
+        echo "Scheduling retry $NEW_RETRY_COUNT of $MAX_RETRIES in $RETRY_DELAY_MINUTES minutes..."
+        echo "================================================================"
+
+        # Submit new job with delay
+        RETRY_JOB_ID=$(sbatch --parsable \
+               --begin=now+${RETRY_DELAY_MINUTES}minutes \
+               --export=ALL,RETRY_COUNT=$NEW_RETRY_COUNT \
+               "$CLYFAR_DIR/scripts/submit_clyfar.sh" "$INIT_TIME")
+
+        echo "Retry job $RETRY_JOB_ID submitted for $(date -u -d "+${RETRY_DELAY_MINUTES} minutes" '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "This job exiting successfully (retry scheduled)."
+        exit 0  # This job succeeded (it scheduled the retry)
+    else
+        echo "================================================================"
+        echo "ERROR: Max retries ($MAX_RETRIES) exceeded."
+        echo "GEFS data still not available after $((MAX_RETRIES * RETRY_DELAY_MINUTES)) minutes."
+        echo "Manual intervention may be required."
+        echo "================================================================"
+        exit 1
+    fi
+elif [ $CLYFAR_EXIT_CODE -ne 0 ]; then
     echo "ERROR: Clyfar forecast failed with exit code $CLYFAR_EXIT_CODE"
     exit $CLYFAR_EXIT_CODE
 fi
