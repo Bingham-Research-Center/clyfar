@@ -458,6 +458,8 @@ def export_figures_to_basinwx(
 ) -> Dict[str, List[str]]:
     """Export heatmap and meteogram PNGs to BasinWx.
 
+    Only uploads files matching the current init_dt to avoid re-uploading old runs.
+
     Looks for figures in:
     - {fig_root}/heatmap/*.png (heatmaps)
     - {fig_root}/meteograms/*.png (new standard location)
@@ -466,7 +468,7 @@ def export_figures_to_basinwx(
 
     Args:
         fig_root: Root directory containing figures
-        init_dt: Forecast initialization datetime
+        init_dt: Forecast initialization datetime (used to filter files)
         upload: If True, upload to BasinWx API
         max_workers: Max parallel upload threads (default 8)
 
@@ -476,11 +478,23 @@ def export_figures_to_basinwx(
     results = {"heatmaps": [], "meteograms": []}
     all_pngs = []
 
+    # Generate init time patterns to match in filenames
+    # Filename patterns: heatmap_UB-dailymax_ozone_20251130-1800_clyfar030.png
+    #                    meteogram_UB-repr_temp_20251130-1800_GEFS.png
+    init_pattern = init_dt.strftime('%Y%m%d-%H%M')  # e.g., "20251130-1800"
+    init_pattern_alt = init_dt.strftime('%Y%m%d_%H')  # e.g., "20251130_18" for folder names
+
+    logger.info(f"Filtering PNGs for init time: {init_pattern}")
+
+    def matches_init_time(filename: str) -> bool:
+        """Check if filename contains the current run's init time."""
+        return init_pattern in filename or init_pattern_alt in filename
+
     # Collect heatmap PNGs from {fig_root}/heatmap/
     heatmap_dir = os.path.join(fig_root, "heatmap")
     if os.path.isdir(heatmap_dir):
         for f in os.listdir(heatmap_dir):
-            if f.endswith('.png'):
+            if f.endswith('.png') and matches_init_time(f):
                 fpath = os.path.join(heatmap_dir, f)
                 results["heatmaps"].append(fpath)
                 all_pngs.append(fpath)
@@ -492,13 +506,10 @@ def export_figures_to_basinwx(
         os.path.join(fig_root, "optim_pessim"),  # Optimist/pessimist percentile meteograms
     ]
 
-    # Also check dated subdirectories (legacy: {fig_root}/{YYYYMMDD_HHZ}/)
-    if os.path.isdir(fig_root):
-        for item in os.listdir(fig_root):
-            item_path = os.path.join(fig_root, item)
-            # Match dated folders like 20251130_1800Z
-            if os.path.isdir(item_path) and len(item) == 13 and item[8] == '_':
-                meteogram_dirs.append(item_path)
+    # Also check the dated subdirectory for THIS run only (legacy support)
+    dated_subdir = os.path.join(fig_root, init_dt.strftime('%Y%m%d_%H%MZ'))
+    if os.path.isdir(dated_subdir):
+        meteogram_dirs.append(dated_subdir)
 
     # Search all meteogram directories
     seen_files = set()  # Avoid duplicates
@@ -506,13 +517,14 @@ def export_figures_to_basinwx(
         if os.path.isdir(mdir):
             for f in os.listdir(mdir):
                 if f.endswith('.png') and 'meteogram' in f.lower() and f not in seen_files:
-                    fpath = os.path.join(mdir, f)
-                    results["meteograms"].append(fpath)
-                    all_pngs.append(fpath)
-                    seen_files.add(f)
+                    if matches_init_time(f):
+                        fpath = os.path.join(mdir, f)
+                        results["meteograms"].append(fpath)
+                        all_pngs.append(fpath)
+                        seen_files.add(f)
 
     logger.info(f"Found {len(results['heatmaps'])} heatmaps, "
-                f"{len(results['meteograms'])} meteograms")
+                f"{len(results['meteograms'])} meteograms for {init_pattern}")
 
     # Parallel upload
     if upload and all_pngs:
