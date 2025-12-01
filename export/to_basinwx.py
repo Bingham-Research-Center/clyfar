@@ -424,8 +424,10 @@ def export_figures_to_basinwx(
     """Export heatmap and meteogram PNGs to BasinWx.
 
     Looks for figures in:
-    - {fig_root}/heatmap/*.png
-    - {fig_root}/*.png (meteograms)
+    - {fig_root}/heatmap/*.png (heatmaps)
+    - {fig_root}/meteograms/*.png (new standard location)
+    - {fig_root}/{YYYYMMDD_HHZ}/*.png (legacy dated subdirs)
+    - {fig_root}/*.png (root fallback)
 
     Args:
         fig_root: Root directory containing figures
@@ -439,7 +441,7 @@ def export_figures_to_basinwx(
     results = {"heatmaps": [], "meteograms": []}
     all_pngs = []
 
-    # Collect heatmap PNGs
+    # Collect heatmap PNGs from {fig_root}/heatmap/
     heatmap_dir = os.path.join(fig_root, "heatmap")
     if os.path.isdir(heatmap_dir):
         for f in os.listdir(heatmap_dir):
@@ -448,13 +450,31 @@ def export_figures_to_basinwx(
                 results["heatmaps"].append(fpath)
                 all_pngs.append(fpath)
 
-    # Collect meteogram PNGs in root
+    # Collect meteogram PNGs from multiple locations
+    meteogram_dirs = [
+        fig_root,  # Root fallback
+        os.path.join(fig_root, "meteograms"),  # New standard location (GEFS meteograms)
+        os.path.join(fig_root, "optim_pessim"),  # Optimist/pessimist percentile meteograms
+    ]
+
+    # Also check dated subdirectories (legacy: {fig_root}/{YYYYMMDD_HHZ}/)
     if os.path.isdir(fig_root):
-        for f in os.listdir(fig_root):
-            if f.endswith('.png') and 'meteogram' in f.lower():
-                fpath = os.path.join(fig_root, f)
-                results["meteograms"].append(fpath)
-                all_pngs.append(fpath)
+        for item in os.listdir(fig_root):
+            item_path = os.path.join(fig_root, item)
+            # Match dated folders like 20251130_1800Z
+            if os.path.isdir(item_path) and len(item) == 13 and item[8] == '_':
+                meteogram_dirs.append(item_path)
+
+    # Search all meteogram directories
+    seen_files = set()  # Avoid duplicates
+    for mdir in meteogram_dirs:
+        if os.path.isdir(mdir):
+            for f in os.listdir(mdir):
+                if f.endswith('.png') and 'meteogram' in f.lower() and f not in seen_files:
+                    fpath = os.path.join(mdir, f)
+                    results["meteograms"].append(fpath)
+                    all_pngs.append(fpath)
+                    seen_files.add(f)
 
     logger.info(f"Found {len(results['heatmaps'])} heatmaps, "
                 f"{len(results['meteograms'])} meteograms")

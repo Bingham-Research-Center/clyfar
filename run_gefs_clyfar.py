@@ -443,10 +443,11 @@ def visualize_results(results: Dict[str, Dict[str, pd.DataFrame]],
         fname = utils.create_meteogram_fname(init_dt_dict['naive'],
                                     "UB-repr", variable, "GEFS")
 
-        dated_rootdir = make_dated_rootdir(clyfar_fig_root, init_dt_dict)
-        utils.try_create(dated_rootdir)
+        # Save to {fig_root}/meteograms/ for consistency with heatmaps pattern
+        meteogram_dir = os.path.join(clyfar_fig_root, "meteograms")
+        utils.try_create(meteogram_dir)
 
-        fig.savefig(fpath := os.path.join(dated_rootdir, fname))
+        fig.savefig(fpath := os.path.join(meteogram_dir, fname))
         print("Saved figure to", fpath)
         plt.close(fig)
     return
