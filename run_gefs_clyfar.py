@@ -40,6 +40,7 @@ from matplotlib import pyplot as plt
 EXIT_CODE_RETRY_404 = 75      # HTTP 404 - data not yet available (EX_TEMPFAIL)
 EXIT_CODE_RETRY_HERBIE = 76   # KeyError from Herbie (incomplete index file)
 EXIT_CODE_RETRY_NETWORK = 77  # Network timeout or connection error
+EXIT_CODE_RETRY_TIMEOUT = 78  # Pool/processing timeout (may be transient)
 # Legacy alias for backwards compatibility
 EXIT_CODE_RETRY = EXIT_CODE_RETRY_404
 
@@ -177,7 +178,13 @@ def get_optimal_process_count(ncpus=None) -> int:
 
 def process_member_variable(args):
     member, variable, processor_map = args
-    return variable, member, processor_map[variable](member)[1]
+    import time
+    start = time.time()
+    logging.info(f"[WORKER] Starting {variable}/{member}")
+    result = processor_map[variable](member)[1]
+    elapsed = time.time() - start
+    logging.info(f"[WORKER] Completed {variable}/{member} in {elapsed:.1f}s")
+    return variable, member, result
 
 class ParallelEnsembleProcessor:
     """
@@ -326,12 +333,32 @@ class ParallelEnsembleProcessor:
         Nested dictionary mapping variables and member identifiers to processed DataFrames
         """
         processor_map = self.processor_map
+        tasks = [(member, variable, processor_map) for member in member_names for variable in variables]
+        total_tasks = len(tasks)
+        print(f"[MAIN] Submitting {total_tasks} tasks to {self.process_count} workers...")
+
+        # Use map_async with timeout for better diagnostics
+        TIMEOUT_PER_TASK = 300  # 5 min per task, generous for slow downloads
+        TOTAL_TIMEOUT = max(TIMEOUT_PER_TASK * total_tasks // self.process_count, 5400)  # At least 90 min
 
         with mp.get_context('spawn').Pool(processes=self.process_count) as pool:
-            results = pool.map(
-                process_member_variable,
-                [(member, variable, processor_map) for member in member_names for variable in variables],
-            )
+            async_result = pool.map_async(process_member_variable, tasks)
+
+            # Monitor progress while waiting
+            import time
+            start_time = time.time()
+            while not async_result.ready():
+                elapsed = time.time() - start_time
+                remaining = async_result._number_left if hasattr(async_result, '_number_left') else '?'
+                print(f"[MAIN] Waiting... {elapsed:.0f}s elapsed, ~{remaining} tasks remaining")
+                if elapsed > TOTAL_TIMEOUT:
+                    print(f"[MAIN] TIMEOUT after {elapsed:.0f}s - terminating pool")
+                    pool.terminate()
+                    raise TimeoutError(f"Parallel processing timed out after {TOTAL_TIMEOUT}s")
+                async_result.wait(timeout=60)  # Check every 60s
+
+            results = async_result.get(timeout=60)  # Final get with short timeout
+            print(f"[MAIN] All {total_tasks} tasks completed in {time.time() - start_time:.0f}s")
 
         nested_results = {}
         for variable, member, df in results:
@@ -998,7 +1025,7 @@ if __name__ == "__main__":
         print(f"{'='*60}\n")
         sys.exit(EXIT_CODE_RETRY_HERBIE)
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
-            ConnectionResetError, TimeoutError) as e:
+            ConnectionResetError) as e:
         # Network errors are usually transient
         logging.error(f"Network error (retryable): {e}")
         print(f"\n{'='*60}")
@@ -1007,6 +1034,15 @@ if __name__ == "__main__":
         print(f"Exiting with code {EXIT_CODE_RETRY_NETWORK} to trigger automatic retry.")
         print(f"{'='*60}\n")
         sys.exit(EXIT_CODE_RETRY_NETWORK)
+    except TimeoutError as e:
+        # Pool/processing timeout - may be transient (system load, slow I/O)
+        logging.error(f"Processing timeout (retryable): {e}")
+        print(f"\n{'='*60}")
+        print(f"PROCESSING TIMEOUT - POOL DID NOT COMPLETE")
+        print(f"Error: {e}")
+        print(f"Exiting with code {EXIT_CODE_RETRY_TIMEOUT} to trigger automatic retry.")
+        print(f"{'='*60}\n")
+        sys.exit(EXIT_CODE_RETRY_TIMEOUT)
     except Exception:
         run_failed = True
         raise
