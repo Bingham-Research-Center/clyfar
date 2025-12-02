@@ -35,9 +35,13 @@ import pandas as pd
 import requests
 from matplotlib import pyplot as plt
 
-# Special exit code for "data not available yet - retry later"
-# 75 = EX_TEMPFAIL in sysexits.h
-EXIT_CODE_RETRY = 75
+# Special exit codes for retryable failures
+# 75-79 range: submit_clyfar.sh treats these as "retry later"
+EXIT_CODE_RETRY_404 = 75      # HTTP 404 - data not yet available (EX_TEMPFAIL)
+EXIT_CODE_RETRY_HERBIE = 76   # KeyError from Herbie (incomplete index file)
+EXIT_CODE_RETRY_NETWORK = 77  # Network timeout or connection error
+# Legacy alias for backwards compatibility
+EXIT_CODE_RETRY = EXIT_CODE_RETRY_404
 
 from nwp.download_funcs import check_and_create_latlon_files
 from fis.v0p9 import (
@@ -983,6 +987,26 @@ if __name__ == "__main__":
             # Some other HTTP error - treat as failure
             run_failed = True
             raise
+    except KeyError as e:
+        # KeyError typically from Herbie when index file is incomplete
+        logging.error(f"Herbie index incomplete (KeyError): {e}")
+        print(f"\n{'='*60}")
+        print(f"HERBIE INDEX FILE INCOMPLETE")
+        print(f"The GEFS index (.idx) file may not be fully published yet.")
+        print(f"KeyError: {e}")
+        print(f"Exiting with code {EXIT_CODE_RETRY_HERBIE} to trigger automatic retry.")
+        print(f"{'='*60}\n")
+        sys.exit(EXIT_CODE_RETRY_HERBIE)
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
+            ConnectionResetError, TimeoutError) as e:
+        # Network errors are usually transient
+        logging.error(f"Network error (retryable): {e}")
+        print(f"\n{'='*60}")
+        print(f"NETWORK ERROR - TRANSIENT FAILURE")
+        print(f"Error: {e}")
+        print(f"Exiting with code {EXIT_CODE_RETRY_NETWORK} to trigger automatic retry.")
+        print(f"{'='*60}\n")
+        sys.exit(EXIT_CODE_RETRY_NETWORK)
     except Exception:
         run_failed = True
         raise

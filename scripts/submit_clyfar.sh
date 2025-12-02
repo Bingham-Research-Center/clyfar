@@ -125,9 +125,15 @@ fi
 RETRY_COUNT=${RETRY_COUNT:-0}
 MAX_RETRIES=3
 RETRY_DELAY_MINUTES=30
-EXIT_CODE_RETRY=75  # Must match run_gefs_clyfar.py
+# Retryable exit codes (must match run_gefs_clyfar.py):
+#   75 = HTTP 404 (data not yet available)
+#   76 = Herbie KeyError (incomplete index file)
+#   77 = Network timeout/connection error
+EXIT_CODE_RETRY_MIN=75
+EXIT_CODE_RETRY_MAX=79
 
 echo "Retry status: attempt $((RETRY_COUNT + 1)) of $((MAX_RETRIES + 1))"
+echo "DEBUG: RETRY_COUNT=$RETRY_COUNT, MAX_RETRIES=$MAX_RETRIES, RETRY_CODES=${EXIT_CODE_RETRY_MIN}-${EXIT_CODE_RETRY_MAX}"
 
 # Run Clyfar forecast
 echo "================================================================"
@@ -147,13 +153,16 @@ python3 run_gefs_clyfar.py \
 CLYFAR_EXIT_CODE=$?
 set -e
 
+echo "DEBUG: Python exit code = $CLYFAR_EXIT_CODE"
+
 # Handle exit codes
-if [ $CLYFAR_EXIT_CODE -eq $EXIT_CODE_RETRY ]; then
-    # Data not available yet - schedule retry
+# Retryable codes: 75-79 (404, KeyError, network errors)
+if [ $CLYFAR_EXIT_CODE -ge $EXIT_CODE_RETRY_MIN ] && [ $CLYFAR_EXIT_CODE -le $EXIT_CODE_RETRY_MAX ]; then
+    # Transient failure - schedule retry
     if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
         NEW_RETRY_COUNT=$((RETRY_COUNT + 1))
         echo "================================================================"
-        echo "GEFS data not available yet."
+        echo "RETRYABLE FAILURE (exit code $CLYFAR_EXIT_CODE)"
         echo "Scheduling retry $NEW_RETRY_COUNT of $MAX_RETRIES in $RETRY_DELAY_MINUTES minutes..."
         echo "================================================================"
 
