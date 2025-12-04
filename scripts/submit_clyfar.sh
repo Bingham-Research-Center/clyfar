@@ -123,7 +123,7 @@ fi
 # Retry configuration
 # RETRY_COUNT is passed via --export when resubmitting
 RETRY_COUNT=${RETRY_COUNT:-0}
-MAX_RETRIES=3
+MAX_RETRIES=5
 RETRY_DELAY_MINUTES=30
 # Retryable exit codes (must match run_gefs_clyfar.py):
 #   75 = HTTP 404 (data not yet available)
@@ -142,13 +142,22 @@ echo "================================================================"
 
 # Disable pipefail temporarily so we can capture exit code
 set +e
+
+# On final retry, allow incomplete data (fill with NaNs)
+INCOMPLETE_FLAG=""
+if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+    echo "Final retry attempt - will proceed with incomplete data if needed"
+    INCOMPLETE_FLAG="--allow-incomplete"
+fi
+
 python3 run_gefs_clyfar.py \
     -i "$INIT_TIME" \
     -d "$DATA_ROOT" \
     -f "$FIG_ROOT" \
     -n "$SLURM_CPUS_PER_TASK" \
     -m all \
-    --log-fis
+    --log-fis \
+    $INCOMPLETE_FLAG
 
 CLYFAR_EXIT_CODE=$?
 set -e

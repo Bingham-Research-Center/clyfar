@@ -967,6 +967,9 @@ if __name__ == "__main__":
     parser.add_argument(
         '--serial-debug', action='store_true',
         help='Process members sequentially (no multiprocessing) for debugging')
+    parser.add_argument(
+        '--allow-incomplete', action='store_true',
+        help='Proceed with NaN-filled data if some forecast hours are unavailable (final retry)')
 
     args = parser.parse_args()
     # Leave maxhr for now - not implemented
@@ -1002,14 +1005,22 @@ if __name__ == "__main__":
         # Check if this is a 404 "data not available yet" error
         if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
             logging.error(f"GEFS data not yet available (404): {e}")
-            logging.info(f"Exiting with code {EXIT_CODE_RETRY} to signal retry later")
-            print(f"\n{'='*60}")
-            print(f"GEFS DATA NOT YET AVAILABLE")
-            print(f"The requested forecast data has not been published to NOMADS yet.")
-            print(f"This is normal - long lead times take longer to become available.")
-            print(f"Exiting with code {EXIT_CODE_RETRY} to trigger automatic retry.")
-            print(f"{'='*60}\n")
-            sys.exit(EXIT_CODE_RETRY)
+            if args.allow_incomplete:
+                logging.warning("--allow-incomplete set; proceeding with partial data")
+                print(f"\n{'='*60}")
+                print(f"GEFS DATA INCOMPLETE - PROCEEDING WITH NaNs")
+                print(f"Some forecast hours unavailable; filling with NaN.")
+                print(f"{'='*60}\n")
+                # Don't exit - let processing continue with NaNs
+            else:
+                logging.info(f"Exiting with code {EXIT_CODE_RETRY} to signal retry later")
+                print(f"\n{'='*60}")
+                print(f"GEFS DATA NOT YET AVAILABLE")
+                print(f"The requested forecast data has not been published to NOMADS yet.")
+                print(f"This is normal - long lead times take longer to become available.")
+                print(f"Exiting with code {EXIT_CODE_RETRY} to trigger automatic retry.")
+                print(f"{'='*60}\n")
+                sys.exit(EXIT_CODE_RETRY)
         else:
             # Some other HTTP error - treat as failure
             run_failed = True
@@ -1017,13 +1028,21 @@ if __name__ == "__main__":
     except KeyError as e:
         # KeyError typically from Herbie when index file is incomplete
         logging.error(f"Herbie index incomplete (KeyError): {e}")
-        print(f"\n{'='*60}")
-        print(f"HERBIE INDEX FILE INCOMPLETE")
-        print(f"The GEFS index (.idx) file may not be fully published yet.")
-        print(f"KeyError: {e}")
-        print(f"Exiting with code {EXIT_CODE_RETRY_HERBIE} to trigger automatic retry.")
-        print(f"{'='*60}\n")
-        sys.exit(EXIT_CODE_RETRY_HERBIE)
+        if args.allow_incomplete:
+            logging.warning("--allow-incomplete set; proceeding with partial data")
+            print(f"\n{'='*60}")
+            print(f"HERBIE INDEX INCOMPLETE - PROCEEDING WITH NaNs")
+            print(f"KeyError: {e}")
+            print(f"{'='*60}\n")
+            # Don't exit - let processing continue with NaNs
+        else:
+            print(f"\n{'='*60}")
+            print(f"HERBIE INDEX FILE INCOMPLETE")
+            print(f"The GEFS index (.idx) file may not be fully published yet.")
+            print(f"KeyError: {e}")
+            print(f"Exiting with code {EXIT_CODE_RETRY_HERBIE} to trigger automatic retry.")
+            print(f"{'='*60}\n")
+            sys.exit(EXIT_CODE_RETRY_HERBIE)
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
             ConnectionResetError) as e:
         # Network errors are usually transient
