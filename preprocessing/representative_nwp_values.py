@@ -489,10 +489,13 @@ def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
                 value = float(field.squeeze().values)
                 # Valid time = init time + forecast hour (ds.time is init time, not valid time)
                 valid_time = init_dt_naive + datetime.timedelta(hours=int(fxx))
-            except (KeyError, IndexError, ValueError, RuntimeError) as exc:
+            except Exception as exc:
+                # Catch ALL exceptions - missing data at extended range is expected
+                # Herbie can raise various errors for missing index files, HTTP 404s, etc.
                 logger.warning(
-                    "MSLP fetch failed for f%03d (%s); storing NaN",
+                    "MSLP fetch failed for f%03d (%s: %s); storing NaN",
                     fxx,
+                    type(exc).__name__,
                     exc,
                 )
                 logger.debug("Full traceback for f%03d:", fxx, exc_info=True)
