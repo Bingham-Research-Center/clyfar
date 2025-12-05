@@ -2,12 +2,70 @@
 """
 
 import os
+import logging
 
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.colors as mcolors
+from matplotlib.patches import Rectangle
+
+logger = logging.getLogger(__name__)
+
+
+def _identify_missing_times(df, categories):
+    """Identify time indices where all category values are NaN (missing data).
+
+    Args:
+        df: DataFrame with time index and category columns
+        categories: List of category column names
+
+    Returns:
+        List of integer indices where data is missing
+    """
+    missing_indices = []
+    for i in range(len(df.index)):
+        all_nan = True
+        for cat in categories:
+            if cat in df.columns:
+                val = df[cat].iloc[i]
+                if not (np.isnan(val) if isinstance(val, float) else False):
+                    all_nan = False
+                    break
+        if all_nan:
+            missing_indices.append(i)
+    return missing_indices
+
+
+def _add_missing_data_overlay(ax, missing_indices, num_categories, num_times):
+    """Add grey hatched rectangles for missing data times.
+
+    Args:
+        ax: Matplotlib axes
+        missing_indices: List of x indices where data is missing
+        num_categories: Number of y categories (rows)
+        num_times: Total number of time steps (for logging)
+    """
+    if not missing_indices:
+        return
+
+    logger.info(f"Marking {len(missing_indices)} of {num_times} times as missing data")
+
+    for idx in missing_indices:
+        # Add a grey hatched rectangle spanning all categories
+        rect = Rectangle(
+            (idx - 0.5, -0.5),  # x, y position (bottom-left corner)
+            1.0,  # width (one time step)
+            num_categories,  # height (all categories)
+            facecolor='#808080',  # grey
+            alpha=0.6,
+            edgecolor='#404040',
+            linewidth=0.5,
+            hatch='///',  # diagonal hatching
+            zorder=10,  # on top of heatmap
+        )
+        ax.add_patch(rect)
 
 
 def plot_possibility_heatmap(possibility_df):
@@ -118,12 +176,26 @@ def plot_ozone_heatmap(df):
     columns containing the possibility values for each category.
     Categories are plotted from bottom to top: background, moderate, elevated, extreme,
     each with its own colorblind-friendly color.
+
+    Missing data (all NaN for a given time) is shown as grey with diagonal hatching.
     """
+    # Process category colors
+    categories, category_colors = process_category_colors()
+
+    # Check for empty dataframe
+    if df.empty or len(df.index) == 0:
+        logger.warning("Empty dataframe passed to plot_ozone_heatmap, creating placeholder")
+        fig, ax = plt.subplots(figsize=(12, 3), dpi=300)
+        ax.text(0.5, 0.5, "No data available", ha='center', va='center',
+                transform=ax.transAxes, fontsize=14, color='grey')
+        ax.set_title('Ozone Category Possibilities: Uinta Basin (No Data)')
+        return fig, ax
+
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(12, 3), dpi=300)
 
-    # Process category colors
-    categories, category_colors = process_category_colors()
+    # Identify missing times (all categories NaN)
+    missing_indices = _identify_missing_times(df, categories)
 
     # Create a 2D array where rows are categories and columns are timestamps
     heatmap_data = np.array([df[cat].values for cat in categories])
@@ -146,9 +218,8 @@ def plot_ozone_heatmap(df):
                            vmin=0, vmax=1,
                            shading='auto')
 
-    # Customize axes
-    # ax.set_yticks(np.arange(len(categories)))
-    # ax.set_yticklabels(categories)
+    # Add missing data overlay (grey hatched rectangles)
+    _add_missing_data_overlay(ax, missing_indices, len(categories), len(df.index))
 
     # Set x-axis ticks and labels
     step = max(1, len(df.index) // 8) if len(df.index) > 0 else 1
@@ -157,14 +228,16 @@ def plot_ozone_heatmap(df):
     ax.set_xticklabels([df.index[i].strftime('%d %b %y') for i in tick_locations],
                        rotation=45, ha='right')
 
-    # Add colorbar
-    # cbar = plt.colorbar(im)
-    # cbar.set_label('Possibility Value', rotation=270, labelpad=15)
-
     # Labels and title
     ax.set_xlabel('Date')
     ax.set_ylabel('Ozone Categories')
-    plt.title('Ozone Category Possibilities: Uinta Basin')
+
+    # Add note about missing data if any
+    if missing_indices:
+        title_suffix = f" ({len(missing_indices)} times pending)"
+    else:
+        title_suffix = ""
+    plt.title(f'Ozone Category Possibilities: Uinta Basin{title_suffix}')
 
     ax.grid(True, which='major', axis='y', linestyle='-',
                     color='grey', alpha=0.3, linewidth=0.5)
@@ -197,22 +270,32 @@ def plot_dailymax_heatmap(df):
 
     This gives r number of rows that are the ozone categories, and
     give c number of columns that are the days in the time series
-    Midmight to midnight is the grouping. Assume time is local unless
+    Midnight to midnight is the grouping. Assume time is local unless
     it states otherwise.
+
+    Missing data (all NaN for a given day) is shown as grey with diagonal hatching.
     """
+    # Process category colors
+    categories, category_colors = process_category_colors()
+
+    # Check for empty dataframe
+    if df is None or df.empty or len(df.index) == 0:
+        logger.warning("Empty dataframe passed to plot_dailymax_heatmap, creating placeholder")
+        fig, ax = plt.subplots(figsize=(8, 4), dpi=300)
+        ax.text(0.5, 0.5, "No data available", ha='center', va='center',
+                transform=ax.transAxes, fontsize=14, color='grey')
+        ax.set_title('Daily Max Ozone Possibilities: Uinta Basin (No Data)')
+        return fig, ax
+
     num_days = max(len(df.index), 1)
     fig_width = min(24, max(6, num_days * 0.5))
     # Create figure and axis
     fig, ax = plt.subplots(figsize=(fig_width, 4), dpi=300)
 
-    # Process category colors
-    categories, category_colors = process_category_colors()
+    # Identify missing days (all categories NaN)
+    missing_indices = _identify_missing_times(df, categories)
 
     # Create a 2D array where rows are categories and columns are daily max timestamps
-
-    # First we need to compute daily max values for each midnight-to-midnight period
-
-
     heatmap_data = np.array([df[cat].values for cat in categories])
 
     # Create meshgrid for plotting
@@ -233,9 +316,8 @@ def plot_dailymax_heatmap(df):
                            vmin=0, vmax=1,
                            shading='auto')
 
-    # Customize axes
-    # ax.set_yticks(np.arange(len(categories)))
-    # ax.set_yticklabels(categories)
+    # Add missing data overlay (grey hatched rectangles)
+    _add_missing_data_overlay(ax, missing_indices, len(categories), len(df.index))
 
     # Set x-axis ticks and labels
     step = max(1, num_days // 8) if num_days > 8 else 1
@@ -244,14 +326,16 @@ def plot_dailymax_heatmap(df):
     ax.set_xticklabels([df.index[i].strftime('%d %b %y') for i in tick_locations],
                        rotation=45, ha='right')
 
-    # Add colorbar
-    # cbar = plt.colorbar(im)
-    # cbar.set_label('Possibility Value', rotation=270, labelpad=15)
-
     # Labels and title
     ax.set_xlabel('Date')
     ax.set_ylabel('Ozone Categories')
-    plt.title('Ozone Category Possibilities: Uinta Basin')
+
+    # Add note about missing data if any
+    if missing_indices:
+        title_suffix = f" ({len(missing_indices)} days pending)"
+    else:
+        title_suffix = ""
+    plt.title(f'Daily Max Ozone Possibilities: Uinta Basin{title_suffix}')
 
     ax.grid(True, which='major', axis='y', linestyle='-',
             color='grey', alpha=0.3, linewidth=0.5)

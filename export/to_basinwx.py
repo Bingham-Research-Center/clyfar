@@ -76,6 +76,35 @@ OZONE_CATEGORIES = {
 EXCEEDANCE_THRESHOLDS = [30, 50, 60, 75]  # background, moderate, elevated, extreme
 
 
+def _identify_missing_dates(df: pd.DataFrame, categories: List[str]) -> List[str]:
+    """Identify dates where all category values are NaN (missing data).
+
+    Args:
+        df: DataFrame with date index and category columns
+        categories: List of category column names
+
+    Returns:
+        List of ISO date strings where data is missing
+    """
+    missing_dates = []
+    for i in range(len(df.index)):
+        all_nan = True
+        for cat in categories:
+            if cat in df.columns:
+                val = df[cat].iloc[i]
+                # Check if value is NaN
+                try:
+                    if not (pd.isna(val) or (isinstance(val, float) and math.isnan(val))):
+                        all_nan = False
+                        break
+                except (TypeError, ValueError):
+                    all_nan = False
+                    break
+        if all_nan:
+            missing_dates.append(df.index[i].strftime('%Y-%m-%d'))
+    return missing_dates
+
+
 def export_possibility_heatmaps(
     dailymax_df_dict: Dict[str, pd.DataFrame],
     init_dt: datetime,
@@ -88,6 +117,9 @@ def export_possibility_heatmaps(
     - 4 rows = ozone categories (background, moderate, elevated, extreme)
     - N columns = forecast days (~15-17 days)
     - Values = possibility (0.0 to 1.0)
+
+    Missing data (all categories NaN for a date) is marked in metadata
+    for frontend tooltip display ("time unavailable at present").
 
     Args:
         dailymax_df_dict: Dictionary mapping member names to daily-max DataFrames
@@ -105,15 +137,23 @@ def export_possibility_heatmaps(
     categories = ["background", "moderate", "elevated", "extreme"]
 
     for member_name, df in dailymax_df_dict.items():
+        # Identify missing dates for tooltip support
+        missing_dates = _identify_missing_dates(df, categories)
+
         # Extract possibility columns
         heatmap_data = {}
         for cat in categories:
             if cat not in df.columns:
                 logger.warning(f"Category '{cat}' not in {member_name} DataFrame")
-                heatmap_data[cat] = [0.0] * len(df)
+                heatmap_data[cat] = [None] * len(df)  # Use null for missing
             else:
-                # Convert to list, handle NaN
-                values = df[cat].fillna(0.0).tolist()
+                # Convert to list, preserve NaN as null for frontend
+                values = []
+                for v in df[cat].values:
+                    if pd.isna(v):
+                        values.append(None)
+                    else:
+                        values.append(float(v))
                 heatmap_data[cat] = values
 
         # Get forecast dates (index as ISO strings)
@@ -126,10 +166,12 @@ def export_possibility_heatmaps(
                 "product_type": "possibility_heatmap",
                 "categories": categories,
                 "num_days": len(df),
+                "num_missing": len(missing_dates),
                 "data_source": "Clyfar v0.9.5",
                 "units": "possibility (0-1)"
             },
             "forecast_dates": forecast_dates,
+            "missing_dates": missing_dates,  # For frontend tooltip: "time unavailable at present"
             "heatmap": heatmap_data
         }
 
@@ -139,7 +181,7 @@ def export_possibility_heatmaps(
         with open(filepath, 'w') as f:
             json.dump(payload, f, indent=2, default=_sanitize_for_json)
 
-        logger.debug(f"Created {filename} ({len(df)} days)")
+        logger.debug(f"Created {filename} ({len(df)} days, {len(missing_dates)} missing)")
         created_files.append(filepath)
 
     logger.info(f"Created {len(created_files)} possibility heatmap files")

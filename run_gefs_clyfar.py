@@ -843,21 +843,28 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                     print("Saved optimist/pessimist plots to ", subdir)
 
             if do_heatmap:
+                heatmap_count = 0
                 for clyfar_member in clyfar_df_dict.keys():
-                    fig, ax = plot_ozone_heatmap(
-                                    clyfar_df_dict[clyfar_member],
-                                    )
-                    fname = utils.create_meteogram_fname(init_dt_dict['naive'],
-                                    "UB-poss", "ozone",
-                                    clyfar_member, actually_heatmap=True,)
-                    subdir = os.path.join(clyfar_fig_root, "heatmap")
-                    utils.try_create(subdir)
-                    fig.savefig(os.path.join(subdir,fname))
-                    plt.show()
-                    plt.close(fig)
-                    print("Saved 3-h heatmaps of O3 categories to ", subdir)
+                    try:
+                        fig, ax = plot_ozone_heatmap(
+                                        clyfar_df_dict[clyfar_member],
+                                        )
+                        fname = utils.create_meteogram_fname(init_dt_dict['naive'],
+                                        "UB-poss", "ozone",
+                                        clyfar_member, actually_heatmap=True,)
+                        subdir = os.path.join(clyfar_fig_root, "heatmap")
+                        utils.try_create(subdir)
+                        fpath = os.path.join(subdir, fname)
+                        fig.savefig(fpath)
+                        plt.close(fig)
+                        heatmap_count += 1
+                        logger.debug(f"Saved 3-h heatmap: {fname}")
+                    except Exception as e:
+                        logger.error(f"Failed to create 3-h heatmap for {clyfar_member}: {e}")
+                print(f"Saved {heatmap_count} 3-h heatmaps of O3 categories to {subdir}")
 
             if do_dailymax_heatmap:
+                dailymax_count = 0
                 for clyfar_member in clyfar_df_dict.keys():
                     daily_df = dailymax_df_dict.get(clyfar_member)
                     if daily_df is None or daily_df.empty:
@@ -865,16 +872,21 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                                        "due to empty aggregation",
                                        clyfar_member)
                         continue
-                    fig, ax = plot_dailymax_heatmap(daily_df)
-                    fname = utils.create_meteogram_fname(init_dt_dict['naive'],
-                                         "UB-dailymax", "ozone",
-                                         clyfar_member, actually_heatmap=True,)
-                    subdir = os.path.join(clyfar_fig_root, "heatmap")
-                    utils.try_create(subdir)
-                    fig.savefig(os.path.join(subdir,fname))
-                    plt.show()
-                    plt.close(fig)
-                    print("Saved daily-max heatmaps of O3 categories to ", subdir)
+                    try:
+                        fig, ax = plot_dailymax_heatmap(daily_df)
+                        fname = utils.create_meteogram_fname(init_dt_dict['naive'],
+                                             "UB-dailymax", "ozone",
+                                             clyfar_member, actually_heatmap=True,)
+                        subdir = os.path.join(clyfar_fig_root, "heatmap")
+                        utils.try_create(subdir)
+                        fpath = os.path.join(subdir, fname)
+                        fig.savefig(fpath)
+                        plt.close(fig)
+                        dailymax_count += 1
+                        logger.debug(f"Saved daily-max heatmap: {fname}")
+                    except Exception as e:
+                        logger.error(f"Failed to create daily-max heatmap for {clyfar_member}: {e}")
+                print(f"Saved {dailymax_count} daily-max heatmaps of O3 categories to {subdir}")
 
     # Export to BasinWx website
     if save and not no_clyfar and dailymax_df_dict:
