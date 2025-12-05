@@ -126,7 +126,7 @@ class Clyfar(FIS):
 
         # Define Universes of Discourse (UOD)
         self.snow_uod = np.arange(0, 251, 2)        # Snow in mm up to 250mm
-        self.mslp_uod = np.arange(985, 1055.5, 0.5)  # MSLP in hPa
+        self.mslp_uod = np.arange(950, 1070.5, 0.5)  # MSLP in hPa (wide sanity check)
         self.wind_uod = np.arange(0, 15.1, 0.25)    # Wind in m/s
         self.solar_uod = np.arange(0, 805, 5)     # Solar in W/m²
         self.ozone_uod = np.arange(20, 140.1, 0.5)      # Ozone in ppb
