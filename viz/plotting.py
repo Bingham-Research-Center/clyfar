@@ -482,8 +482,8 @@ def add_average(ax, df_dict, vrbl_col, average="median", multiplier=1):
     ave_df = pd.DataFrame(ave_func(ensemble_values, axis=1),
                                 index=arbitrary_df.index)
 
-    # Plot the average
-    ax.plot(df_dict[list(df_dict.keys())[0]].index, ave_df,
+    # Plot the average (use ave_df's index which matches its length)
+    ax.plot(ave_df.index, ave_df.values.flatten(),
                     color='black', lw=2, label=average)
     return ax
 
