@@ -15,6 +15,13 @@ import fasteners
 from nwp.datafile import DataFile
 from utils.download_utils import retry_download_backoff
 
+logger = logging.getLogger(__name__)
+
+# GRIB2 files always start with these 4 bytes
+_GRIB_MAGIC = b'GRIB'
+# Minimum valid GRIB file size (bytes) - subset files are typically 100KB+
+_MIN_GRIB_SIZE = 1000
+
 # At the top of the file, enforce spawn context
 if mp.get_start_method() != 'spawn':
     try:
@@ -81,6 +88,62 @@ class GEFSData(DataFile):
         )
         return H
 
+    @staticmethod
+    def _validate_cached_grib(grib_path, min_size_bytes=_MIN_GRIB_SIZE) -> bool:
+        """
+        Check if a cached GRIB file appears valid.
+
+        Returns True if:
+          - File doesn't exist (Herbie will download fresh)
+          - File exists and passes all validation checks
+
+        Returns False if:
+          - File exists but is too small (truncated download)
+          - File exists but doesn't have GRIB magic number (corrupted)
+
+        Args:
+            grib_path: Path to the GRIB file (string or Path)
+            min_size_bytes: Minimum acceptable file size
+
+        Returns:
+            bool: True if file is valid or missing, False if corrupted
+        """
+        if grib_path is None:
+            return True  # No path = nothing to validate
+
+        if isinstance(grib_path, str):
+            grib_path = Path(grib_path)
+
+        if not grib_path.exists():
+            return True  # No cache = Herbie will download fresh
+
+        try:
+            stat = grib_path.stat()
+
+            # Check 1: Minimum file size (truncated files are tiny)
+            if stat.st_size < min_size_bytes:
+                logger.warning(
+                    f"GRIB cache invalid: {grib_path.name} too small "
+                    f"({stat.st_size} < {min_size_bytes} bytes)"
+                )
+                return False
+
+            # Check 2: GRIB magic number (first 4 bytes)
+            with open(grib_path, 'rb') as f:
+                magic = f.read(4)
+                if magic != _GRIB_MAGIC:
+                    logger.warning(
+                        f"GRIB cache invalid: {grib_path.name} has bad magic "
+                        f"(got {magic!r}, expected {_GRIB_MAGIC!r})"
+                    )
+                    return False
+
+            return True
+
+        except OSError as e:
+            logger.warning(f"GRIB cache validation failed for {grib_path}: {e}")
+            return False  # Can't read = treat as invalid
+
     @classmethod
     @retry_download_backoff(retries=3, backoff_in_seconds=1)
     def safe_get_CONUS(cls, qstr, herbie_inst, remove_grib=True):
@@ -104,6 +167,20 @@ class GEFSData(DataFile):
                             os.remove(path)
                         except FileNotFoundError:
                             pass
+
+            # Validate cached GRIB file before attempting to use it
+            # This catches corrupted files from previous killed jobs
+            grib_path = getattr(herbie_inst, 'grib', None)
+            if grib_path and not cls._validate_cached_grib(grib_path):
+                logger.info(f"Removing invalid cached GRIB: {grib_path}")
+                for path in (herbie_inst.idx, herbie_inst.grib):
+                    if isinstance(path, str) and path and os.path.exists(path):
+                        try:
+                            os.remove(path)
+                            logger.debug(f"Deleted: {path}")
+                        except FileNotFoundError:
+                            pass
+
             attempts = 2
             last_exc = None
             for attempt in range(attempts):
@@ -121,7 +198,6 @@ class GEFSData(DataFile):
                                 except FileNotFoundError:
                                     pass
                         continue
-                    logger = logging.getLogger(__name__)
                     logger.warning(
                         "Herbie download failed for %s f%03d (%s); returning NaNs",
                         herbie_inst.date,
