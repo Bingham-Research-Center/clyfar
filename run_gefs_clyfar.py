@@ -590,12 +590,14 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
             'solar': solar_val,
         }
         clipped_flags = {}
+        nan_inputs = []
         for v, val in val_map.items():
             u = clyfar.universes.get(v)
             if u is None:
                 continue
             umin, umax = float(u.min()), float(u.max())
             if not np.isfinite(val):
+                nan_inputs.append(v)
                 continue
             if val < umin or val > umax:
                 logger.warning(f"UOD clip: {v}={val:.3f} outside [{umin:.3f},{umax:.3f}] at {dt}")
@@ -605,10 +607,18 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
                 clipped_flags[v] = False
             val_map[v] = val
 
+        if nan_inputs:
+            logger.debug(f"NaN inputs at {dt}: {nan_inputs}")
+
         snow_val = val_map['snow']
         mslp_val = val_map['mslp']
         wind_val = val_map['wind']
         solar_val = val_map['solar']
+
+        # Log first few timesteps for debugging
+        if nm == 0 and len(poss_records) < 3:
+            logger.info(f"FIS inputs at {dt}: snow={snow_val:.1f}mm mslp={mslp_val:.1f}hPa "
+                       f"wind={wind_val:.2f}m/s solar={solar_val:.1f}W/m²")
 
         # Use the variables in the function call
         pc_dict, poss_df = clyfar.compute_ozone(
