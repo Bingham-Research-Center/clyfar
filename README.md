@@ -83,6 +83,13 @@ Clyfar predictions are intended to be pushed to the BasinWx website (`basinwx.co
 - `DATA_UPLOAD_API_KEY`: 32-char hex key for BasinWx uploads
 - `BASINWX_API_URL`: https://basinwx.com (optional, defaults to this)
 
+> **TODO (Operations):** Herbie cache management needs improvement. Currently cached GRIB/idx files can become stale or corrupted, causing failures on retry. Options to implement:
+> 1. Add `--fresh-cache` CLI flag to clear cache before run
+> 2. Use per-job temp cache: `export CLYFAR_HERBIE_CACHE="/tmp/herbie_${SLURM_JOB_ID}"`
+> 3. Add cache validation/cleanup to `submit_clyfar.sh`
+>
+> For now, manually clear before ad-hoc runs: `rm -rf ~/basinwx-data/clyfar/herbie_cache/*`
+
 ## Related Repositories and Knowledge Base
 - Technical report (LaTeX, local path): `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
 - Knowledge base (local path): `/Users/johnlawson/Documents/GitHub/brc-knowledge`
