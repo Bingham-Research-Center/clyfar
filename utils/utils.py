@@ -252,11 +252,17 @@ def get_valid_forecast_init(current_dt=None, required_delay_hours=8,
     """Determines valid forecast initialization time accounting for data availability."""
 
     if force_init_dt:
+        # Ensure we have a UTC-aware datetime before converting
+        if force_init_dt.tzinfo is None:
+            # Naive datetime from CLI is assumed to be UTC
+            utc_dt = pytz.utc.localize(force_init_dt)
+        else:
+            utc_dt = force_init_dt.astimezone(pytz.utc)
+
         init_times = {
-            # 'utc': force_init_dt.astimezone(pytz.utc),
-            'utc': force_init_dt.replace(tzinfo=pytz.timezone('UTC')),
+            'utc': utc_dt,
             'naive': force_init_dt.replace(tzinfo=None),
-            'local': force_init_dt.astimezone(pytz.timezone('US/Mountain')),
+            'local': utc_dt.astimezone(pytz.timezone('US/Mountain')),
             'skipped': []
         }
         return init_times
