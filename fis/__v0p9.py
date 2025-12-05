@@ -47,7 +47,7 @@ solar_cats = {
 snow_uod = np.arange(0, 251, 2)
 
 # This is just valid for KVEL
-mslp_uod = np.arange(995E2, 1050.1E2, 0.5E2)
+mslp_uod = np.arange(985E2, 1055.1E2, 0.5E2)
 
 # Wind has sigmoid. m/s
 wind_uod = np.arange(0, 15.1, 0.25)
