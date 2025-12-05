@@ -24,12 +24,13 @@
 #           MST equivalents: 21:30, 03:30, 09:30, 15:30
 #
 # Usage:
-#   Manual:   sbatch submit_clyfar.sh [YYYYMMDDHH]
+#   Manual:   sbatch submit_clyfar.sh [YYYYMMDDHH] [--no-retry]
 #   Cron:     30 4,10,16,22 * * * sbatch ~/gits/clyfar/scripts/submit_clyfar.sh
 #
 # Arguments:
 #   $1: Optional forecast initialization time (YYYYMMDDHH)
 #       If not provided, auto-detects most recent GEFS run
+#   --no-retry: Disable automatic retry on transient failures (for ad-hoc runs)
 #
 # Environment variables required (set in ~/.bashrc_basinwx):
 #   - DATA_UPLOAD_API_KEY
@@ -86,10 +87,25 @@ cd "$CLYFAR_DIR" || {
     exit 1
 }
 
+# Parse arguments
+NO_RETRY=false
+INIT_TIME=""
+
+for arg in "$@"; do
+    case $arg in
+        --no-retry)
+            NO_RETRY=true
+            echo "Ad-hoc mode: automatic retries disabled"
+            ;;
+        *)
+            # Assume it's the init time
+            INIT_TIME=$arg
+            ;;
+    esac
+done
+
 # Determine forecast initialization time
-if [ $# -eq 1 ]; then
-    # User provided init time (YYYYMMDDHH format)
-    INIT_TIME=$1
+if [ -n "$INIT_TIME" ]; then
     echo "Using provided init time: $INIT_TIME"
 else
     # Auto-detect most recent GEFS run using Python datetime math
@@ -123,7 +139,11 @@ fi
 # Retry configuration
 # RETRY_COUNT is passed via --export when resubmitting
 RETRY_COUNT=${RETRY_COUNT:-0}
-MAX_RETRIES=5
+if [ "$NO_RETRY" = true ]; then
+    MAX_RETRIES=0
+else
+    MAX_RETRIES=5
+fi
 RETRY_DELAY_MINUTES=30
 # Retryable exit codes (must match run_gefs_clyfar.py):
 #   75 = HTTP 404 (data not yet available)
