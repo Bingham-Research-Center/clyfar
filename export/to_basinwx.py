@@ -453,8 +453,37 @@ def _parallel_upload_jsons(filepaths: List[str], data_type: str, max_workers: in
     return success
 
 
+def _upload_single_png(png_path: str, session, upload_url: str, headers: dict) -> bool:
+    """Upload a single PNG using a shared session.
+
+    Args:
+        png_path: Path to PNG file
+        session: requests.Session object (shared across threads)
+        upload_url: API endpoint URL
+        headers: Request headers (api key, hostname)
+
+    Returns:
+        True if upload succeeded, False otherwise
+    """
+    try:
+        with open(png_path, 'rb') as f:
+            files = {'file': (os.path.basename(png_path), f, 'image/png')}
+            response = session.post(upload_url, files=files, headers=headers, timeout=60)
+
+        if response.status_code == 200:
+            logger.info(f"Uploaded PNG: {os.path.basename(png_path)}")
+            return True
+        else:
+            logger.error(f"PNG upload failed ({response.status_code}): {response.text}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to upload PNG {png_path}: {e}")
+        return False
+
+
 def upload_png_to_basinwx(png_path: str) -> bool:
-    """Upload a PNG image to BasinWx API.
+    """Upload a PNG image to BasinWx API (standalone version).
 
     Args:
         png_path: Path to PNG file
@@ -473,23 +502,10 @@ def upload_png_to_basinwx(png_path: str) -> bool:
     api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
     upload_url = f"{api_url}/api/upload/images"
     hostname = socket.getfqdn()
+    headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
 
-    try:
-        with open(png_path, 'rb') as f:
-            files = {'file': (os.path.basename(png_path), f, 'image/png')}
-            headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
-            response = requests.post(upload_url, files=files, headers=headers)
-
-        if response.status_code == 200:
-            logger.info(f"Uploaded PNG: {os.path.basename(png_path)}")
-            return True
-        else:
-            logger.error(f"PNG upload failed ({response.status_code}): {response.text}")
-            return False
-
-    except Exception as e:
-        logger.error(f"Failed to upload PNG {png_path}: {e}")
-        return False
+    with requests.Session() as session:
+        return _upload_single_png(png_path, session, upload_url, headers)
 
 
 def export_figures_to_basinwx(
@@ -568,16 +584,39 @@ def export_figures_to_basinwx(
     logger.info(f"Found {len(results['heatmaps'])} heatmaps, "
                 f"{len(results['meteograms'])} meteograms for {init_pattern}")
 
-    # Parallel upload
+    # Parallel upload with shared session for proper connection cleanup
     if upload and all_pngs:
+        import requests
+        import socket
+
+        api_key = os.getenv('DATA_UPLOAD_API_KEY')
+        if not api_key:
+            logger.warning("DATA_UPLOAD_API_KEY not set, skipping PNG uploads")
+            return results
+
+        api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
+        upload_url = f"{api_url}/api/upload/images"
+        hostname = socket.getfqdn()
+        headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
+
         logger.info(f"Uploading {len(all_pngs)} PNGs with {max_workers} workers...")
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(upload_png_to_basinwx, p): p for p in all_pngs}
-            success = 0
-            for future in as_completed(futures):
-                if future.result():
-                    success += 1
-        logger.info(f"Uploaded {success}/{len(all_pngs)} PNGs")
+
+        # Use a shared session for connection pooling and proper cleanup
+        session = requests.Session()
+        try:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_upload_single_png, p, session, upload_url, headers): p
+                    for p in all_pngs
+                }
+                success = 0
+                for future in as_completed(futures):
+                    if future.result():
+                        success += 1
+            logger.info(f"Uploaded {success}/{len(all_pngs)} PNGs")
+        finally:
+            # Explicitly close session to ensure all connections are cleaned up
+            session.close()
 
     return results
 

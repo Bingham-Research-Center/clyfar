@@ -567,6 +567,14 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
 
     poss_records: List[Dict[str, float]] = []
 
+    # Safe lookups - use NaN if timestamp missing (incomplete GEFS data)
+    def safe_loc(df, col, ts):
+        """Get value at timestamp, or NaN if not available."""
+        try:
+            return df[col].loc[ts]
+        except KeyError:
+            return np.nan
+
     for nt, dt in enumerate(indices):
         if nt == 0:
             print("Solar radiation is unavailable for first time.")
@@ -574,13 +582,16 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
                 output_df.loc[dt, f'ozone_{pct}pc'] = np.nan
             continue
 
-        snow_val = all_vrbl_dfs["snow"][snow_].loc[dt]  # mm
+        snow_val = safe_loc(all_vrbl_dfs["snow"], snow_, dt)  # mm
         # MSLP may have coarser time resolution - use nearest available value
         mslp_series = all_vrbl_dfs["mslp"][mslp_]
-        mslp_val = mslp_series.iloc[mslp_series.index.get_indexer([dt], method='nearest')[0]]  # hPa
-        wind_val = all_vrbl_dfs["wind"][wind_].loc[dt] # already in m/s?
-        solar_val = all_vrbl_dfs["solar"][solar_].loc[dt] # already w/m2 TODO Crap after 240h
-        temp_val = all_vrbl_dfs["temp"][temp_].loc[dt] # already in C
+        try:
+            mslp_val = mslp_series.iloc[mslp_series.index.get_indexer([dt], method='nearest')[0]]  # hPa
+        except (KeyError, IndexError):
+            mslp_val = np.nan
+        wind_val = safe_loc(all_vrbl_dfs["wind"], wind_, dt)  # already in m/s?
+        solar_val = safe_loc(all_vrbl_dfs["solar"], solar_, dt)  # already w/m2 TODO Crap after 240h
+        temp_val = safe_loc(all_vrbl_dfs["temp"], temp_, dt)  # already in C
 
         # UOD guard: warn/clip when inputs fall outside FIS domains
         val_map = {
