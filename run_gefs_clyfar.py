@@ -616,7 +616,7 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
         solar_val = val_map['solar']
 
         # Log first few timesteps for debugging
-        if nm == 0 and len(poss_records) < 3:
+        if len(poss_records) < 3:
             logger.info(f"FIS inputs at {dt}: snow={snow_val:.1f}mm mslp={mslp_val:.1f}hPa "
                        f"wind={wind_val:.2f}m/s solar={solar_val:.1f}W/m²")
 
