@@ -51,6 +51,8 @@ python run_gefs_clyfar.py -i 2025112806 -n 16 -m all -d ~/basinwx-data/clyfar -f
 sbatch scripts/submit_clyfar.sh 2025112806
 ```
 
+For example scenario/cluster visualisations from existing JSON (quantities, probabilities, possibilities), see `docs/CODEX-SCENARIO-POSSIBILITIES.md` and the demo scripts under `scripts/demo_*.py`.
+
 ## Debugging guardrails
 
 - Avoid stacking silent workarounds. If a Herbie download fails, revisit the `Lookup` entry and cfgrib `filter_by_keys` using the official inventories (see `docs/external_data_references.md`) before dropping more coordinates or mutating datasets ad hoc.

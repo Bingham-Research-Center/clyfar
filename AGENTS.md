@@ -49,3 +49,5 @@ Guidance for agents
 - Discover paths on demand; read/write only when the task explicitly requires it.
 - Prefer referencing these locations in docs and comments over in-code hard links.
 - Keep the Clyfar code and the LaTeX technical report synchronized at release boundaries (see docs).
+- For fast spin-up: read `AGENT-INDEX.md` here plus `~/WebstormProjects/ubair-website/COMPACT-RESUME-POINT.md` (latest plan) before opening large files.
+- Production uploads are enabled; unset `DATA_UPLOAD_API_KEY` or use testing flags if you do not want to push data to BasinWx.
