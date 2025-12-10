@@ -45,6 +45,34 @@ def find_available_inits(root: Path) -> List[str]:
     return sorted(inits)
 
 
+def parse_init_or_suffix(arg: str) -> tuple[str | None, str]:
+    """
+    Accept either 'YYYYMMDD_HHMMZ' or 'HHMMZ'.
+
+    Returns (full_init_or_None, suffix).
+    """
+    arg = arg.strip()
+    if "_" in arg and arg.endswith("Z"):
+        return arg, arg.split("_")[-1]
+    # 10-digit init without underscore: YYYYMMDDHH -> YYYYMMDD_HH00Z
+    if len(arg) == 10 and arg.isdigit():
+        date = arg[:8]
+        hour = arg[8:]
+        hhmm = hour.ljust(4, "0")
+        full = f"{date}_{hhmm}Z"
+        return full, full.split("_")[-1]
+    # Fallback: suffix only (e.g. HHMMZ)
+    return None, arg
+
+
+def case_root_for_init(base: Path, norm_init: str) -> Path:
+    """Return CASE_YYYYMMDD_HHMMZ directory for a normalised init."""
+    date, hhmmz = norm_init.split("_")
+    hhmm = hhmmz.replace("Z", "")
+    case_id = f"CASE_{date}_{hhmm}Z"
+    return base / case_id
+
+
 def pick_most_variable_init(root: Path, inits: List[str]) -> str:
     """Pick init with largest spread in elevated+extreme across members/days."""
     plotter = ForecastPlotter()
@@ -114,14 +142,30 @@ def main() -> None:
         raise SystemExit("No possibility_heatmap JSON files found in data/json_tests")
 
     if len(sys.argv) > 1:
-        init = sys.argv[1]
+        full_init, suffix = parse_init_or_suffix(sys.argv[1])
     else:
-        init = pick_most_variable_init(data_root, inits)
+        # Choose most variable based on full init list and derive suffix
+        full_init = pick_most_variable_init(data_root, inits)
+        _, suffix = parse_init_or_suffix(full_init)
 
-    out_dir = data_root / "brainstorm_scenarios_possibility"
-    out_dir.mkdir(exist_ok=True)
+    # Prefer CASE layout when full init is provided
+    if full_init is not None:
+        case_root = case_root_for_init(data_root, full_init)
+        case_poss = case_root / "possibilities"
+        if case_poss.exists():
+            poss_root = case_poss
+            out_dir = case_root / "figs" / "scenarios_possibility"
+        else:
+            poss_root = data_root
+            out_dir = data_root / "brainstorm_scenarios_possibility"
+    else:
+        poss_root = data_root
+        out_dir = data_root / "brainstorm_scenarios_possibility"
 
-    print(f"Using init: {init}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    label_init = full_init if full_init is not None else suffix
+    print(f"Using init: {label_init}")
     print(f"Writing plots to: {out_dir}")
 
     plotter = ForecastPlotter()
@@ -129,7 +173,7 @@ def main() -> None:
     # Load all members' possibility heatmaps
     member_poss: Dict[str, "np.ndarray"] = {}
     dates = None
-    for path in sorted(data_root.glob(f"forecast_possibility_heatmap_*_{init}.json")):
+    for path in sorted(poss_root.glob(f"forecast_possibility_heatmap_*_{suffix}.json")):
         # pattern: forecast_possibility_heatmap_clyfarXXX_YYYYMMDD_HHMMZ.json
         parts = path.stem.split("_")
         member = parts[3]  # clyfar000
@@ -139,7 +183,7 @@ def main() -> None:
         member_poss[member] = df
 
     if not member_poss:
-        raise SystemExit(f"No possibility_heatmap files found for init {init}")
+        raise SystemExit(f"No possibility_heatmap files found for init {label_init}")
 
     index = dates
 
@@ -173,17 +217,17 @@ def main() -> None:
 
         fig, ax = plotter.plot_cluster_mean_possibility_heatmap(
             subset,
-            title=f"Scenario {cid} mean possibilities · {init}",
+            title=f"Scenario {cid} mean possibilities · {label_init}",
         )
-        fig.savefig(out_dir / f"scenario_{cid}_mean_heatmap_{init}.png", bbox_inches="tight")
+        fig.savefig(out_dir / f"scenario_{cid}_mean_heatmap_{label_init}.png", bbox_inches="tight")
         plt.close(fig)
 
         fig, ax = plotter.plot_cluster_highrisk_fraction(
             subset,
             threshold=0.5,
-            title=f"Scenario {cid} high-risk fraction (P(elev+ext)>0.5) · {init}",
+            title=f"Scenario {cid} high-risk fraction (P(elev+ext)>0.5) · {label_init}",
         )
-        fig.savefig(out_dir / f"scenario_{cid}_highrisk_{init}.png", bbox_inches="tight")
+        fig.savefig(out_dir / f"scenario_{cid}_highrisk_{label_init}.png", bbox_inches="tight")
         plt.close(fig)
 
     # Scenario membership bar chart
@@ -195,9 +239,9 @@ def main() -> None:
     ax.set_ylim(0, 1.05)
     ax.set_ylabel("Fraction of members")
     ax.set_xlabel("Scenario ID")
-    ax.set_title(f"Scenario membership fractions · {init}")
+    ax.set_title(f"Scenario membership fractions · {label_init}")
     fig.tight_layout()
-    fig.savefig(out_dir / f"scenario_membership_{init}.png", bbox_inches="tight")
+    fig.savefig(out_dir / f"scenario_membership_{label_init}.png", bbox_inches="tight")
     plt.close(fig)
 
     print("Done.")
