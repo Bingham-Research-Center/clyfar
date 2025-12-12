@@ -28,6 +28,7 @@ Writerside/
 # Logs & runtime artifacts
 *.log
 performance_log.txt
+diagnostic-*.txt
 
 # Local data & figures
 data/
@@ -59,3 +60,6 @@ export/__pycache__/
 
 # Mac
 .DS_Store
+
+# Matplotlib cache
+.mplconfig/
