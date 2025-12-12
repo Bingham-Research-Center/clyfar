@@ -41,6 +41,31 @@ def find_available_inits(root: Path):
     return sorted(inits)
 
 
+def parse_init(init: str) -> str:
+    """
+    Normalise init string to 'YYYYMMDD_HHMMZ'.
+
+    Accepts either 'YYYYMMDD_HHMMZ' or 'YYYYMMDDHH'.
+    """
+    init = init.strip()
+    if "_" in init and init.endswith("Z"):
+        return init
+    if len(init) == 10 and init.isdigit():
+        date = init[:8]
+        hour = init[8:]  # HH
+        hhmm = hour.ljust(4, "0")  # HH -> HH00
+        return f"{date}_{hhmm}Z"
+    raise ValueError(f"Unrecognised init format: {init}")
+
+
+def case_root_for_init(base: Path, norm_init: str) -> Path:
+    """Return CASE_YYYYMMDD_HHMMZ directory for a normalised init."""
+    date, hhmmz = norm_init.split("_")
+    hhmm = hhmmz.replace("Z", "")
+    case_id = f"CASE_{date}_{hhmm}Z"
+    return base / case_id
+
+
 def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     data_root = repo_root / "data" / "json_tests"
@@ -52,33 +77,53 @@ def main() -> None:
         raise SystemExit("No exceedance_probabilities JSON files found in data/json_tests")
 
     if len(sys.argv) > 1:
-        init = sys.argv[1]
+        init_arg = sys.argv[1]
     else:
         # Default to latest full init (assumes filenames include date)
-        init = inits[-1]
+        init_arg = inits[-1]
 
-    out_dir = data_root / "brainstorm_probabilities"
-    out_dir.mkdir(exist_ok=True)
+    norm_init = parse_init(init_arg)
 
-    print(f"Using init: {init}")
+    # Prefer CASE layout if present
+    case_root = case_root_for_init(data_root, norm_init)
+    case_probs = case_root / "probs"
+    if case_probs.exists():
+        probs_root = case_probs
+        out_dir = case_root / "figs" / "probabilities"
+    else:
+        probs_root = data_root
+        out_dir = data_root / "brainstorm_probabilities"
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Using init: {norm_init}")
     print(f"Writing plots to: {out_dir}")
 
     plotter = ForecastPlotter()
-    matches = sorted(data_root.glob(f"forecast_exceedance_probabilities_*_{init}.json"))
-    if not matches:
-        raise SystemExit(
-            f"Exceedance file not found for init {init} in {data_root} "
-            "(expected pattern forecast_exceedance_probabilities_*_{init}.json)"
+
+    # Prefer the canonical filename without extra segments first
+    expected = probs_root / f"forecast_exceedance_probabilities_{norm_init}.json"
+    if expected.exists():
+        path = expected
+    else:
+        matches = sorted(
+            probs_root.glob(f"forecast_exceedance_probabilities_*_{norm_init}.json")
         )
-    path = matches[0]
+        if not matches:
+            raise SystemExit(
+                f"Exceedance file not found for init {norm_init} in {probs_root} "
+                "(expected forecast_exceedance_probabilities_{init}.json or "
+                "forecast_exceedance_probabilities_*_{init}.json)"
+            )
+        path = matches[0]
 
     df = plotter.load_exceedance(path)
     dates = df.index
     thresholds = list(df.columns)
 
     # 1) Multi-threshold probability lines
-    fig, ax = plotter.plot_exceedance_lines(df, title=f"Exceedance probabilities · {init}")
-    fig.savefig(out_dir / f"exceedance_lines_{init}.png", bbox_inches="tight")
+    fig, ax = plotter.plot_exceedance_lines(df, title=f"Exceedance probabilities · {norm_init}")
+    fig.savefig(out_dir / f"exceedance_lines_{norm_init}.png", bbox_inches="tight")
     plt.close(fig)
 
     # 2) Bar chart: days with p>0.5 and p>0.2 per threshold
@@ -92,10 +137,10 @@ def main() -> None:
     ax.set_xticks(idx)
     ax.set_xticklabels([f">{t} ppb" for t in thresholds])
     ax.set_ylabel("Number of days")
-    ax.set_title(f"Days with meaningful exceedance risk · {init}")
+    ax.set_title(f"Days with meaningful exceedance risk · {norm_init}")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(out_dir / f"exceedance_days_{init}.png", bbox_inches="tight")
+    fig.savefig(out_dir / f"exceedance_days_{norm_init}.png", bbox_inches="tight")
     plt.close(fig)
 
     # 3) Threshold × day heatmap
@@ -105,11 +150,11 @@ def main() -> None:
     ax.set_yticklabels([f">{t} ppb" for t in thresholds])
     ax.set_xticks(range(len(dates)))
     ax.set_xticklabels([d.strftime("%d %b") for d in dates], rotation=45, ha="right")
-    ax.set_title(f"Exceedance probability heatmap · {init}")
+    ax.set_title(f"Exceedance probability heatmap · {norm_init}")
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label("Probability")
     fig.tight_layout()
-    fig.savefig(out_dir / f"exceedance_heatmap_{init}.png", bbox_inches="tight")
+    fig.savefig(out_dir / f"exceedance_heatmap_{norm_init}.png", bbox_inches="tight")
     plt.close(fig)
 
     print("Done.")

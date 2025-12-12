@@ -45,6 +45,31 @@ def find_available_inits(root: Path) -> List[str]:
     return sorted(inits)
 
 
+def parse_init(init: str) -> str:
+    """
+    Normalise init string to 'YYYYMMDD_HHMMZ'.
+
+    Accepts either 'YYYYMMDD_HHMMZ' or 'YYYYMMDDHH'.
+    """
+    init = init.strip()
+    if "_" in init and init.endswith("Z"):
+        return init
+    if len(init) == 10 and init.isdigit():
+        date = init[:8]
+        hour = init[8:]  # HH
+        hhmm = hour.ljust(4, "0")  # HH -> HH00
+        return f"{date}_{hhmm}Z"
+    raise ValueError(f"Unrecognised init format: {init}")
+
+
+def case_root_for_init(base: Path, norm_init: str) -> Path:
+    """Return CASE_YYYYMMDD_HHMMZ directory for a normalised init."""
+    date, hhmmz = norm_init.split("_")
+    hhmm = hhmmz.replace("Z", "")
+    case_id = f"CASE_{date}_{hhmm}Z"
+    return base / case_id
+
+
 def pick_most_variable_init(root: Path, inits: List[str]) -> str:
     """Pick the init with largest spread in p90 across members/days."""
     plotter = ForecastPlotter()
@@ -109,15 +134,26 @@ def main() -> None:
         raise SystemExit("No percentile_scenarios JSON files found in data/json_tests")
 
     if len(sys.argv) > 1:
-        init = sys.argv[1]
+        init_arg = sys.argv[1]
     else:
         # Default to the init with largest spread in p90 across members
-        init = pick_most_variable_init(data_root, inits)
+        init_arg = pick_most_variable_init(data_root, inits)
 
-    out_dir = data_root / "brainstorm_scenarios"
-    out_dir.mkdir(exist_ok=True)
+    norm_init = parse_init(init_arg)
 
-    print(f"Using init: {init}")
+    # Prefer CASE layout if present
+    case_root = case_root_for_init(data_root, norm_init)
+    case_percentiles = case_root / "percentiles"
+    if case_percentiles.exists():
+        percentiles_root = case_percentiles
+        out_dir = case_root / "figs" / "scenarios_percentiles"
+    else:
+        percentiles_root = data_root
+        out_dir = data_root / "brainstorm_scenarios"
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Using init: {norm_init}")
     print(f"Writing plots to: {out_dir}")
 
     plotter = ForecastPlotter()
@@ -125,7 +161,7 @@ def main() -> None:
     # Load all members' percentiles
     member_percentiles: Dict[str, "np.ndarray"] = {}
     dates = None
-    for path in sorted(data_root.glob(f"forecast_percentile_scenarios_*_{init}.json")):
+    for path in sorted(percentiles_root.glob(f"forecast_percentile_scenarios_*_{norm_init}.json")):
         member = path.stem.split("_")[3]
         df = plotter.load_percentiles(path)
         if dates is None:
@@ -133,7 +169,7 @@ def main() -> None:
         member_percentiles[member] = df
 
     if not member_percentiles:
-        raise SystemExit(f"No percentile_scenarios files found for {init}")
+        raise SystemExit(f"No percentile_scenarios files found for {norm_init}")
 
     # Use full horizon as the window for clustering
     window = slice(0, len(dates))
@@ -168,9 +204,9 @@ def main() -> None:
         subset = {m: member_percentiles[m] for m in cluster_members_map[cid]}
         fig, ax = plotter.plot_percentile_spaghetti_union(
             subset,
-            title=f"Scenario {cid} union envelope (p10–p90) · {init}",
+            title=f"Scenario {cid} union envelope (p10–p90) · {norm_init}",
         )
-        fig.savefig(out_dir / f"scenario_{cid}_union_{init}.png", bbox_inches="tight")
+        fig.savefig(out_dir / f"scenario_{cid}_union_{norm_init}.png", bbox_inches="tight")
         plt.close(fig)
 
     # Also plot medoid fan chart for each scenario
@@ -180,9 +216,9 @@ def main() -> None:
         fig, ax = plotter.plot_percentile_fan(
             df,
             member_label=medoid_member,
-            title=f"Scenario {cid} medoid percentiles · {init}",
+            title=f"Scenario {cid} medoid percentiles · {norm_init}",
         )
-        fig.savefig(out_dir / f"scenario_{cid}_medoid_{medoid_member}_{init}.png", bbox_inches="tight")
+        fig.savefig(out_dir / f"scenario_{cid}_medoid_{medoid_member}_{norm_init}.png", bbox_inches="tight")
         plt.close(fig)
 
     print("Done.")
