@@ -29,7 +29,9 @@ INIT="$1"  # e.g. 2025121200
 
 CLYFAR_ROOT="${CLYFAR_ROOT:-$HOME/gits/clyfar}"
 BASE_URL="${BASINWX_API_URL:-https://basinwx.com}"
-FROM_API="${LLM_FROM_API:-1}"  # default: fetch from API
+FROM_API="${LLM_FROM_API:-0}"  # default: use local CASE data
+HISTORY="${LLM_HISTORY:-5}"
+QA_FILE="${LLM_QA_FILE:-}"
 
 # Optional Slurm settings for auto-interactive mode
 ACCOUNT="${LLM_SLURM_ACCOUNT:-}"
@@ -40,13 +42,27 @@ MEM="${LLM_SLURM_MEM:-8G}"
 
 cd "$CLYFAR_ROOT"
 
-export MPLCONFIGDIR="${MPLCONFIGDIR:-.mplconfig}"
+MPL_DIR="${MPLCONFIGDIR:-.mplconfig}"
+export MPLCONFIGDIR="$MPL_DIR"
+
+pipeline_cmd=(python scripts/run_case_pipeline.py --init "$INIT" --history "$HISTORY")
+if [[ "$FROM_API" == "1" ]]; then
+  pipeline_cmd+=(--from-api --base-url "$BASE_URL")
+fi
+if [[ -n "$QA_FILE" ]]; then
+  pipeline_cmd+=(--qa-file "$QA_FILE")
+fi
+pipeline_cmd_str=$(printf '%q ' "${pipeline_cmd[@]}")
 
 echo "=== CHPC LLM PIPELINE ==="
 echo "Repo root: $CLYFAR_ROOT"
 echo "Init:      $INIT"
 echo "Base URL:  $BASE_URL"
 echo "From API:  $FROM_API"
+echo "History:   $HISTORY"
+if [[ -n "$QA_FILE" ]]; then
+  echo "QA File:   $QA_FILE"
+fi
 echo
 
 # If not already inside a Slurm job, optionally start an interactive allocation.
@@ -59,16 +75,8 @@ if [[ -z "${SLURM_JOB_ID:-}" ]]; then
     echo "CPUs:      $CPUS"
     echo "Mem:       $MEM"
     echo
-    salloc -A "$ACCOUNT" -p "$PARTITION" -t "$WALLTIME" --cpus-per-task="$CPUS" --mem="$MEM" --job-name="clyfar-llm-${INIT}" <<EOF
-cd "$CLYFAR_ROOT"
-export MPLCONFIGDIR="${MPLCONFIGDIR:-.mplconfig}"
-
-if [[ "$FROM_API" == "1" ]]; then
-  python scripts/run_case_pipeline.py --init "$INIT" --from-api --base-url "$BASE_URL"
-else
-  python scripts/run_case_pipeline.py --init "$INIT"
-fi
-EOF
+    salloc -A "$ACCOUNT" -p "$PARTITION" -t "$WALLTIME" --cpus-per-task="$CPUS" --mem="$MEM" --job-name="clyfar-llm-${INIT}" \
+      bash -lc "cd \"$CLYFAR_ROOT\"; export MPLCONFIGDIR=\"$MPL_DIR\"; $pipeline_cmd_str"
     echo "Interactive Slurm session complete."
     exit 0
   else
@@ -80,14 +88,6 @@ EOF
   fi
 fi
 
-if [[ "$FROM_API" == "1" ]]; then
-  python scripts/run_case_pipeline.py \
-    --init "$INIT" \
-    --from-api \
-    --base-url "$BASE_URL"
-else
-  python scripts/run_case_pipeline.py \
-    --init "$INIT"
-fi
+"${pipeline_cmd[@]}"
 
 echo "Done. Check data/json_tests/CASE_* for outputs."

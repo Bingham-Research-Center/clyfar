@@ -78,12 +78,18 @@ def download_file(base_url: str, filename: str, dest: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Fetch Clyfar forecast JSON from BasinWx into a CASE directory."
+        description="Fetch Clyfar forecast JSON from BasinWx into CASE directories."
     )
     parser.add_argument(
         "--init",
         required=True,
         help="Init time as YYYYMMDDHH or YYYYMMDD_HHMMZ (e.g. 2025121200 or 20251212_0000Z)",
+    )
+    parser.add_argument(
+        "--history",
+        type=int,
+        default=5,
+        help="Number of consecutive init times (6h spacing) to fetch, default 5.",
     )
     parser.add_argument(
         "--base-url",
@@ -106,37 +112,59 @@ def main() -> None:
     print(f"Found {len(filelist)} forecast files on server.")
 
     # Filter filenames containing this init
-    matches = [f for f in filelist if norm_init in f]
-    if not matches:
-        raise SystemExit(f"No forecast files containing {norm_init} found on server.")
+    from datetime import datetime, timedelta
+    init_dt = datetime.strptime(norm_init, "%Y%m%d_%H%MZ")
+    history_inits = []
+    for i in range(max(1, args.history)):
+        dt = init_dt - timedelta(hours=6 * i)
+        history_inits.append(dt.strftime("%Y%m%d_%H%MZ"))
 
-    # Group by product type
-    groups: Dict[str, List[str]] = {"possibilities": [], "percentiles": [], "probs": []}
-    for name in matches:
-        if name.startswith("forecast_possibility_heatmap_"):
-            groups["possibilities"].append(name)
-        elif name.startswith("forecast_percentile_scenarios_"):
-            groups["percentiles"].append(name)
-        elif name.startswith("forecast_exceedance_probabilities_"):
-            groups["probs"].append(name)
+    print(f"Fetching up to {len(history_inits)} init(s): {', '.join(history_inits)}")
 
-    # Download each group
-    for group, files in groups.items():
-        if not files:
+    for init_str in history_inits:
+        case_root = case_root_for_init(data_root, init_str)
+        needs_fetch = False
+        for sub in ("possibilities", "percentiles", "probs"):
+            target_dir = case_root / sub
+            if not target_dir.exists():
+                needs_fetch = True
+                break
+            files = list(target_dir.glob(f"*_{init_str}.json"))
+            if not files:
+                needs_fetch = True
+                break
+        if not needs_fetch:
+            print(f"CASE {case_root.name} already populated; skipping download.")
             continue
-        print(f"Downloading {len(files)} {group} files...")
-        for fname in files:
-            if group == "probs" and len(files) > 1:
-                # Prefer the canonical name without extra segments
-                if fname != f"forecast_exceedance_probabilities_{norm_init}.json":
-                    continue
-            dest_dir = case_root / group
-            dest = dest_dir / fname
-            download_file(args.base_url, fname, dest)
 
-    print("Done fetching JSON into CASE directory.")
+        matches = [f for f in filelist if init_str in f]
+        if not matches:
+            print(f"Warning: no files for {init_str} on server; skipping.")
+            continue
+
+        print(f"Populating CASE {case_root.name} ...")
+
+        groups: Dict[str, List[str]] = {"possibilities": [], "percentiles": [], "probs": []}
+        for name in matches:
+            if name.startswith("forecast_possibility_heatmap_"):
+                groups["possibilities"].append(name)
+            elif name.startswith("forecast_percentile_scenarios_"):
+                groups["percentiles"].append(name)
+            elif name.startswith("forecast_exceedance_probabilities_"):
+                groups["probs"].append(name)
+
+        for group, files in groups.items():
+            if not files:
+                continue
+            print(f"  downloading {len(files)} {group} files...")
+            for fname in files:
+                if group == "probs" and len(files) > 1 and fname != f"forecast_exceedance_probabilities_{init_str}.json":
+                    continue
+                dest = case_root / group / fname
+                download_file(args.base_url, fname, dest)
+
+    print("Done fetching CASE directories.")
 
 
 if __name__ == "__main__":
     main()
-

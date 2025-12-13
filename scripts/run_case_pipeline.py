@@ -48,6 +48,16 @@ def main() -> None:
         default=os.environ.get("BASINWX_API_URL", "https://basinwx.com"),
         help="Base URL for BasinWx when using --from-api.",
     )
+    parser.add_argument(
+        "--history",
+        type=int,
+        default=5,
+        help="Number of 6-hour inits (current + past) to ensure exist (default 5).",
+    )
+    parser.add_argument(
+        "--qa-file",
+        help="Optional path to a Q&A markdown file to include in the LLM prompt.",
+    )
     args = parser.parse_args()
 
     # Ensure MPLCONFIGDIR is set
@@ -64,6 +74,8 @@ def main() -> None:
             args.init,
             "--base-url",
             args.base_url,
+            "--history",
+            str(args.history),
         ]
         print("Running:", " ".join(cmd))
         subprocess.run(cmd, check=True, env=env, cwd=str(REPO_ROOT))
@@ -75,7 +87,6 @@ def main() -> None:
         ["scripts/demo_scenarios_clusters.py", args.init],
         ["scripts/demo_scenarios_possibility.py", args.init],
         ["scripts/demo_heatmaps_from_json.py", args.init],
-        ["scripts/demo_llm_forecast_template.py", args.init],
     ]
 
     for rel_script, init_arg in script_cmds:
@@ -83,9 +94,15 @@ def main() -> None:
         print("Running:", " ".join(cmd))
         subprocess.run(cmd, check=True, env=env, cwd=str(REPO_ROOT))
 
+    # LLM prompt template (handle optional QA file)
+    llm_cmd = [sys.executable, str(REPO_ROOT / "scripts" / "demo_llm_forecast_template.py"), args.init]
+    if args.qa_file:
+        llm_cmd.extend(["--qa-file", args.qa_file])
+    print("Running:", " ".join(llm_cmd))
+    subprocess.run(llm_cmd, check=True, env=env, cwd=str(REPO_ROOT))
+
     print("CASE pipeline complete.")
 
 
 if __name__ == "__main__":
     main()
-

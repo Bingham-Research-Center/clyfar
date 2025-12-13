@@ -160,9 +160,15 @@ def main() -> None:
     lines.append("## Recent cases (for run-to-run context)")
     lines.append("")
     if recent_cases:
+        lines.append("| Init | Case path |")
+        lines.append("|------|-----------|")
         for c in recent_cases:
             marker = " (this case)" if c == norm_init else ""
-            lines.append(f"- `{c}`{marker}")
+            case_dir = case_root_for_init(data_root, c)
+            if case_dir.exists():
+                lines.append(f"| `{c}`{marker} | `{case_dir}` |")
+            else:
+                lines.append(f"| `{c}`{marker} | (not present locally) |")
     else:
         lines.append("- (no other CASE_ directories found)")
 
@@ -175,6 +181,8 @@ def main() -> None:
         lines.append("")
         for line in qa_text.splitlines():
             lines.append(f"> {line}")
+        lines.append("")
+        lines.append("**Directive:** If the Q&A mentions data quality issues or cautions, restate that warning in every section (public, stakeholder, expert, and full outlook).")
 
     lines.append("")
     lines.append("## Prompt for the language model")
@@ -186,11 +194,14 @@ def main() -> None:
     lines.append("You are helping explain a Clyfar ozone forecast for the Uintah Basin.")
     lines.append(f"The forecast init is {norm_init}.")
     lines.append(f"The case directory on disk is `{case_root}`.")
+    lines.append(f"The previous {len(recent_cases)} cases are listed in the metadata table above; use them for run-to-run consistency checks if needed.")
     lines.append("")
     lines.append("You have three main data sources:")
     lines.append("1) Quantities in ppb (p10/p50/p90) with ensemble distributions.")
     lines.append("2) Exceedance probabilities for thresholds (e.g., >30, >50, >60, >75 ppb).")
     lines.append("3) Possibility‑based scenarios (background/moderate/elevated/extreme) and clustering outputs.")
+    lines.append("")
+    lines.append("If any Q&A context above warns about data quality or known issues, you must repeat that warning in every section you produce.")
     lines.append("")
     lines.append("### Task 1 – Three 5-day summaries at three complexity levels")
     lines.append("")
@@ -257,4 +268,3 @@ if __name__ == "__main__":
     if "MPLCONFIGDIR" not in os.environ:
         os.environ["MPLCONFIGDIR"] = ".mplconfig"
     main()
-
