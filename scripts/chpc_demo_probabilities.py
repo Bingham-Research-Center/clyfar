@@ -72,13 +72,14 @@ def main() -> None:
     if not data_root.exists():
         raise SystemExit(f"Data directory not found: {data_root}")
 
-    inits = find_available_inits(data_root)
-    if not inits:
-        raise SystemExit("No exceedance_probabilities JSON files found in data/json_tests")
-
+    # If init provided as argument, skip scanning
     if len(sys.argv) > 1:
         init_arg = sys.argv[1]
     else:
+        # Auto-detect available inits
+        inits = find_available_inits(data_root)
+        if not inits:
+            raise SystemExit("No exceedance_probabilities JSON files found in data/json_tests")
         # Default to latest full init (assumes filenames include date)
         init_arg = inits[-1]
 

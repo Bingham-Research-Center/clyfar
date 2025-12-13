@@ -137,13 +137,14 @@ def main() -> None:
     if not data_root.exists():
         raise SystemExit(f"Data directory not found: {data_root}")
 
-    inits = find_available_inits(data_root)
-    if not inits:
-        raise SystemExit("No possibility_heatmap JSON files found in data/json_tests")
-
+    # If init provided as argument, skip scanning
     if len(sys.argv) > 1:
         full_init, suffix = parse_init_or_suffix(sys.argv[1])
     else:
+        # Auto-detect available inits
+        inits = find_available_inits(data_root)
+        if not inits:
+            raise SystemExit("No possibility_heatmap JSON files found in data/json_tests")
         # Choose most variable based on full init list and derive suffix
         full_init = pick_most_variable_init(data_root, inits)
         _, suffix = parse_init_or_suffix(full_init)
