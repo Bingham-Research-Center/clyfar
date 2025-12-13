@@ -38,9 +38,11 @@ from viz.forecast_plots import ForecastPlotter
 def find_available_inits(root: Path) -> List[str]:
     """Return sorted list of init strings present in percentile JSON filenames."""
     inits = set()
-    for path in root.glob("forecast_percentile_scenarios_*_*.json"):
+    for path in root.rglob("forecast_percentile_scenarios_*_*.json"):
         parts = path.stem.split("_")
-        init = parts[-1]  # YYYYMMDD_HHMMZ
+        if len(parts) < 2:
+            continue
+        init = f"{parts[-2]}_{parts[-1]}"
         inits.add(init)
     return sorted(inits)
 
@@ -79,7 +81,7 @@ def pick_most_variable_init(root: Path, inits: List[str]) -> str:
     scores = {}
     for init in inits:
         values: List[float] = []
-        for path in root.glob(f"forecast_percentile_scenarios_*_{init}.json"):
+        for path in root.rglob(f"forecast_percentile_scenarios_*_{init}.json"):
             df = plotter.load_percentiles(path)
             # Flatten p90 values
             values.extend(df["p90"].tolist())

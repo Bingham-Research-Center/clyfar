@@ -40,8 +40,11 @@ from viz.forecast_plots import ForecastPlotter
 def find_available_inits(root: Path) -> List[str]:
     """Return sorted list of init strings present in possibility filenames."""
     inits = set()
-    for path in root.glob("forecast_possibility_heatmap_*_*.json"):
-        inits.add(path.stem.split("_")[-1])
+    for path in root.rglob("forecast_possibility_heatmap_*_*.json"):
+        parts = path.stem.split("_")
+        if len(parts) < 2:
+            continue
+        inits.add(f"{parts[-2]}_{parts[-1]}")
     return sorted(inits)
 
 
@@ -79,7 +82,7 @@ def pick_most_variable_init(root: Path, inits: List[str]) -> str:
     scores = {}
     for init in inits:
         values = []
-        for path in root.glob(f"forecast_possibility_heatmap_*_{init}.json"):
+        for path in root.rglob(f"forecast_possibility_heatmap_*_{init}.json"):
             df, _ = plotter.load_possibility(path)
             high = (df["elevated"] + df["extreme"]).to_numpy()
             values.extend(high.tolist())

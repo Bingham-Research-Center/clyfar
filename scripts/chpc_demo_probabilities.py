@@ -35,8 +35,11 @@ from viz.forecast_plots import ForecastPlotter
 
 def find_available_inits(root: Path):
     inits = set()
-    for path in root.glob("forecast_exceedance_probabilities_*.json"):
-        init = path.stem.split("_")[-1]
+    for path in root.rglob("forecast_exceedance_probabilities_*.json"):
+        parts = path.stem.split("_")
+        if len(parts) < 2:
+            continue
+        init = f"{parts[-2]}_{parts[-1]}"
         inits.add(init)
     return sorted(inits)
 
