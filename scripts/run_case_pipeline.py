@@ -27,7 +27,58 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DATA_ROOT = REPO_ROOT / "data" / "json_tests"
 
+
+def normalise_init(init: str) -> str:
+    """Return init as YYYYMMDD_HHMMZ."""
+    init = init.strip()
+    if "_" in init and init.endswith("Z"):
+        return init
+    if len(init) == 10 and init.isdigit():
+        date = init[:8]
+        hour = init[8:]
+        hhmm = hour.ljust(4, "0")
+        return f"{date}_{hhmm}Z"
+    raise ValueError(f"Unrecognised init format: {init}")
+
+
+def case_root_for_init(norm_init: str) -> Path:
+    """Return CASE_YYYYMMDD_HHMMZ directory path."""
+    date, hhmmz = norm_init.split("_")
+    hhmm = hhmmz.replace("Z", "")
+    case_id = f"CASE_{date}_{hhmm}Z"
+    return DATA_ROOT / case_id
+
+
+def ensure_case_present(norm_init: str) -> None:
+    """Ensure the CASE directory (and JSON subfolders) exist for the init."""
+    case_root = case_root_for_init(norm_init)
+    if not case_root.exists():
+        raise SystemExit(
+            f"CASE directory not found for {norm_init}: {case_root}\n"
+            "Fetch it first via scripts/fetch_case_from_api.py (or run with --from-api / LLM_FROM_API=1)."
+        )
+
+    missing: list[str] = []
+    checks = {
+        "percentiles": f"forecast_percentile_scenarios_*_{norm_init}.json",
+        "probs": f"forecast_exceedance_probabilities*{norm_init}.json",
+        "possibilities": f"forecast_possibility_heatmap_*_{norm_init}.json",
+    }
+    for subdir, pattern in checks.items():
+        folder = case_root / subdir
+        if not folder.exists():
+            missing.append(f"{subdir} (directory missing)")
+            continue
+        if not any(folder.glob(pattern)):
+            missing.append(f"{subdir} (no files matching {pattern})")
+    if missing:
+        details = "; ".join(missing)
+        raise SystemExit(
+            f"CASE {case_root} is incomplete: {details}.\n"
+            "Refetch the init or verify the JSON placement before rerunning."
+        )
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -65,6 +116,8 @@ def main() -> None:
     if "MPLCONFIGDIR" not in env:
         env["MPLCONFIGDIR"] = ".mplconfig"
 
+    norm_init = normalise_init(args.init)
+
     # 1) Optionally fetch JSON from API into CASE_ dir
     if args.from_api:
         cmd = [
@@ -79,6 +132,9 @@ def main() -> None:
         ]
         print("Running:", " ".join(cmd))
         subprocess.run(cmd, check=True, env=env, cwd=str(REPO_ROOT))
+
+    # Ensure the CASE exists (user may be running purely on local data)
+    ensure_case_present(norm_init)
 
     # 2) Generate plots and LLM prompt
     script_cmds = [

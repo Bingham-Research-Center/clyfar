@@ -156,12 +156,13 @@ def main() -> None:
     if full_init is not None:
         case_root = case_root_for_init(data_root, full_init)
         case_poss = case_root / "possibilities"
-        if case_poss.exists():
-            poss_root = case_poss
-            out_dir = case_root / "figs" / "scenarios_possibility"
-        else:
-            poss_root = data_root
-            out_dir = data_root / "brainstorm_scenarios_possibility"
+        if not case_poss.exists():
+            raise SystemExit(
+                f"Possibility JSONs not found for {full_init} under {case_poss}.\n"
+                "Fetch the CASE via scripts/fetch_case_from_api.py or set LLM_FROM_API=1 when running the pipeline."
+            )
+        poss_root = case_poss
+        out_dir = case_root / "figs" / "scenarios_possibility"
     else:
         poss_root = data_root
         out_dir = data_root / "brainstorm_scenarios_possibility"

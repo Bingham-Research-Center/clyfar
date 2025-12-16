@@ -115,12 +115,13 @@ def main() -> None:
     # Prefer new CASE_YYYYMMDDHHZ layout if present
     case_root = case_root_for_init(data_root, norm_init)
     case_percentiles = case_root / "percentiles"
-    if case_percentiles.exists():
-        percentiles_root = case_percentiles
-        out_dir = case_root / "figs" / "quantities"
-    else:
-        percentiles_root = data_root
-        out_dir = data_root / "brainstorm_quantities"
+    if not case_percentiles.exists():
+        raise SystemExit(
+            f"Percentile JSONs not found for {norm_init} under {case_percentiles}.\n"
+            "Fetch the CASE via scripts/fetch_case_from_api.py or set LLM_FROM_API=1 when running the pipeline."
+        )
+    percentiles_root = case_percentiles
+    out_dir = case_root / "figs" / "quantities"
 
     out_dir.mkdir(parents=True, exist_ok=True)
 

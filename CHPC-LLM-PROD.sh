@@ -32,6 +32,7 @@ BASE_URL="${BASINWX_API_URL:-https://basinwx.com}"
 FROM_API="${LLM_FROM_API:-0}"  # default: use local CASE data
 HISTORY="${LLM_HISTORY:-5}"
 QA_FILE="${LLM_QA_FILE:-}"
+LOCAL_SOURCE="${LLM_LOCAL_SOURCE:-}"
 
 # Optional Slurm settings for auto-interactive mode
 ACCOUNT="${LLM_SLURM_ACCOUNT:-}"
@@ -63,7 +64,21 @@ echo "History:   $HISTORY"
 if [[ -n "$QA_FILE" ]]; then
   echo "QA File:   $QA_FILE"
 fi
+if [[ "$FROM_API" != "1" && -n "$LOCAL_SOURCE" ]]; then
+  echo "Local source: $LOCAL_SOURCE"
+fi
 echo
+
+# If we're working purely from local data and a source directory is provided,
+# ensure CASE_* folders are populated before launching the heavy plotting.
+if [[ "$FROM_API" != "1" && -n "$LOCAL_SOURCE" ]]; then
+  echo "Ensuring CASE directories exist via local sync..."
+  python scripts/sync_case_from_local.py \
+    --init "$INIT" \
+    --history "$HISTORY" \
+    --source "$LOCAL_SOURCE"
+  echo
+fi
 
 # If not already inside a Slurm job, optionally start an interactive allocation.
 if [[ -z "${SLURM_JOB_ID:-}" ]]; then

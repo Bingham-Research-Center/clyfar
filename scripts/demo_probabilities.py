@@ -91,12 +91,13 @@ def main() -> None:
     # Prefer CASE layout if present
     case_root = case_root_for_init(data_root, norm_init)
     case_probs = case_root / "probs"
-    if case_probs.exists():
-        probs_root = case_probs
-        out_dir = case_root / "figs" / "probabilities"
-    else:
-        probs_root = data_root
-        out_dir = data_root / "brainstorm_probabilities"
+    if not case_probs.exists():
+        raise SystemExit(
+            f"Exceedance JSON not found for {norm_init} under {case_probs}.\n"
+            "Fetch the CASE via scripts/fetch_case_from_api.py or set LLM_FROM_API=1 when running the pipeline."
+        )
+    probs_root = case_probs
+    out_dir = case_root / "figs" / "probabilities"
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
