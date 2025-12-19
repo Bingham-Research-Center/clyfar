@@ -12,10 +12,11 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 import pandas as pd
 
@@ -68,6 +69,18 @@ def _load_dailymax_tables(dailymax_dir: Path) -> Dict[str, pd.DataFrame]:
     return dailymax_df_dict
 
 
+def _guess_run_dir(base_path: Path, init_dt: datetime) -> Optional[Path]:
+    """Return base/init folder if one exists (handles both HHMMZ and HH00Z names)."""
+    candidates = [
+        base_path / init_dt.strftime("%Y%m%d_%H%MZ"),
+        base_path / init_dt.strftime("%Y%m%d_%HZ"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Regenerate BasinWx export artifacts using saved daily-max tables."
@@ -82,7 +95,18 @@ def parse_args() -> argparse.Namespace:
         "-d",
         "--data-root",
         default="./data",
-        help="Path passed as --data-root to run_gefs_clyfar.py (default: ./data).",
+        help=(
+            "Base data directory passed as --data-root to run_gefs_clyfar.py "
+            "(default: ./data). Used for lookup fallbacks."
+        ),
+    )
+    parser.add_argument(
+        "--run-dir",
+        default=None,
+        help=(
+            "Run-specific directory (e.g., data/20251218_1800Z). "
+            "If omitted, the script tries to locate it under --data-root."
+        ),
     )
     parser.add_argument(
         "--dailymax-dir",
@@ -92,14 +116,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-f",
         "--fig-root",
-        default="./figures",
-        help="Path passed as --fig-root (for locating PNGs).",
+        default=None,
+        help="Directory holding figures to upload. Defaults to <run-dir>/figures or <data-root>/figures.",
     )
     parser.add_argument(
         "-e",
         "--export-dir",
         default=None,
         help="Destination for regenerated JSON (defaults to <data-root>/basinwx_export).",
+    )
+    parser.add_argument(
+        "--case-root",
+        default="data/json_tests",
+        help=(
+            "Root folder for CASE_YYYYMMDD_HHMMZ directories "
+            "(used when --sync-case is provided)."
+        ),
+    )
+    parser.add_argument(
+        "--sync-case",
+        action="store_true",
+        help="Copy regenerated JSON files into data/json_tests/CASE_<init>/ subfolders.",
     )
     parser.add_argument(
         "--skip-json",
@@ -136,17 +173,45 @@ def main() -> None:
     init_dt = datetime.strptime(args.init_time, "%Y%m%d%H")
 
     data_root = Path(args.data_root).expanduser().resolve()
-    dailymax_dir = (
-        Path(args.dailymax_dir).expanduser().resolve()
-        if args.dailymax_dir
-        else data_root / "dailymax"
+    run_dir = (
+        Path(args.run_dir).expanduser().resolve()
+        if args.run_dir
+        else _guess_run_dir(data_root, init_dt)
     )
-    export_dir = (
-        Path(args.export_dir).expanduser().resolve()
-        if args.export_dir
-        else data_root / "basinwx_export"
-    )
-    fig_root = Path(args.fig_root).expanduser().resolve()
+
+    if run_dir:
+        logger.info("Using run directory: %s", run_dir)
+    else:
+        logger.info("No run directory provided/detected; using data root fallbacks (%s)", data_root)
+
+    if args.dailymax_dir:
+        dailymax_dir = Path(args.dailymax_dir).expanduser().resolve()
+    elif run_dir and (run_dir / "dailymax").exists():
+        dailymax_dir = run_dir / "dailymax"
+    else:
+        dailymax_dir = data_root / "dailymax"
+
+    if not dailymax_dir.exists():
+        raise FileNotFoundError(
+            f"Could not locate daily-max directory. "
+            f"Tried {dailymax_dir}. Specify --dailymax-dir."
+        )
+
+    if args.export_dir:
+        export_dir = Path(args.export_dir).expanduser()
+    elif run_dir:
+        export_dir = run_dir / "basinwx_export"
+    else:
+        export_dir = data_root / "basinwx_export"
+    export_dir = export_dir.resolve()
+
+    if args.fig_root:
+        fig_root = Path(args.fig_root).expanduser()
+    elif run_dir and (run_dir / "figures").exists():
+        fig_root = run_dir / "figures"
+    else:
+        fig_root = data_root / "figures"
+    fig_root = fig_root.resolve()
 
     dailymax_df_dict = _load_dailymax_tables(dailymax_dir)
 
@@ -170,6 +235,24 @@ def main() -> None:
             len(results.get("percentiles", [])),
             len(results.get("exceedance", [])),
         )
+
+        if args.sync_case:
+            case_root = Path(args.case_root).expanduser().resolve()
+            case_dir = case_root / f"CASE_{init_dt.strftime('%Y%m%d_%H%MZ')}"
+            (case_dir / "possibilities").mkdir(parents=True, exist_ok=True)
+            (case_dir / "percentiles").mkdir(parents=True, exist_ok=True)
+            (case_dir / "probs").mkdir(parents=True, exist_ok=True)
+
+            def _copy_many(files, dest):
+                for src in files:
+                    src_path = Path(src)
+                    target = dest / src_path.name
+                    shutil.copy2(src_path, target)
+
+            _copy_many(results.get("possibility", []), case_dir / "possibilities")
+            _copy_many(results.get("percentiles", []), case_dir / "percentiles")
+            _copy_many(results.get("exceedance", []), case_dir / "probs")
+            logger.info("Synced JSON outputs into %s", case_dir)
     else:
         logger.info("Skipping JSON regeneration per --skip-json flag")
 
