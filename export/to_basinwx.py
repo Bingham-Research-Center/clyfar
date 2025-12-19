@@ -219,27 +219,32 @@ def export_exceedance_probabilities(
 
     init_str = init_dt.strftime('%Y%m%d_%H%MZ')
 
-    # Collect all member forecasts into a 3D structure
-    # Shape: (n_members, n_days)
-    member_forecasts = []
-    forecast_dates = None
+    # Collect valid members and keep a union of all available forecast dates so we can
+    # align variable-length inputs (some members occasionally miss the last day or two).
+    valid_members: List[pd.DataFrame] = []
+    all_dates_index: Optional[pd.DatetimeIndex] = None
 
     for member_name, df in dailymax_df_dict.items():
         if percentile_col not in df.columns:
             logger.warning(f"{percentile_col} not in {member_name} DataFrame, skipping")
             continue
 
-        values = df[percentile_col].fillna(np.nan).values
-        member_forecasts.append(values)
+        valid_members.append(df)
+        all_dates_index = df.index if all_dates_index is None else all_dates_index.union(df.index)
 
-        if forecast_dates is None:
-            forecast_dates = df.index.strftime('%Y-%m-%d').tolist()
-
-    if not member_forecasts:
+    if not valid_members:
         raise ValueError("No valid member forecasts found for exceedance calculation")
 
-    # Convert to numpy array: (n_members, n_days)
-    forecasts_array = np.array(member_forecasts)
+    all_dates_index = all_dates_index.sort_values()
+    forecast_dates = all_dates_index.strftime('%Y-%m-%d').tolist()
+
+    # Convert to numpy array aligned on the union of dates: (n_members, n_days)
+    member_forecasts = []
+    for df in valid_members:
+        reindexed = df.reindex(all_dates_index)[percentile_col].astype(float)
+        member_forecasts.append(reindexed.to_numpy())
+
+    forecasts_array = np.vstack(member_forecasts)
     n_members = len(member_forecasts)
 
     # Compute exceedance probabilities for each threshold
@@ -247,6 +252,7 @@ def export_exceedance_probabilities(
     for threshold in thresholds:
         # For each day, count how many members exceed threshold
         exceeds = forecasts_array > threshold  # Boolean array
+        exceeds = np.where(np.isnan(forecasts_array), np.nan, exceeds.astype(float))
         prob_exceed = np.nanmean(exceeds, axis=0)  # Fraction exceeding (0-1)
         exceedance_data[f"{int(threshold)}ppb"] = prob_exceed.tolist()
 
