@@ -51,6 +51,24 @@ def case_root_for_init(norm_init: str) -> Path:
     return DATA_ROOT / case_id
 
 
+def check_case_complete(norm_init: str) -> bool:
+    """Check if CASE directory exists and has required JSON files."""
+    case_root = case_root_for_init(norm_init)
+    if not case_root.exists():
+        return False
+
+    checks = {
+        "percentiles": f"forecast_percentile_scenarios_*_{norm_init}.json",
+        "probs": f"forecast_exceedance_probabilities*{norm_init}.json",
+        "possibilities": f"forecast_possibility_heatmap_*_{norm_init}.json",
+    }
+    for subdir, pattern in checks.items():
+        folder = case_root / subdir
+        if not folder.exists() or not any(folder.glob(pattern)):
+            return False
+    return True
+
+
 def ensure_case_present(norm_init: str) -> None:
     """Ensure the CASE directory (and JSON subfolders) exist for the init."""
     case_root = case_root_for_init(norm_init)
@@ -118,8 +136,13 @@ def main() -> None:
 
     norm_init = normalise_init(args.init)
 
-    # 1) Optionally fetch JSON from API into CASE_ dir
-    if args.from_api:
+    # 1) Check if local data exists; fetch from API only if missing or explicitly requested
+    local_complete = check_case_complete(norm_init)
+    if local_complete and not args.from_api:
+        print(f"Local CASE data found and complete for {norm_init}, skipping API fetch.")
+    elif args.from_api or not local_complete:
+        if not local_complete:
+            print(f"Local CASE data missing or incomplete for {norm_init}, fetching from API...")
         cmd = [
             sys.executable,
             str(REPO_ROOT / "scripts" / "fetch_case_from_api.py"),
@@ -133,7 +156,7 @@ def main() -> None:
         print("Running:", " ".join(cmd))
         subprocess.run(cmd, check=True, env=env, cwd=str(REPO_ROOT))
 
-    # Ensure the CASE exists (user may be running purely on local data)
+    # Ensure the CASE exists (should be present now)
     ensure_case_present(norm_init)
 
     # 2) Generate plots and LLM prompt
