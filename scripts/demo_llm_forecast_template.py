@@ -26,12 +26,13 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
 
 def parse_init(init: str) -> str:
     """Normalise init string to 'YYYYMMDD_HHMMZ'."""
@@ -76,6 +77,14 @@ def list_recent_cases(base: Path, limit: int = 8) -> List[str]:
     return recent
 
 
+def render_prompt_template(path: Path, replacements: Dict[str, str]) -> str:
+    """Return prompt instructions with {{PLACEHOLDER}} values injected."""
+    text = path.read_text()
+    for key, value in replacements.items():
+        text = text.replace(f"{{{{{key}}}}}", value)
+    return text.rstrip()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Create multi-tier LLM forecast report template for a Clyfar CASE."
@@ -89,6 +98,12 @@ def main() -> None:
         type=str,
         default=None,
         help="Optional path to a Q&A markdown/text file with case-specific notes.",
+    )
+    parser.add_argument(
+        "--prompt-template",
+        type=str,
+        default=os.environ.get("LLM_PROMPT_TEMPLATE", str(DEFAULT_PROMPT_TEMPLATE)),
+        help=f"Path to the markdown template used for the prompt body (default: {DEFAULT_PROMPT_TEMPLATE}).",
     )
     args = parser.parse_args()
 
@@ -184,81 +199,16 @@ def main() -> None:
         lines.append("")
         lines.append("**Directive:** If the Q&A mentions data quality issues or cautions, restate that warning in every section (public, stakeholder, expert, and full outlook).")
 
+    template_path = Path(args.prompt_template).expanduser()
+    if not template_path.exists():
+        raise SystemExit(f"Prompt template not found: {template_path}")
+    replacements = {
+        "INIT": norm_init,
+        "CASE_ROOT": str(case_root),
+        "RECENT_CASE_COUNT": str(len(recent_cases)),
+    }
     lines.append("")
-    lines.append("## Prompt for the language model")
-    lines.append("")
-    lines.append("Use American English and U.S. units (°F, mph, feet, etc.).")
-    lines.append("Assume the reader already understands basic ozone / air quality concepts.")
-    lines.append("")
-    lines.append("```text")
-    lines.append("You are helping explain a Clyfar ozone forecast for the Uintah Basin.")
-    lines.append(f"The forecast init is {norm_init}.")
-    lines.append(f"The case directory on disk is `{case_root}`.")
-    lines.append(f"The previous {len(recent_cases)} cases are listed in the metadata table above; use them for run-to-run consistency checks if needed.")
-    lines.append("")
-    lines.append("You have three main data sources:")
-    lines.append("1) Quantities in ppb (p10/p50/p90) with ensemble distributions.")
-    lines.append("2) Exceedance probabilities for thresholds (e.g., >30, >50, >60, >75 ppb).")
-    lines.append("3) Possibility‑based scenarios (background/moderate/elevated/extreme) and clustering outputs.")
-    lines.append("")
-    lines.append("If any Q&A context above warns about data quality or known issues, you must repeat that warning in every section you produce.")
-    lines.append("")
-    lines.append("### Task 1 – Three 5-day summaries at three complexity levels")
-    lines.append("")
-    lines.append("For each block (Days 1–5, Days 6–10, Days 11–15), write:")
-    lines.append("a) A 3-sentence summary for the general public (field workers, residents).")
-    lines.append("b) A 3-sentence summary for mid-tier stakeholders (policy, general scientists, industry).")
-    lines.append("c) A 3-sentence summary for experts (forecasters, ozone specialists).")
-    lines.append("")
-    lines.append("Guidance:")
-    lines.append("- Keep all text concise and concrete; avoid repetition across levels.")
-    lines.append("- Do *not* explain what ozone is; assume the audience already knows.")
-    lines.append("- Use ppb ranges and probabilities to differentiate typical vs higher-ozone scenarios.")
-    lines.append("- Refer to scenarios qualitatively (e.g., “most model runs”, “a small minority of runs”).")
-    lines.append("")
-    lines.append("### Task 2 – Full-length (~1 page) outlook")
-    lines.append("")
-    lines.append("Write a single, cohesive outlook (~1 printed page) that:")
-    lines.append("- Explains the overall pattern across Days 1–15.")
-    lines.append("- Describes the scenario logic: dominant clusters vs tail/high-ozone clusters, in plain terms.")
-    lines.append("- Summarises accessible ranges of daily maximum ozone at one or more key sites.")
-    lines.append("- Notes any consistency or shifts compared with recent runs (if that information was provided).")
-    lines.append("- Uses U.S. units and terminology appropriate for professional but time-constrained readers.")
-    lines.append("")
-    lines.append("Structure:")
-    lines.append("- Start with the big picture (most likely outcome).")
-    lines.append("- Then describe less likely but higher-impact scenarios.")
-    lines.append("- End with a brief statement about confidence and what to watch in upcoming runs.")
-    lines.append("")
-    lines.append("### Task 3 – Alert level for the website")
-    lines.append("")
-    lines.append("Based on all of the above, assign a single alert level for the forecast period as a whole:")
-    lines.append("- LOW – background ozone, no meaningful high-ozone risk expected.")
-    lines.append("- MODERATE – some chance of higher ozone on a few days, but not strongly signaled.")
-    lines.append("- HIGH – strong signal for one or more high-ozone days.")
-    lines.append("- EXTREME – persistent or widespread high-ozone conditions likely.")
-    lines.append("")
-    lines.append("Output this in a machine-readable form *at the very end* of your response as a single line:")
-    lines.append("AlertLevel: LOW | MODERATE | HIGH | EXTREME")
-    lines.append("")
-    lines.append("### Output formatting")
-    lines.append("")
-    lines.append("1) First, three sections for Days 1–5, 6–10, 11–15, each containing:")
-    lines.append("   - Public paragraph")
-    lines.append("   - Stakeholder paragraph")
-    lines.append("   - Expert paragraph")
-    lines.append("2) Second, a full-length outlook section (~1 page).")
-    lines.append("3) Finally, the single alert level line as specified above.")
-    lines.append("```")
-
-    lines.append("")
-    lines.append("## Notes for the forecaster / operator")
-    lines.append("")
-    lines.append("- Before sending this prompt to an LLM, you may want to:")
-    lines.append("  * Edit in any specific day/threshold highlights you care about.")
-    lines.append("  * Trim sections that are not relevant for a particular event.")
-    lines.append("- For high-ozone but uncertain events, focus the expert text on how many members occupy tail clusters and how often they exceed key thresholds.")
-    lines.append("- You can reuse this template across cases by re-running the script with a different init and, optionally, a different Q&A file.")
+    lines.append(render_prompt_template(template_path, replacements))
 
     out_path.write_text("\n".join(lines))
     print(f"Wrote LLM forecast prompt to {out_path}")
