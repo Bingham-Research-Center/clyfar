@@ -100,10 +100,27 @@ def build_features_for_window(
         df = member_percentiles[m]
         p50 = df["p50"].iloc[window].to_numpy()
         p90 = df["p90"].iloc[window].to_numpy()
-        vec = np.concatenate([p50, p90])
+        vec = np.concatenate([p50, p90]).astype(float)
         X_list.append(vec)
     X = np.vstack(X_list)
     return X, members
+
+
+def drop_nonfinite_members(X: np.ndarray, members: List[str]) -> Tuple[np.ndarray, List[str]]:
+    """Remove members that contain NaN/inf values to keep clustering stable."""
+    mask = np.isfinite(X).all(axis=1)
+    if mask.all():
+        return X, members
+    removed = [m for m, keep in zip(members, mask) if not keep]
+    print(
+        "Warning: dropping members with missing percentile data before clustering:",
+        ", ".join(removed),
+    )
+    X_clean = X[mask]
+    members_clean = [m for m, keep in zip(members, mask) if keep]
+    if X_clean.size == 0:
+        raise SystemExit("All members had missing values; cannot cluster scenarios.")
+    return X_clean, members_clean
 
 
 def cluster_members(X: np.ndarray, k: int) -> np.ndarray:
@@ -179,12 +196,16 @@ def main() -> None:
     # Use full horizon as the window for clustering
     window = slice(0, len(dates))
     X, members = build_features_for_window(member_percentiles, window)
+    X, members = drop_nonfinite_members(X, members)
 
     # Standardize features (p50 and p90) to comparable scale
     X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
 
     # Simple 3-cluster solution to produce a dominant scenario plus tail scenarios
     k = 3
+    if len(members) < k:
+        k = max(1, len(members))
+        print(f"Warning: reducing cluster count to {k} due to limited members after filtering.")
     labels = cluster_members(X, k)
     medoids = find_medoids(X, labels)
 
