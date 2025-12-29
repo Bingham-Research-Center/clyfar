@@ -1,5 +1,37 @@
 # LLM Forecast SOP (Clyfar CASE Pipeline)
 
+## Environment Setup
+
+Set these variables in your shell. For persistent config, add to `~/.bashrc` or create a conda activation script:
+
+```bash
+# One-time setup for conda env (vars load automatically on activate)
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+cat > $CONDA_PREFIX/etc/conda/activate.d/clyfar_llm.sh << 'EOF'
+export LLM_CLI_COMMAND='claude -p "Generate the ozone outlook per the prompt."'
+export LLM_SLURM_ACCOUNT=lawson-np
+export LLM_SLURM_PARTITION=lawson-np
+EOF
+```
+
+**LLM CLI examples** (pick one for `LLM_CLI_COMMAND`):
+```bash
+# Claude Code CLI
+export LLM_CLI_COMMAND='claude -p "Generate the ozone outlook per the prompt."'
+
+# Ollama (local)
+export LLM_CLI_COMMAND='ollama run llama3.2'
+
+# Skip LLM, just render prompt for review
+unset LLM_CLI_COMMAND
+```
+
+**Required env vars for CHPC:**
+- `DATA_UPLOAD_API_KEY` - BasinWx upload (get from team lead)
+- `SYNOPTIC_API_TOKEN` - Observation API ([register here](https://developers.synopticdata.com/))
+
+---
+
 ## Commands (default history = 5 runs)
 
 Local laptop:

@@ -54,15 +54,15 @@ Write a cohesive outlook (~1 printed page) that:
 Using all evidence above, assign a single alert level for the full forecast period that fits the Clyfar outlook synthesised with uncertainty identified in Clyfar and GEFS data:
 
 #### Magnitude, matching Clyfar fuzzy categories sets
-- BACKGROUND – loq ozone, no meaningful high-ozone risk expected.
+- BACKGROUND – low ozone, no meaningful high-ozone risk expected.
 - MODERATE – some chance of higher ozone on a few days, but not strongly signaled.
 - ELEVATED – strong signal for one or more high-ozone days.
 - EXTREME – persistent or widespread high-ozone conditions likely.
 
-#### Confidence, using slighly different language to lower ambiguity
-- LOW – this AI forecaster sees a lot of variation in the forecast models, or does not trust the guidance following human advice (e.g., biases recently identified awaiting to be patched).
-- MEDIUM – (in between)
-- HIGH – there is good consensus between run times for the same valid did (dRisk/dt) and/or physically plasible and logical research for Clyfar and GEFS to light up the possibilities for a certain period; there is good consensus in GEFS and Clyfar, also, relative to the lead time. At 10+ days, just having 2+ members agreeing on a large event towards the final few days of the period is a big deal as a cluster of 5% or so!
+#### Confidence
+- LOW: High spread in ensemble or known biases not yet corrected
+- MEDIUM: Moderate ensemble agreement, typical uncertainty for lead time
+- HIGH: Strong run-to-run consistency (dRisk/dt) and ensemble agreement
 
 Output this final two lines in a machine-readable form *at the very end* of your response:
 
