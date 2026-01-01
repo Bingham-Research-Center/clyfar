@@ -28,6 +28,7 @@ from typing import Dict, List, Tuple, Optional
 import logging
 import datetime
 import platform
+import shutil
 import sys
 
 import numpy as np
@@ -436,6 +437,42 @@ def save_forecast_data(dfs: Dict[str, pd.DataFrame], variable: str, init_dt_dict
         df.to_parquet(fpath)
     return
 
+
+def archive_clyfar_parquets_to_run(
+    clyfar_data_root: str,
+    init_dt: datetime.datetime,
+    clyfar_df_dict: Dict[str, pd.DataFrame],
+) -> str:
+    """Archive Clyfar parquets to the per-init _run directory.
+
+    Copies parquets to {data_root}/{YYYYMMDD_HHMMz}_run/parquets/
+    while keeping the current "latest" copies in the root for operational use.
+
+    Args:
+        clyfar_data_root: Root data directory (e.g., ~/basinwx-data/clyfar)
+        init_dt: Forecast initialization datetime (naive UTC)
+        clyfar_df_dict: Dictionary of Clyfar member DataFrames
+
+    Returns:
+        Path to the parquets archive directory
+    """
+    run_label = init_dt.strftime('%Y%m%d_%H%MZ')
+    run_dir = os.path.join(clyfar_data_root, f"{run_label}_run")
+    parquets_dir = os.path.join(run_dir, "parquets")
+    utils.try_create(parquets_dir)
+
+    archived_count = 0
+    for clyfar_member in clyfar_df_dict.keys():
+        src = os.path.join(clyfar_data_root, f"{clyfar_member}_df.parquet")
+        dst = os.path.join(parquets_dir, f"{clyfar_member}_df.parquet")
+        if os.path.exists(src):
+            shutil.copy2(src, dst)
+            archived_count += 1
+
+    logger.info(f"Archived {archived_count} parquets to {parquets_dir}")
+    return parquets_dir
+
+
 def load_forecast_data(variable: str, init_dt: datetime.datetime, member_names: list):
     """Load forecast data from disk."""
     dfs = {}
@@ -835,6 +872,10 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             print("Saved Clyfar dataframes to ", subdir)
             print("Saved daily-max ozone tables to ", dailymax_dir)
 
+            # Archive parquets to _run directory for historical tracking
+            archive_clyfar_parquets_to_run(
+                clyfar_data_root, init_dt_dict['naive'], clyfar_df_dict)
+
         if log_fis and fis_diagnostics:
             diag_df = pd.DataFrame(fis_diagnostics)
             diag_means = diag_df.mean(numeric_only=True)
@@ -917,16 +958,15 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             export_dir = os.path.join(clyfar_data_root, "basinwx_export")
             utils.try_create(export_dir)
 
-            # Export JSON products (63 files)
+            # Export JSON products (63 ozone + 32 weather = 95 files)
             results = export_all_products(
                 dailymax_df_dict=dailymax_df_dict,
                 init_dt=init_dt_dict['naive'],
                 output_dir=export_dir,
+                clyfar_df_dict=clyfar_df_dict,  # Full-resolution for weather export
                 upload=True  # Uploads if DATA_UPLOAD_API_KEY is set
             )
-            total = len(results.get('possibility', [])) + \
-                    len(results.get('exceedance', [])) + \
-                    len(results.get('percentiles', []))
+            total = sum(len(v) for v in results.values())
             print(f"Exported {total} JSON files to {export_dir}")
 
             # Export PNG figures (heatmaps + meteograms)

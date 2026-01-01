@@ -8,7 +8,7 @@ Set these variables in your shell. For persistent config, add to `~/.bashrc` or 
 # One-time setup for conda env (vars load automatically on activate)
 mkdir -p $CONDA_PREFIX/etc/conda/activate.d
 cat > $CONDA_PREFIX/etc/conda/activate.d/clyfar_llm.sh << 'EOF'
-export LLM_CLI_COMMAND='claude -p "Generate the ozone outlook per the prompt."'
+export LLM_CLI_COMMAND='claude -p "ultrathink. You are a professional meteorologist and air chemist. Generate the ozone outlook per the prompt."'
 export LLM_SLURM_ACCOUNT=lawson-np
 export LLM_SLURM_PARTITION=lawson-np
 EOF
@@ -16,8 +16,11 @@ EOF
 
 **LLM CLI examples** (pick one for `LLM_CLI_COMMAND`):
 ```bash
-# Claude Code CLI
-export LLM_CLI_COMMAND='claude -p "Generate the ozone outlook per the prompt."'
+# Claude Code CLI with extended thinking (recommended)
+export LLM_CLI_COMMAND='claude -p "ultrathink. You are a professional meteorologist and air chemist specialising in forecasting air quality, especially ozone."'
+
+# Claude Code CLI without extended thinking (faster, less thorough)
+export LLM_CLI_COMMAND='claude -p "You are a professional meteorologist and air chemist specialising in forecasting air quality, especially ozone."'
 
 # Ollama (local)
 export LLM_CLI_COMMAND='ollama run llama3.2'
@@ -25,6 +28,8 @@ export LLM_CLI_COMMAND='ollama run llama3.2'
 # Skip LLM, just render prompt for review
 unset LLM_CLI_COMMAND
 ```
+
+**Note:** The script runs `bash -lc` which sources your profile. If your `~/.bash_profile` has echo statements, they'll appear in the output. Either remove those echos or filter the output afterward.
 
 **Required env vars for CHPC:**
 - `DATA_UPLOAD_API_KEY` - BasinWx upload (get from team lead)
@@ -58,13 +63,36 @@ Flags are passed straight to `scripts/run_case_pipeline.py`, which:
 2. Runs all demo plots + heatmaps for the current init.
 3. Writes the prompt template to `CASE_<init>/llm_text/forecast_prompt_<init>.md`, embedding the CASE table and any Q&A file (rendered from `templates/llm/prompt_body.md` by default).
 
-## Optional Q&A / prompt overrides
+## Q&A Context (Special Guidance for LLM)
 
-1. Create a markdown file, e.g. `data/json_tests/CASE_20251212_0000Z/llm_text/QANDA.md`.
-2. Mention any cautions (“GEFS members 10–15 have bogus snow”, “treat tail scenarios carefully”).
-3. Set `LLM_QA_FILE` to that path before running the pipeline.
-4. The prompt template instructs the LLM to repeat those warnings in every section.
-5. Edit `templates/llm/prompt_body.md` (or point `LLM_PROMPT_TEMPLATE` to another file) to change the base instructions—run-to-run consistency, GEFS time-series language, etc.
+Use Q&A context to inject warnings or guidance into the LLM outlook (e.g., "GEFS members show unrealistic snow"). The LLM repeats these warnings in every section.
+
+**Quick method - use the helper script:**
+```bash
+# 1. Edit the QA_CONTENT section in scripts/set_llm_qa.sh
+nano scripts/set_llm_qa.sh
+
+# 2. Enable Q&A context
+source scripts/set_llm_qa.sh
+
+# 3. Run your LLM generation
+./LLM-GENERATE.sh 2025121200
+
+# 4. Disable when no longer needed
+source scripts/set_llm_qa.sh off
+```
+
+**Manual method:**
+```bash
+export LLM_QA_FILE=/path/to/your/warnings.md
+./LLM-GENERATE.sh 2025121200
+unset LLM_QA_FILE  # disable
+```
+
+**Notes:**
+- Empty file = no Q&A (same as unset)
+- Warnings persist until you disable or change the file
+- Edit `templates/llm/prompt_body.md` for permanent prompt changes
 
 ## Generating the actual text
 
@@ -92,8 +120,8 @@ Always run the CLI from a compute node (salloc) rather than a login node.
 - The template always ends with `AlertLevel: LOW|MODERATE|HIGH|EXTREME`; scrape that line for website dashboards.
 - If the Q&A block warns about bad data, manually verify before posting—those warnings are repeated everywhere by design.
 - Prompt body lives in `templates/llm/prompt_body.md`; point `LLM_PROMPT_TEMPLATE` elsewhere if you need variants (e.g., stakeholder briefings).
-- When copying JSON from other locations (e.g., CHPC export directories), ensure all three subfolders exist under `CASE_<init>/`:
-  - `possibilities/forecast_possibility_heatmap_*_<init>.json`
-  - `percentiles/forecast_percentile_scenarios_*_<init>.json`
-  - `probs/forecast_exceedance_probabilities_<init>.json`
-- Dendrogram, scenario, and heatmap PNGs live under `CASE_<init>/figs/...` for quick reference or website upload.
+- When copying JSON from other locations (e.g., CHPC export directories), ensure these subfolders exist under `CASE_<init>/`:
+  - `possibilities/` - 31 ozone category heatmaps
+  - `percentiles/` - 31 ozone percentile scenarios
+  - `probs/` - 1 exceedance probability file
+  - `weather/` - 32 GEFS weather files (31 members + 1 percentiles)

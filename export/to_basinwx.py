@@ -1,9 +1,11 @@
 """Export Clyfar forecast data to BasinWx website.
 
-Generates 3 data products (63 JSON files total per forecast run):
+Generates 5 data products (up to 95 JSON files per forecast run):
 1. Possibility heatmaps (31 files): Per-member 4×N grids of category possibilities
 2. Exceedance probabilities (1 file): Ensemble consensus for threshold exceedance
 3. Percentile scenarios (31 files): Defuzzified ppb values per member
+4. GEFS weather members (31 files): Per-member weather time series (snow, mslp, wind, solar, temp)
+5. GEFS weather percentiles (1 file): Ensemble p10/p50/p90 for weather variables
 
 Environment variables required:
 - DATA_UPLOAD_API_KEY: API key for BasinWx upload endpoint
@@ -74,6 +76,15 @@ OZONE_CATEGORIES = {
 
 # Default exceedance thresholds (ppb) - start of "peak" membership
 EXCEEDANCE_THRESHOLDS = [30, 50, 60, 75]  # background, moderate, elevated, extreme
+
+# GEFS weather variable metadata
+WEATHER_VARIABLES = {
+    "snow": {"units": "mm", "description": "Snow depth"},
+    "mslp": {"units": "hPa", "description": "Mean sea level pressure"},
+    "wind": {"units": "m/s", "description": "Wind speed"},
+    "solar": {"units": "W/m²", "description": "Solar radiation"},
+    "temp": {"units": "°C", "description": "Temperature"}
+}
 
 
 def _identify_missing_dates(df: pd.DataFrame, categories: List[str]) -> List[str]:
@@ -353,43 +364,224 @@ def export_percentile_scenarios(
     return created_files
 
 
+def export_gefs_weather_members(
+    clyfar_df_dict: Dict[str, pd.DataFrame],
+    init_dt: datetime,
+    output_dir: str,
+    upload: bool = True
+) -> List[str]:
+    """Export per-member GEFS weather time series (31 JSON files).
+
+    Each file contains all 5 weather variables (snow, mslp, wind, solar, temp)
+    as hourly time series for one ensemble member.
+
+    Args:
+        clyfar_df_dict: Dictionary mapping member names to full-resolution DataFrames
+        init_dt: Forecast initialization datetime (naive UTC)
+        output_dir: Directory to save JSON files
+        upload: If True, upload to BasinWx API
+
+    Returns:
+        List of file paths created
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    created_files = []
+
+    init_str = init_dt.strftime('%Y%m%d_%H%MZ')
+    weather_vars = list(WEATHER_VARIABLES.keys())
+
+    for member_name, df in clyfar_df_dict.items():
+        weather_data = {}
+
+        for var in weather_vars:
+            if var not in df.columns:
+                logger.warning(f"Weather variable '{var}' not in {member_name} DataFrame")
+                weather_data[var] = []
+            else:
+                # Convert to list, handling NaN values
+                values = []
+                for v in df[var].values:
+                    if pd.isna(v):
+                        values.append(None)
+                    else:
+                        values.append(float(v))
+                weather_data[var] = values
+
+        # Get forecast times (index as ISO strings)
+        forecast_times = df.index.strftime('%Y-%m-%dT%H:%M:%SZ').tolist()
+
+        payload = {
+            "metadata": {
+                "init_datetime": init_dt.isoformat() + "Z",
+                "member": member_name,
+                "product_type": "gefs_weather",
+                "variables": {var: WEATHER_VARIABLES[var] for var in weather_vars},
+                "num_timesteps": len(df),
+                "data_source": "GEFS via Clyfar v0.9.5"
+            },
+            "forecast_times": forecast_times,
+            "weather": weather_data
+        }
+
+        filename = f"forecast_gefs_weather_{member_name}_{init_str}.json"
+        filepath = os.path.join(output_dir, filename)
+
+        with open(filepath, 'w') as f:
+            json.dump(payload, f, indent=2, default=_sanitize_for_json)
+
+        logger.debug(f"Created {filename} ({len(df)} timesteps)")
+        created_files.append(filepath)
+
+    logger.info(f"Created {len(created_files)} GEFS weather member files")
+    return created_files
+
+
+def export_gefs_weather_percentiles(
+    clyfar_df_dict: Dict[str, pd.DataFrame],
+    init_dt: datetime,
+    output_dir: str,
+    percentiles: Optional[List[int]] = None,
+    upload: bool = True
+) -> str:
+    """Export ensemble weather percentiles (1 JSON file).
+
+    For each weather variable, compute p10/p50/p90 across the ensemble
+    at each timestep.
+
+    Args:
+        clyfar_df_dict: Dictionary mapping member names to full-resolution DataFrames
+        init_dt: Forecast initialization datetime (naive UTC)
+        output_dir: Directory to save JSON file
+        percentiles: Percentiles to compute (default: [10, 50, 90])
+        upload: If True, upload to BasinWx API
+
+    Returns:
+        File path created
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    if percentiles is None:
+        percentiles = [10, 50, 90]
+
+    init_str = init_dt.strftime('%Y%m%d_%H%MZ')
+    weather_vars = list(WEATHER_VARIABLES.keys())
+
+    # Find common time index across all members
+    all_times_index: Optional[pd.DatetimeIndex] = None
+    valid_dfs = []
+    for member_name, df in clyfar_df_dict.items():
+        valid_dfs.append(df)
+        all_times_index = df.index if all_times_index is None else all_times_index.union(df.index)
+
+    if not valid_dfs:
+        raise ValueError("No valid member DataFrames found for weather percentiles")
+
+    all_times_index = all_times_index.sort_values()
+    forecast_times = all_times_index.strftime('%Y-%m-%dT%H:%M:%SZ').tolist()
+
+    # Compute percentiles for each weather variable
+    percentile_data = {}
+    for var in weather_vars:
+        # Stack all members for this variable: (n_members, n_times)
+        member_values = []
+        for df in valid_dfs:
+            if var in df.columns:
+                reindexed = df.reindex(all_times_index)[var].astype(float)
+                member_values.append(reindexed.to_numpy())
+
+        if not member_values:
+            logger.warning(f"No data for weather variable '{var}'")
+            percentile_data[var] = {f"p{p}": [] for p in percentiles}
+            continue
+
+        values_array = np.vstack(member_values)
+
+        # Compute percentiles at each timestep
+        var_percentiles = {}
+        for p in percentiles:
+            pct_values = np.nanpercentile(values_array, p, axis=0)
+            var_percentiles[f"p{p}"] = _sanitize_list(pct_values.tolist())
+
+        percentile_data[var] = var_percentiles
+
+    payload = {
+        "metadata": {
+            "init_datetime": init_dt.isoformat() + "Z",
+            "product_type": "gefs_weather_percentiles",
+            "num_members": len(valid_dfs),
+            "num_timesteps": len(forecast_times),
+            "percentiles": percentiles,
+            "variables": {var: WEATHER_VARIABLES[var] for var in weather_vars},
+            "data_source": "GEFS via Clyfar v0.9.5"
+        },
+        "forecast_times": forecast_times,
+        "weather_percentiles": percentile_data
+    }
+
+    filename = f"forecast_gefs_weather_percentiles_{init_str}.json"
+    filepath = os.path.join(output_dir, filename)
+
+    with open(filepath, 'w') as f:
+        json.dump(payload, f, indent=2, default=_sanitize_for_json)
+
+    logger.info(f"Created {filename} ({len(forecast_times)} timesteps, {len(percentiles)} percentiles)")
+    return filepath
+
+
 def export_all_products(
     dailymax_df_dict: Dict[str, pd.DataFrame],
     init_dt: datetime,
     output_dir: str,
+    clyfar_df_dict: Optional[Dict[str, pd.DataFrame]] = None,
     upload: bool = True,
     max_workers: int = 8
 ) -> Dict[str, List[str]]:
-    """Export all 3 data products (63 JSON files total).
+    """Export all forecast data products (63-95 JSON files total).
 
     Convenience function to generate all forecast products in one call.
     Files are created first, then uploaded in parallel for better performance.
+
+    Products:
+    - Ozone (63 files): possibility heatmaps (31), exceedance (1), percentiles (31)
+    - Weather (32 files, optional): GEFS weather members (31), percentiles (1)
 
     Args:
         dailymax_df_dict: Dictionary mapping member names to daily-max DataFrames
         init_dt: Forecast initialization datetime (naive UTC)
         output_dir: Directory to save JSON files
+        clyfar_df_dict: Optional full-resolution DataFrames for weather export
         upload: If True, upload all files to BasinWx API in parallel
         max_workers: Max parallel upload threads (default 8)
 
     Returns:
-        Dictionary with keys 'possibility', 'exceedance', 'percentiles' mapping to file lists
+        Dictionary with keys mapping to file lists:
+        - 'possibility', 'exceedance', 'percentiles' (always)
+        - 'weather_members', 'weather_percentiles' (if clyfar_df_dict provided)
     """
     logger.info(f"Exporting all Clyfar forecast products for {init_dt}")
 
-    # Step 1: Create all JSON files (no uploads yet)
+    # Step 1: Create ozone JSON files
     results = {
         "possibility": export_possibility_heatmaps(dailymax_df_dict, init_dt, output_dir),
         "exceedance": [export_exceedance_probabilities(dailymax_df_dict, init_dt, output_dir)],
         "percentiles": export_percentile_scenarios(dailymax_df_dict, init_dt, output_dir)
     }
 
-    total_files = len(results["possibility"]) + len(results["exceedance"]) + len(results["percentiles"])
+    # Step 2: Create weather JSON files if full-resolution data provided
+    if clyfar_df_dict is not None:
+        results["weather_members"] = export_gefs_weather_members(
+            clyfar_df_dict, init_dt, output_dir)
+        results["weather_percentiles"] = [export_gefs_weather_percentiles(
+            clyfar_df_dict, init_dt, output_dir)]
+
+    total_files = sum(len(v) for v in results.values())
     logger.info(f"Created {total_files} JSON files")
 
-    # Step 2: Upload all files in parallel
+    # Step 3: Upload all files in parallel
     if upload:
-        all_files = results["possibility"] + results["exceedance"] + results["percentiles"]
+        all_files = []
+        for file_list in results.values():
+            all_files.extend(file_list)
         _parallel_upload_jsons(all_files, "forecasts", max_workers=max_workers)
 
     return results

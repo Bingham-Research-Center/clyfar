@@ -6,20 +6,54 @@
 - Outputs: daily ozone forecasts (JSON + PNG) pushed to basinwx.com
 - Version: v0.9 operational | 4x daily on CHPC
 
-## Quick Commands
+## Common Tasks (for humans and Claude CLI)
+
+### 1. Run full pipeline (GEFS download + Clyfar + export)
 ```bash
-# Smoke test (2 members, fast)
-python run_gefs_clyfar.py -i 2025010100 -n 4 -m 2 -d ./data -f ./figures -t
+# Production run on CHPC (replace YYYYMMDDHH with init time, e.g., 2025123006)
+python run_gefs_clyfar.py -i YYYYMMDDHH -n 16 -m 31 \
+  -d ~/basinwx-data/clyfar -f ~/basinwx-data/clyfar/figures
 
-# Full production run
-python run_gefs_clyfar.py -i 2025010100 -n 16 -m 31 -d ./data -f ./figures
-
-# Unit tests
-pytest tests/
-
-# LLM outlook generation
-./LLM-GENERATE.sh 2025010100
+# Smoke test (fast, 2 members)
+python run_gefs_clyfar.py -i YYYYMMDDHH -n 4 -m 2 -d ./data -f ./figures -t
 ```
+
+### 2. Generate LLM outlook (requires CASE data to exist)
+```bash
+# Step 1: Sync CASE data from export directory (if not already done)
+python scripts/sync_case_from_local.py --init YYYYMMDDHH \
+  --source ~/basinwx-data/clyfar/basinwx_export --history 5
+
+# Step 2: Generate LLM outlook
+./LLM-GENERATE.sh YYYYMMDDHH
+
+# Output: data/json_tests/CASE_*/llm_text/LLM-OUTLOOK-*.md
+```
+
+### 3. Check data readiness before LLM generation
+```bash
+# Verify CASE directory has required JSONs
+ls data/json_tests/CASE_YYYYMMDD_HHMMZ/{possibilities,percentiles,probs,weather}/
+
+# Check recent exports exist
+ls ~/basinwx-data/clyfar/basinwx_export/*YYYYMMDD_HHMMZ.json | wc -l
+# Should be 95 files (63 ozone + 32 weather)
+```
+
+### 4. Set Q&A context (optional warnings for LLM)
+```bash
+# Edit scripts/set_llm_qa.sh to change QA_CONTENT, then:
+source scripts/set_llm_qa.sh      # enable
+source scripts/set_llm_qa.sh off  # disable
+```
+
+### Quick reference
+| Task | Command |
+|------|---------|
+| Full pipeline | `python run_gefs_clyfar.py -i INIT -n 16 -m 31 -d ~/basinwx-data/clyfar -f ~/basinwx-data/clyfar/figures` |
+| Sync CASE data | `python scripts/sync_case_from_local.py --init INIT --source ~/basinwx-data/clyfar/basinwx_export --history 5` |
+| LLM generation | `./LLM-GENERATE.sh INIT` |
+| Unit tests | `pytest tests/` |
 
 ## Directory Structure
 ```
@@ -85,10 +119,10 @@ LLM-GENERATE.sh → run_case_pipeline.py → templates/llm/prompt_body.md
 CASE directory structure:
 ```
 CASE_YYYYMMDD_HHMMZ/
-├── percentiles/    # Scenario JSONs
-├── probs/          # Exceedance probabilities
-├── possibilities/  # Category heatmaps
-├── figs/           # Generated visualizations
+├── percentiles/    # 31 ozone scenario JSONs
+├── probs/          # 1 exceedance probability JSON
+├── possibilities/  # 31 ozone category heatmap JSONs
+├── weather/        # 32 GEFS weather JSONs (31 members + 1 percentiles)
 └── llm_text/       # Prompts and LLM outputs
 ```
 
