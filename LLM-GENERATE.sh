@@ -62,6 +62,15 @@ if [[ ! -d "$CASE_DIR" ]]; then
   exit 1
 fi
 
+# Warn if Q&A context is active
+if [[ -n "$QA_FILE" ]]; then
+  echo ""
+  echo ">>> Q&A CONTEXT ACTIVE: $QA_FILE"
+  echo ">>> Warnings from this file will appear in the LLM output."
+  echo ">>> To disable: source scripts/set_llm_qa.sh off"
+  echo ""
+fi
+
 if [[ "$RENDER_PROMPT" == "1" ]]; then
   cmd=("$PYTHON_BIN" scripts/demo_llm_forecast_template.py "$NORM_INIT")
   if [[ -n "$QA_FILE" ]]; then

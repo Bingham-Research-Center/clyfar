@@ -47,7 +47,9 @@ def case_root_for_init(base: Path, norm_init: str) -> Path:
 
 def gather_matches(source: Path, init_str: str) -> Dict[str, List[Path]]:
     """Collect local JSON files for a given init."""
-    groups: Dict[str, List[Path]] = {"possibilities": [], "percentiles": [], "probs": []}
+    groups: Dict[str, List[Path]] = {
+        "possibilities": [], "percentiles": [], "probs": [], "weather": []
+    }
     for path in source.glob(f"*{init_str}.json"):
         name = path.name
         if name.startswith("forecast_possibility_heatmap_"):
@@ -56,6 +58,8 @@ def gather_matches(source: Path, init_str: str) -> Dict[str, List[Path]]:
             groups["percentiles"].append(path)
         elif name.startswith("forecast_exceedance_probabilities"):
             groups["probs"].append(path)
+        elif name.startswith("forecast_gefs_weather_"):
+            groups["weather"].append(path)
     return groups
 
 
