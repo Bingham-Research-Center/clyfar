@@ -291,6 +291,48 @@ if [ $EXPORT_EXIT_CODE -ne 0 ]; then
     # Don't exit - forecast data is still saved locally
 fi
 
+# Generate LLM outlook (optional, non-blocking)
+# This runs AFTER all Clyfar processing and exports are complete
+echo "================================================================"
+echo "Generating LLM outlook..."
+echo "================================================================"
+
+LLM_SUCCESS=false
+if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
+    # Step 1: Sync CASE data from export directory
+    echo "Syncing CASE data for LLM prompt generation..."
+    python3 scripts/sync_case_from_local.py \
+        --init "$INIT_TIME" \
+        --source "$EXPORT_DIR" \
+        --history 5 || {
+        echo "WARNING: CASE sync failed, LLM may have incomplete context"
+    }
+
+    # Step 2: Enable Q&A context (solar bias warning)
+    if [ -f "$CLYFAR_DIR/scripts/set_llm_qa.sh" ]; then
+        source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
+    fi
+
+    # Step 3: Generate LLM outlook
+    # Failures here don't block the pipeline - forecast data is already saved
+    echo "Running LLM-GENERATE.sh for init $INIT_TIME..."
+    "$CLYFAR_DIR/LLM-GENERATE.sh" "$INIT_TIME" && LLM_SUCCESS=true || {
+        echo "WARNING: LLM outlook generation failed (non-fatal)"
+        echo "You can retry manually: ./LLM-GENERATE.sh $INIT_TIME"
+    }
+
+    if [ "$LLM_SUCCESS" = true ]; then
+        OUTLOOK_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.md"
+        if [ -f "$OUTLOOK_FILE" ]; then
+            echo "LLM outlook generated: $OUTLOOK_FILE"
+            # Extract and display AlertLevel
+            grep -E "^AlertLevel:|^Confidence:" "$OUTLOOK_FILE" | head -2 || true
+        fi
+    fi
+else
+    echo "WARNING: LLM-GENERATE.sh not found, skipping outlook generation"
+fi
+
 # Report completion
 echo "================================================================"
 echo "Job complete!"
