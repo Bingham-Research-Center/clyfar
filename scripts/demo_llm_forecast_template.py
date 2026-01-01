@@ -25,14 +25,21 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.extract_outlook_summary import extract_outlook_summary
+
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
+
+# Previous outlook configuration
+MAX_PREVIOUS_OUTLOOKS = 2
+MAX_OUTLOOK_AGE_HOURS = 18  # 18h = 3 prior 6-hourly runs
 
 def parse_init(init: str) -> str:
     """Normalise init string to 'YYYYMMDD_HHMMZ'."""
@@ -83,6 +90,62 @@ def render_prompt_template(path: Path, replacements: Dict[str, str]) -> str:
     for key, value in replacements.items():
         text = text.replace(f"{{{{{key}}}}}", value)
     return text.rstrip()
+
+
+def gather_previous_outlooks(
+    data_root: Path,
+    norm_init: str,
+    recent_cases: List[str],
+    max_outlooks: int = MAX_PREVIOUS_OUTLOOKS,
+    max_age_hours: float = MAX_OUTLOOK_AGE_HOURS,
+) -> List[Dict]:
+    """
+    Gather summaries from previous LLM outlooks within the age window.
+
+    Args:
+        data_root: Base path containing CASE_* directories
+        norm_init: Current init time (YYYYMMDD_HHMMZ)
+        recent_cases: List of recent init strings from list_recent_cases()
+        max_outlooks: Maximum number of previous outlooks to include
+        max_age_hours: Skip outlooks older than this (hours)
+
+    Returns:
+        List of dicts with 'init', 'age_hours', and 'summary' keys
+    """
+    current_dt = datetime.strptime(norm_init, "%Y%m%d_%H%MZ")
+    previous_outlooks = []
+
+    # Iterate through recent cases in reverse order (newest first), excluding current
+    for prev_init in reversed(recent_cases):
+        if prev_init == norm_init:
+            continue  # Skip current case
+
+        try:
+            prev_dt = datetime.strptime(prev_init, "%Y%m%d_%H%MZ")
+        except ValueError:
+            continue
+
+        age_hours = (current_dt - prev_dt).total_seconds() / 3600
+        if age_hours <= 0:
+            continue  # Skip future cases (shouldn't happen)
+        if age_hours > max_age_hours:
+            continue  # Skip stale outlooks
+
+        prev_case = case_root_for_init(data_root, prev_init)
+        outlook_path = prev_case / "llm_text" / f"LLM-OUTLOOK-{prev_init}.md"
+
+        if outlook_path.exists():
+            summary = extract_outlook_summary(outlook_path)
+            if summary:
+                previous_outlooks.append({
+                    "init": prev_init,
+                    "age_hours": int(age_hours),
+                    "summary": summary,
+                })
+                if len(previous_outlooks) >= max_outlooks:
+                    break
+
+    return previous_outlooks
 
 
 def main() -> None:
@@ -139,6 +202,9 @@ def main() -> None:
             qa_text = qa_path.read_text()
 
     recent_cases = list_recent_cases(data_root, limit=8)
+
+    # Gather previous outlook summaries for comparison
+    previous_outlooks = gather_previous_outlooks(data_root, norm_init, recent_cases)
 
     llm_dir = case_root / "llm_text"
     llm_dir.mkdir(parents=True, exist_ok=True)
@@ -198,6 +264,35 @@ def main() -> None:
             lines.append(f"> {line}")
         lines.append("")
         lines.append("**Directive:** If the Q&A mentions data quality issues or cautions, restate that warning in every section (public, stakeholder, expert, and full outlook).")
+
+    # Add previous outlook summaries section
+    lines.append("")
+    lines.append("## Previous Outlook Summaries (for comparison)")
+    lines.append("")
+    if previous_outlooks:
+        lines.append("> Use these summaries to compare your current assessment against prior outlooks.")
+        lines.append("> Explicitly note how your AlertLevel/Confidence differs from the previous run(s).")
+        lines.append("> Format: AlertLevel is the ozone category (BACKGROUND/MODERATE/ELEVATED/EXTREME);")
+        lines.append("> Confidence reflects ensemble spread, Clyfar reliability, and expert-identified biases.")
+        lines.append("")
+        for po in previous_outlooks:
+            summary = po["summary"]
+            lines.append(f"### Previous: {po['init']} ({po['age_hours']}h ago)")
+            lines.append(f"- **Alert Level:** {summary.get('alert_level', 'N/A')}")
+            lines.append(f"- **Confidence:** {summary.get('confidence', 'N/A')}")
+            if summary.get("days_1_5_expert"):
+                lines.append(f"- **Days 1-5 (expert):** {summary['days_1_5_expert']}")
+            if summary.get("days_6_10_expert"):
+                lines.append(f"- **Days 6-10 (expert):** {summary['days_6_10_expert']}")
+            if summary.get("days_11_15_expert"):
+                lines.append(f"- **Days 11-15 (expert):** {summary['days_11_15_expert']}")
+            if summary.get("key_drisk_statement"):
+                lines.append(f"- **dRisk/dt trend:** {summary['key_drisk_statement']}")
+            lines.append("")
+    else:
+        lines.append("> No previous outlook files found within the last 18 hours for comparison.")
+        lines.append("> Note in your outlook: \"This is the first outlook in this sequence.\"")
+        lines.append("")
 
     template_path = Path(args.prompt_template).expanduser()
     if not template_path.exists():
