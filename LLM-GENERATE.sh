@@ -118,4 +118,20 @@ else
   fi
 fi
 
+# Post-process: ensure output starts with "---" (strip any LLM preamble)
+if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
+  first_line=$(head -1 "$OUTPUT_PATH")
+  if [[ "$first_line" != "---" ]]; then
+    if grep -q "^---$" "$OUTPUT_PATH"; then
+      # Strip everything before first "---"
+      sed -i '1,/^---$/{/^---$/!d}' "$OUTPUT_PATH"
+      echo "Post-processed: stripped preamble before first '---'"
+    else
+      # No "---" found at all - prepend it as safety net
+      sed -i '1i---' "$OUTPUT_PATH"
+      echo "Post-processed: prepended '---' (was missing)"
+    fi
+  fi
+fi
+
 echo "Done."
