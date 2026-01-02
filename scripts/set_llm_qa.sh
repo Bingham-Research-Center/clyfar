@@ -37,7 +37,7 @@ This is likely true from the human view, but not proven.
 
 QA_FILE="$HOME/gits/clyfar/data/llm_qa_context.md"
 
-if [[ "$1" == "off" || "$1" == "disable" || "$1" == "clear" ]]; then
+if [[ "${1:-}" == "off" || "${1:-}" == "disable" || "${1:-}" == "clear" ]]; then
     unset LLM_QA_FILE
     rm -f "$QA_FILE"
     echo "Q&A context DISABLED - LLM will not include special guidance"
