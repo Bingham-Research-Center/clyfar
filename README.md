@@ -108,3 +108,27 @@ Notes
   - In tmux: `tmux pipe-pane -o 'cat >> docs/session_log.md'` (enable where you want streaming, disable afterward).
   - Per-command: `yourcmd 2>&1 | tee -a docs/session_log.md` keeps the transcript on screen while persisting it.
 - For Vim tailing, install the dotfiles (`~/dotfiles/install.sh`) so `vim-dispatch` is available; then run `:Dispatch tail -f docs/session_log.md` or `<leader>tl` while editing to keep a live tail inside the editor (see `~/dotfiles/README.md` for more detail).
+
+## AI-Generated Outlook PDFs (Alpha)
+
+> **Status:** Internal review, January 2025
+
+Clyfar generates AI-assisted ozone outlooks using the "Ffion" forecaster (Claude LLM). Each outlook is available as a professionally formatted PDF.
+
+**Access URL pattern:**
+```
+https://basinwx.com/outlooks/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
+```
+
+**Example (replace with current date/time):**
+```
+https://basinwx.com/outlooks/LLM-OUTLOOK-20260102_0600Z.pdf
+```
+
+**Local generation:**
+```bash
+./LLM-GENERATE.sh 20260102_0600Z
+# Outputs: forecast_prompt, LLM-OUTLOOK .md, and .pdf
+```
+
+See `LLM-SOP.md` for operational procedures and `templates/llm/prompt_body.md` for prompt configuration.
