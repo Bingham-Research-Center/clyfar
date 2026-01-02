@@ -134,4 +134,14 @@ if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
   fi
 fi
 
+# Generate PDF from the outlook markdown
+if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
+  PDF_PATH="${OUTPUT_PATH%.md}.pdf"
+  if "$SCRIPT_DIR/scripts/outlook_to_pdf.sh" "$OUTPUT_PATH" "$PDF_PATH"; then
+    echo "PDF generated: $PDF_PATH"
+  else
+    echo "Warning: PDF generation failed (non-fatal)" >&2
+  fi
+fi
+
 echo "Done."
