@@ -26,8 +26,9 @@ if [[ ! -f "$INPUT" ]]; then
 fi
 
 pandoc "$INPUT" \
-  --from markdown-yaml_metadata_block \
+  --from markdown-yaml_metadata_block+lists_without_preceding_blankline \
   --pdf-engine=xelatex \
+  --wrap=preserve \
   -V geometry:margin=0.75in \
   -V fontsize=11pt \
   -V mainfont="STIX" \
