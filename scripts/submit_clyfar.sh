@@ -273,15 +273,17 @@ print(f"  Possibility heatmaps: {len(results['possibility'])}")
 print(f"  Exceedance probabilities: {len(results['exceedance'])}")
 print(f"  Percentile scenarios: {len(results['percentiles'])}")
 
-# Export PNG figures to BasinWx
-print("Exporting PNG figures to BasinWx...")
+# Export PNG figures and PDF outlooks to BasinWx
+print("Exporting PNG figures and PDF outlooks to BasinWx...")
 fig_results = export_figures_to_basinwx(
     fig_root="$FIG_ROOT",
     init_dt=init_dt,
-    upload=True
+    upload=True,
+    json_tests_root="$DATA_ROOT/json_tests"
 )
 print(f"  Heatmap PNGs: {len(fig_results['heatmaps'])}")
 print(f"  Meteogram PNGs: {len(fig_results['meteograms'])}")
+print(f"  Outlook PDFs: {len(fig_results['outlooks'])}")
 EOF
 
 EXPORT_EXIT_CODE=$?

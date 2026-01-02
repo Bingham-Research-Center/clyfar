@@ -265,11 +265,13 @@ def main() -> None:
             init_dt=init_dt,
             upload=args.upload,
             max_workers=args.max_workers,
+            json_tests_root=str(data_root / "json_tests"),
         )
         logger.info(
-            "Processed %d heatmaps + %d meteograms",
+            "Processed %d heatmaps + %d meteograms + %d outlook PDFs",
             len(fig_results.get("heatmaps", [])),
             len(fig_results.get("meteograms", [])),
+            len(fig_results.get("outlooks", [])),
         )
     else:
         logger.info("Skipping PNG handling per --skip-figures flag")

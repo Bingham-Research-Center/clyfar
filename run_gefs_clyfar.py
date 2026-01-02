@@ -969,15 +969,17 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             total = sum(len(v) for v in results.values())
             print(f"Exported {total} JSON files to {export_dir}")
 
-            # Export PNG figures (heatmaps + meteograms)
+            # Export PNG figures (heatmaps + meteograms) and PDF outlooks
             if visualise:
                 fig_results = export_figures_to_basinwx(
                     fig_root=clyfar_fig_root,
                     init_dt=init_dt_dict['naive'],
-                    upload=True
+                    upload=True,
+                    json_tests_root=os.path.join(clyfar_data_root, "json_tests")
                 )
                 print(f"Exported {len(fig_results.get('heatmaps', []))} heatmaps, "
-                      f"{len(fig_results.get('meteograms', []))} meteograms")
+                      f"{len(fig_results.get('meteograms', []))} meteograms, "
+                      f"{len(fig_results.get('outlooks', []))} outlook PDFs")
 
         except ImportError as e:
             logger.warning("Could not import export module: %s", e)

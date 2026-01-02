@@ -750,9 +750,10 @@ def export_figures_to_basinwx(
     fig_root: str,
     init_dt: datetime,
     upload: bool = True,
-    max_workers: int = 8
+    max_workers: int = 8,
+    json_tests_root: Optional[str] = None
 ) -> Dict[str, List[str]]:
-    """Export heatmap and meteogram PNGs to BasinWx.
+    """Export heatmap and meteogram PNGs, plus LLM outlook PDFs, to BasinWx.
 
     Only uploads files matching the current init_dt to avoid re-uploading old runs.
 
@@ -762,16 +763,20 @@ def export_figures_to_basinwx(
     - {fig_root}/{YYYYMMDD_HHZ}/*.png (legacy dated subdirs)
     - {fig_root}/*.png (root fallback)
 
+    Looks for PDFs in:
+    - {json_tests_root}/CASE_{init}/llm_text/*.pdf (LLM outlook PDFs)
+
     Args:
         fig_root: Root directory containing figures
         init_dt: Forecast initialization datetime (used to filter files)
         upload: If True, upload to BasinWx API
         max_workers: Max parallel upload threads (default 8)
+        json_tests_root: Optional path to json_tests directory for PDF uploads
 
     Returns:
-        Dictionary with 'heatmaps' and 'meteograms' keys mapping to file lists
+        Dictionary with 'heatmaps', 'meteograms', and 'outlooks' keys mapping to file lists
     """
-    results = {"heatmaps": [], "meteograms": []}
+    results = {"heatmaps": [], "meteograms": [], "outlooks": []}
     all_pngs = []
 
     # Generate init time patterns to match in filenames
@@ -822,6 +827,20 @@ def export_figures_to_basinwx(
     logger.info(f"Found {len(results['heatmaps'])} heatmaps, "
                 f"{len(results['meteograms'])} meteograms for {init_pattern}")
 
+    # Collect LLM outlook PDFs from json_tests directory
+    all_pdfs = []
+    if json_tests_root:
+        init_str = init_dt.strftime('%Y%m%d_%H%MZ')
+        llm_text_dir = os.path.join(json_tests_root, f"CASE_{init_str}", "llm_text")
+        if os.path.isdir(llm_text_dir):
+            for f in os.listdir(llm_text_dir):
+                if f.endswith('.pdf'):
+                    fpath = os.path.join(llm_text_dir, f)
+                    results["outlooks"].append(fpath)
+                    all_pdfs.append(fpath)
+            if all_pdfs:
+                logger.info(f"Found {len(all_pdfs)} outlook PDFs in {llm_text_dir}")
+
     # Parallel upload with shared session for proper connection cleanup
     if upload and all_pngs:
         import requests
@@ -855,6 +874,14 @@ def export_figures_to_basinwx(
         finally:
             # Explicitly close session to ensure all connections are cleaned up
             session.close()
+
+    # Upload PDFs separately (different endpoint)
+    if upload and all_pdfs:
+        pdf_success = 0
+        for pdf_path in all_pdfs:
+            if upload_pdf_to_basinwx(pdf_path):
+                pdf_success += 1
+        logger.info(f"Uploaded {pdf_success}/{len(all_pdfs)} outlook PDFs")
 
     return results
 
