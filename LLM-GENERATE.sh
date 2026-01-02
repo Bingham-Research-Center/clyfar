@@ -139,6 +139,16 @@ if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
   PDF_PATH="${OUTPUT_PATH%.md}.pdf"
   if "$SCRIPT_DIR/scripts/outlook_to_pdf.sh" "$OUTPUT_PATH" "$PDF_PATH"; then
     echo "PDF generated: $PDF_PATH"
+    # Upload PDF to BasinWx API
+    if [[ -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
+      if "$PYTHON_BIN" -c "from export.to_basinwx import upload_pdf_to_basinwx; exit(0 if upload_pdf_to_basinwx('$PDF_PATH') else 1)"; then
+        echo "PDF uploaded to BasinWx"
+      else
+        echo "Warning: PDF upload failed (non-fatal)" >&2
+      fi
+    else
+      echo "Skipping PDF upload (DATA_UPLOAD_API_KEY not set)"
+    fi
   else
     echo "Warning: PDF generation failed (non-fatal)" >&2
   fi

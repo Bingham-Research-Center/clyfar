@@ -706,6 +706,46 @@ def upload_png_to_basinwx(png_path: str) -> bool:
         return _upload_single_png(png_path, session, upload_url, headers)
 
 
+def upload_pdf_to_basinwx(pdf_path: str) -> bool:
+    """Upload a PDF file to BasinWx API.
+
+    Args:
+        pdf_path: Path to PDF file
+
+    Returns:
+        True if upload succeeded, False otherwise
+    """
+    import requests
+    import socket
+
+    api_key = os.getenv('DATA_UPLOAD_API_KEY')
+    if not api_key:
+        logger.warning("DATA_UPLOAD_API_KEY not set, skipping PDF upload")
+        return False
+
+    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
+    upload_url = f"{api_url}/api/upload/outlooks"
+    hostname = socket.getfqdn()
+    headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
+
+    try:
+        with requests.Session() as session:
+            with open(pdf_path, 'rb') as f:
+                files = {'file': (os.path.basename(pdf_path), f, 'application/pdf')}
+                response = session.post(upload_url, files=files, headers=headers, timeout=60)
+
+            if response.status_code == 200:
+                logger.info(f"Uploaded PDF: {os.path.basename(pdf_path)}")
+                return True
+            else:
+                logger.error(f"PDF upload failed ({response.status_code}): {response.text}")
+                return False
+
+    except Exception as e:
+        logger.error(f"Failed to upload PDF {pdf_path}: {e}")
+        return False
+
+
 def export_figures_to_basinwx(
     fig_root: str,
     init_dt: datetime,

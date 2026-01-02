@@ -115,20 +115,26 @@ Notes
 
 Clyfar generates AI-assisted ozone outlooks using the "Ffion" forecaster (Claude LLM). Each outlook is available as a professionally formatted PDF.
 
-**Access URL pattern:**
+**Public access URL:**
 ```
-https://basinwx.com/outlooks/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
+https://basinwx.com/api/outlooks/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
 ```
 
 **Example (replace with current date/time):**
 ```
-https://basinwx.com/outlooks/LLM-OUTLOOK-20260102_0600Z.pdf
+https://basinwx.com/api/outlooks/LLM-OUTLOOK-20260102_0600Z.pdf
 ```
 
-**Local generation:**
+**Local generation + upload:**
 ```bash
 ./LLM-GENERATE.sh 20260102_0600Z
-# Outputs: forecast_prompt, LLM-OUTLOOK .md, and .pdf
+# Generates: forecast_prompt .md, LLM-OUTLOOK .md and .pdf
+# Uploads PDF to BasinWx if DATA_UPLOAD_API_KEY is set
+```
+
+**Local path (CHPC):**
+```
+~/gits/clyfar/data/json_tests/CASE_YYYYMMDD_HHMMZ/llm_text/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
 ```
 
 See `LLM-SOP.md` for operational procedures and `templates/llm/prompt_body.md` for prompt configuration.
