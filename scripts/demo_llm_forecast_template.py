@@ -36,6 +36,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.extract_outlook_summary import extract_outlook_summary
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
+DEFAULT_QA_FILE = REPO_ROOT / "data" / "llm_qa_context.md"
 
 # Previous outlook configuration
 MAX_PREVIOUS_OUTLOOKS = 2
@@ -169,6 +170,15 @@ def main() -> None:
         help=f"Path to the markdown template used for the prompt body (default: {DEFAULT_PROMPT_TEMPLATE}).",
     )
     args = parser.parse_args()
+
+    # Auto-detect Q&A file if not explicitly provided
+    if args.qa_file is None and DEFAULT_QA_FILE.exists():
+        args.qa_file = str(DEFAULT_QA_FILE)
+        print(f"Auto-detected Q&A context file: {DEFAULT_QA_FILE}")
+    elif args.qa_file:
+        print(f"Using Q&A context file: {args.qa_file}")
+    else:
+        print("No Q&A context file found or specified.")
 
     data_root = REPO_ROOT / "data" / "json_tests"
     if not data_root.exists():

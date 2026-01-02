@@ -33,6 +33,13 @@ PYTHON_BIN="${PYTHON:-python}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Auto-detect Q&A file if not set via environment variable
+DEFAULT_QA_FILE="$SCRIPT_DIR/data/llm_qa_context.md"
+if [[ -z "$QA_FILE" && -f "$DEFAULT_QA_FILE" ]]; then
+  QA_FILE="$DEFAULT_QA_FILE"
+  echo "Auto-detected Q&A context file: $QA_FILE"
+fi
+
 normalise_init() {
   local raw="$1"
   if [[ "$raw" == *_*Z ]]; then
