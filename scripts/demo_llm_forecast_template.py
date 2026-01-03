@@ -318,20 +318,50 @@ def main() -> None:
         lines.append("> Note in your outlook: \"This is the first outlook in this sequence.\"")
         lines.append("")
 
-    # Embed JSON data for LLM analysis
+    # Embed JSON data for LLM analysis (summarized to fit context limits)
     lines.append("## JSON Data (for analysis)")
     lines.append("")
-    lines.append("> The following JSON files contain the actual forecast data. Analyze these to generate the outlook.")
+    lines.append("> Actual forecast data from all 31 Clyfar scenarios plus ensemble statistics.")
     lines.append("")
-    for subdir_name, file_list in json_contents.items():
-        lines.append(f"### {subdir_name.capitalize()} ({len(file_list)} files)")
+
+    import json as json_module
+
+    # Embed probs (1 file, small)
+    if "probs" in json_contents and json_contents["probs"]:
+        lines.append("### Exceedance Probabilities")
+        lines.append("```json")
+        lines.append(json_contents["probs"][0][1])
+        lines.append("```")
         lines.append("")
-        for filename, content in file_list:
+
+    # Embed all possibilities (31 files, key data)
+    if "possibilities" in json_contents:
+        lines.append(f"### Possibility Heatmaps ({len(json_contents['possibilities'])} scenarios)")
+        lines.append("")
+        for filename, content in json_contents["possibilities"]:
             lines.append(f"#### `{filename}`")
             lines.append("```json")
             lines.append(content)
             lines.append("```")
             lines.append("")
+
+    # Embed only weather percentiles (1 file), not all 31 members
+    if "weather" in json_contents:
+        for filename, content in json_contents["weather"]:
+            if "percentiles" in filename:
+                lines.append("### GEFS Weather Percentiles (ensemble p10/p50/p90)")
+                lines.append("```json")
+                lines.append(content)
+                lines.append("```")
+                lines.append("")
+                break
+
+    # Summarize percentiles instead of full embed
+    if "percentiles" in json_contents:
+        lines.append(f"### Ozone Percentile Scenarios ({len(json_contents['percentiles'])} files)")
+        lines.append("")
+        lines.append("Files available: " + ", ".join(f[0] for f in json_contents["percentiles"]))
+        lines.append("")
 
     template_path = Path(args.prompt_template).expanduser()
     if not template_path.exists():
