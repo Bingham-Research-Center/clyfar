@@ -194,6 +194,7 @@ def main() -> None:
         "percentiles": case_root / "percentiles",
         "probs": case_root / "probs",
         "possibilities": case_root / "possibilities",
+        "weather": case_root / "weather",
     }
     figs_subdirs = {
         "quantities": figs_root / "quantities",
@@ -227,9 +228,22 @@ def main() -> None:
     lines.append("")
     lines.append(f"- Init time: `{norm_init}`")
     lines.append(f"- Case root: `{case_root}`")
+
+    # Collect JSON file contents for embedding
+    json_contents = {}
     for name, path in json_subdirs.items():
-        status = "present" if path.exists() else "missing"
-        lines.append(f"- JSON · {name}: `{path}` ({status})")
+        if path.exists():
+            json_files = sorted(path.glob("*.json"))
+            json_contents[name] = []
+            for jf in json_files:
+                try:
+                    content = jf.read_text()
+                    json_contents[name].append((jf.name, content))
+                except Exception as e:
+                    json_contents[name].append((jf.name, f"ERROR: {e}"))
+            lines.append(f"- JSON · {name}: {len(json_files)} files (embedded below)")
+        else:
+            lines.append(f"- JSON · {name}: (missing)")
 
     lines.append("")
     lines.append("## Figure subfolders")
@@ -303,6 +317,21 @@ def main() -> None:
         lines.append("> No previous outlook files found within the last 18 hours for comparison.")
         lines.append("> Note in your outlook: \"This is the first outlook in this sequence.\"")
         lines.append("")
+
+    # Embed JSON data for LLM analysis
+    lines.append("## JSON Data (for analysis)")
+    lines.append("")
+    lines.append("> The following JSON files contain the actual forecast data. Analyze these to generate the outlook.")
+    lines.append("")
+    for subdir_name, file_list in json_contents.items():
+        lines.append(f"### {subdir_name.capitalize()} ({len(file_list)} files)")
+        lines.append("")
+        for filename, content in file_list:
+            lines.append(f"#### `{filename}`")
+            lines.append("```json")
+            lines.append(content)
+            lines.append("```")
+            lines.append("")
 
     template_path = Path(args.prompt_template).expanduser()
     if not template_path.exists():
