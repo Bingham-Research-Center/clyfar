@@ -100,7 +100,8 @@ echo "Writing LLM output to: $OUTPUT_PATH"
 
 if [[ -n "$CLI_COMMAND" ]]; then
   echo "Running custom CLI command: $CLI_COMMAND"
-  if ! bash -lc "$CLI_COMMAND" < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
+  # Run from CASE_DIR so --add-dir . works for file access
+  if ! bash -lc "cd '$CASE_DIR' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
     echo "LLM CLI command failed." >&2
     exit 1
   fi
@@ -111,8 +112,12 @@ else
   fi
   # shellcheck disable=SC2206
   CLI_EXTRA=($CLI_ARGS)
-  echo "Running ${CLI_BIN} ${CLI_EXTRA[*]}"
-  if ! "$CLI_BIN" "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
+  echo "Running ${CLI_BIN} -p --model opus --allowedTools Read,Glob,Grep --permission-mode default --add-dir $CASE_DIR ${CLI_EXTRA[*]}"
+  if ! "$CLI_BIN" -p --model opus \
+      --allowedTools "Read,Glob,Grep" \
+      --permission-mode default \
+      --add-dir "$CASE_DIR" \
+      "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
     echo "LLM CLI invocation failed." >&2
     exit 1
   fi

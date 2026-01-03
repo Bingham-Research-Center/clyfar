@@ -229,19 +229,11 @@ def main() -> None:
     lines.append(f"- Init time: `{norm_init}`")
     lines.append(f"- Case root: `{case_root}`")
 
-    # Collect JSON file contents for embedding
-    json_contents = {}
+    # List JSON files (Claude reads them via file access, no embedding)
     for name, path in json_subdirs.items():
         if path.exists():
             json_files = sorted(path.glob("*.json"))
-            json_contents[name] = []
-            for jf in json_files:
-                try:
-                    content = jf.read_text()
-                    json_contents[name].append((jf.name, content))
-                except Exception as e:
-                    json_contents[name].append((jf.name, f"ERROR: {e}"))
-            lines.append(f"- JSON · {name}: {len(json_files)} files (embedded below)")
+            lines.append(f"- JSON · {name}: {len(json_files)} files at `{path.relative_to(case_root)}/`")
         else:
             lines.append(f"- JSON · {name}: (missing)")
 
@@ -318,50 +310,19 @@ def main() -> None:
         lines.append("> Note in your outlook: \"This is the first outlook in this sequence.\"")
         lines.append("")
 
-    # Embed JSON data for LLM analysis (summarized to fit context limits)
-    lines.append("## JSON Data (for analysis)")
+    # Embed clustering summary if available (small, critical context for Claude)
+    clustering_file = case_root / "clustering_summary.json"
+    lines.append("## Ensemble Clustering Summary")
     lines.append("")
-    lines.append("> Actual forecast data from all 31 Clyfar scenarios plus ensemble statistics.")
-    lines.append("")
-
-    import json as json_module
-
-    # Embed probs (1 file, small)
-    if "probs" in json_contents and json_contents["probs"]:
-        lines.append("### Exceedance Probabilities")
+    if clustering_file.exists():
+        lines.append("> Cluster assignments showing GEFS weather → Clyfar ozone linkage.")
+        lines.append("")
         lines.append("```json")
-        lines.append(json_contents["probs"][0][1])
+        lines.append(clustering_file.read_text())
         lines.append("```")
-        lines.append("")
-
-    # Embed all possibilities (31 files, key data)
-    if "possibilities" in json_contents:
-        lines.append(f"### Possibility Heatmaps ({len(json_contents['possibilities'])} scenarios)")
-        lines.append("")
-        for filename, content in json_contents["possibilities"]:
-            lines.append(f"#### `{filename}`")
-            lines.append("```json")
-            lines.append(content)
-            lines.append("```")
-            lines.append("")
-
-    # Embed only weather percentiles (1 file), not all 31 members
-    if "weather" in json_contents:
-        for filename, content in json_contents["weather"]:
-            if "percentiles" in filename:
-                lines.append("### GEFS Weather Percentiles (ensemble p10/p50/p90)")
-                lines.append("```json")
-                lines.append(content)
-                lines.append("```")
-                lines.append("")
-                break
-
-    # Summarize percentiles instead of full embed
-    if "percentiles" in json_contents:
-        lines.append(f"### Ozone Percentile Scenarios ({len(json_contents['percentiles'])} files)")
-        lines.append("")
-        lines.append("Files available: " + ", ".join(f[0] for f in json_contents["percentiles"]))
-        lines.append("")
+    else:
+        lines.append("> No clustering summary found. Read `possibilities/*.json` directly to understand ensemble spread.")
+    lines.append("")
 
     template_path = Path(args.prompt_template).expanduser()
     if not template_path.exists():

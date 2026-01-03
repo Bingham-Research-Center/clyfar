@@ -166,6 +166,7 @@ def main() -> None:
         ["scripts/demo_scenarios_clusters.py", args.init],
         ["scripts/demo_scenarios_possibility.py", args.init],
         ["scripts/demo_heatmaps_from_json.py", args.init],
+        ["scripts/generate_clustering_summary.py", args.init],  # GEFS↔Clyfar linkage for LLM
     ]
 
     for rel_script, init_arg in script_cmds:
