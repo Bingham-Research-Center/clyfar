@@ -183,5 +183,26 @@ Example format:
 
 - Caveat where relevant: forecasts are subject to error growth at longer lead times; Clyfar is experimental; AI-human system still being tested.
 - If files could not be read, note this in the Data Logger section.
+
+## Data Integrity
+
+- DO NOT hallucinate or fabricate data values or ensemble member names
+- ALWAYS read the actual JSON files before referencing specific values
+- For high-impact or tight-predictability cases, read ALL 31 ensemble members, not a subset
+- If a file cannot be read, state this explicitly rather than guessing
+
+## CRITICAL OUTPUT REQUIREMENT
+
+Output the forecast document DIRECTLY. Your response must START with:
+```
+---
+> **EXPERIMENTAL AI-GENERATED FORECAST**
+```
+
+- DO NOT describe or summarize the task
+- DO NOT ask for confirmation or offer alternatives
+- DO NOT output meta-commentary like "I've completed..." or "Here is..."
+
+Any response that begins with explanatory text is INVALID and will be rejected.
 ----
 
