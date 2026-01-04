@@ -18,16 +18,25 @@ python run_gefs_clyfar.py -i YYYYMMDDHH -n 16 -m 31 \
 python run_gefs_clyfar.py -i YYYYMMDDHH -n 4 -m 2 -d ./data -f ./figures -t
 ```
 
-### 2. Generate LLM outlook (requires CASE data to exist)
+### 2. Generate LLM outlook (ad-hoc, when CASE data exists)
 ```bash
-# Step 1: Sync CASE data from export directory (if not already done)
-python scripts/sync_case_from_local.py --init YYYYMMDDHH \
-  --source ~/basinwx-data/clyfar/basinwx_export --history 5
+# On CHPC interactive node (salloc -n 4 -A notchpeak-shared-short -p notchpeak-shared-short -t 1:00:00)
+cd ~/gits/clyfar
 
-# Step 2: Generate LLM outlook
+# IMPORTANT: Use default CLI path (prevents meta-response failures)
+unset LLM_CLI_COMMAND LLM_CLI_BIN LLM_CLI_ARGS
+
+# Generate outlook (YYYYMMDDHH format, e.g., 2026010406)
 ./LLM-GENERATE.sh YYYYMMDDHH
 
-# Output: data/json_tests/CASE_*/llm_text/LLM-OUTLOOK-*.md
+# Exit codes: 0=success, 2=validation failed (meta-response, retry manually)
+# Output: data/json_tests/CASE_*/llm_text/LLM-OUTLOOK-*.md + .pdf
+```
+
+**If CASE data doesn't exist yet** (sync from scheduled run exports):
+```bash
+python scripts/sync_case_from_local.py --init YYYYMMDDHH \
+  --source ~/basinwx-data/clyfar/basinwx_export --history 5
 ```
 
 ### 3. Check data readiness before LLM generation
@@ -52,7 +61,7 @@ source scripts/set_llm_qa.sh off  # disable
 |------|---------|
 | Full pipeline | `python run_gefs_clyfar.py -i INIT -n 16 -m 31 -d ~/basinwx-data/clyfar -f ~/basinwx-data/clyfar/figures` |
 | Sync CASE data | `python scripts/sync_case_from_local.py --init INIT --source ~/basinwx-data/clyfar/basinwx_export --history 5` |
-| LLM generation | `./LLM-GENERATE.sh INIT` |
+| LLM generation (ad-hoc) | `unset LLM_CLI_COMMAND && ./LLM-GENERATE.sh INIT` |
 | Unit tests | `pytest tests/` |
 
 ## Directory Structure
