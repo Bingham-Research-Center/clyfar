@@ -315,13 +315,34 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
         source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
     fi
 
+    # Step 2.5: Load pandoc/texlive modules for PDF generation
+    # These must be loaded in the SLURM job context (not just in outlook_to_pdf.sh)
+    module load pandoc/2.19.2 texlive/2022 2>/dev/null || {
+        echo "WARNING: Failed to load pandoc/texlive modules, PDF generation may fail"
+    }
+
     # Step 3: Generate LLM outlook
     # Failures here don't block the pipeline - forecast data is already saved
+    # IMPORTANT: Use default CLI path (unset custom commands to prevent meta-responses)
+    unset LLM_CLI_COMMAND LLM_CLI_BIN LLM_CLI_ARGS 2>/dev/null || true
+
     echo "Running LLM-GENERATE.sh for init $INIT_TIME..."
-    "$CLYFAR_DIR/LLM-GENERATE.sh" "$INIT_TIME" && LLM_SUCCESS=true || {
-        echo "WARNING: LLM outlook generation failed (non-fatal)"
-        echo "You can retry manually: ./LLM-GENERATE.sh $INIT_TIME"
-    }
+    LLM_EXIT=0
+    "$CLYFAR_DIR/LLM-GENERATE.sh" "$INIT_TIME" || LLM_EXIT=$?
+
+    case $LLM_EXIT in
+        0)
+            LLM_SUCCESS=true
+            ;;
+        2)
+            echo "WARNING: LLM output validation failed (meta-response detected)"
+            echo "Manual regeneration required: ./LLM-GENERATE.sh $INIT_TIME"
+            ;;
+        *)
+            echo "WARNING: LLM outlook generation failed (exit $LLM_EXIT)"
+            echo "You can retry manually: ./LLM-GENERATE.sh $INIT_TIME"
+            ;;
+    esac
 
     if [ "$LLM_SUCCESS" = true ]; then
         OUTLOOK_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.md"

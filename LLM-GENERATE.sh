@@ -12,6 +12,10 @@
 #   LLM_CLI_COMMAND     - full shell command to run (reads prompt from STDIN)
 #   LLM_CLI_BIN         - CLI binary name if LLM_CLI_COMMAND is unset (default claude)
 #   LLM_CLI_ARGS        - arguments for LLM_CLI_BIN (space-separated; for complex quoting use LLM_CLI_COMMAND)
+#
+# PRODUCTION: Use DEFAULT path (do not set LLM_CLI_COMMAND)
+#   Default uses: claude -p --model opus --allowedTools Read,Glob,Grep
+#   WARNING: LLM_CLI_COMMAND is for debugging only; it causes meta-response failures
 
 set -euo pipefail
 
@@ -59,7 +63,8 @@ normalise_init() {
 NORM_INIT="$(normalise_init "$INIT")"
 DATE_PART="${NORM_INIT:0:8}"
 HOUR_PART="${NORM_INIT:9:4}"
-CASE_DIR="$SCRIPT_DIR/data/json_tests/CASE_${DATE_PART}_${HOUR_PART}Z"
+JSON_TESTS_ROOT="$SCRIPT_DIR/data/json_tests"
+CASE_DIR="$JSON_TESTS_ROOT/CASE_${DATE_PART}_${HOUR_PART}Z"
 PROMPT_PATH="$CASE_DIR/llm_text/forecast_prompt_${NORM_INIT}.md"
 OUTPUT_PATH="$CASE_DIR/llm_text/${OUTPUT_BASENAME}-${NORM_INIT}.md"
 
@@ -76,6 +81,16 @@ if [[ -n "$QA_FILE" ]]; then
   echo ">>> Warnings from this file will appear in the LLM output."
   echo ">>> To disable: source scripts/set_llm_qa.sh off"
   echo ""
+fi
+
+# Generate clustering summary if not present (for ensemble structure context)
+if [[ ! -f "$CASE_DIR/clustering_summary.json" ]]; then
+  echo "Generating clustering summary for $NORM_INIT..."
+  if "$PYTHON_BIN" scripts/generate_clustering_summary.py "$NORM_INIT" 2>/dev/null; then
+    echo "  Created: $CASE_DIR/clustering_summary.json"
+  else
+    echo "  Warning: Could not generate clustering summary (non-fatal)"
+  fi
 fi
 
 if [[ "$RENDER_PROMPT" == "1" ]]; then
@@ -100,8 +115,8 @@ echo "Writing LLM output to: $OUTPUT_PATH"
 
 if [[ -n "$CLI_COMMAND" ]]; then
   echo "Running custom CLI command: $CLI_COMMAND"
-  # Run from CASE_DIR so --add-dir . works for file access
-  if ! bash -lc "cd '$CASE_DIR' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
+  # Run from JSON_TESTS_ROOT so --add-dir . gives access to all CASE directories (for dRisk/dt)
+  if ! bash -lc "cd '$JSON_TESTS_ROOT' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
     echo "LLM CLI command failed." >&2
     exit 1
   fi
@@ -112,11 +127,11 @@ else
   fi
   # shellcheck disable=SC2206
   CLI_EXTRA=($CLI_ARGS)
-  echo "Running ${CLI_BIN} -p --model opus --allowedTools Read,Glob,Grep --permission-mode default --add-dir $CASE_DIR ${CLI_EXTRA[*]}"
+  echo "Running ${CLI_BIN} -p --model opus --allowedTools Read,Glob,Grep --permission-mode default --add-dir $JSON_TESTS_ROOT ${CLI_EXTRA[*]}"
   if ! "$CLI_BIN" -p --model opus \
       --allowedTools "Read,Glob,Grep" \
       --permission-mode default \
-      --add-dir "$CASE_DIR" \
+      --add-dir "$JSON_TESTS_ROOT" \
       "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
     echo "LLM CLI invocation failed." >&2
     exit 1
@@ -136,6 +151,53 @@ if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
       sed -i '1i---' "$OUTPUT_PATH"
       echo "Post-processed: prepended '---' (was missing)"
     fi
+  fi
+fi
+
+# Validation: detect meta-responses and incomplete output
+validate_llm_output() {
+  local file="$1"
+  local errors=()
+
+  [[ ! -f "$file" || ! -s "$file" ]] && errors+=("Empty/missing output")
+
+  local lines
+  lines=$(wc -l < "$file")
+  [[ "$lines" -lt 50 ]] && errors+=("Too short: $lines lines (expected 50+)")
+
+  grep -q "^AlertLevel:" "$file" || errors+=("Missing AlertLevel:")
+  grep -q "^Confidence:" "$file" || errors+=("Missing Confidence:")
+  grep -q "## Days 1" "$file" || errors+=("Missing 'Days 1-5' section")
+
+  # Meta-response detection
+  if grep -qiE "I've completed|Would you like me|The key findings|ready for publication|save this to a file" "$file"; then
+    errors+=("META-RESPONSE detected (LLM described task instead of completing it)")
+  fi
+
+  if [[ ${#errors[@]} -gt 0 ]]; then
+    echo "========================================" >&2
+    echo "LLM OUTPUT VALIDATION FAILED" >&2
+    echo "========================================" >&2
+    printf "  - %s\n" "${errors[@]}" >&2
+    echo "" >&2
+    echo "Output saved to: $file" >&2
+    echo "Retry: ./LLM-GENERATE.sh $INIT" >&2
+    echo "========================================" >&2
+    return 1
+  fi
+  echo "Validation passed: $lines lines, all markers present"
+  return 0
+}
+
+# Run validation after post-processing
+if [[ -f "$OUTPUT_PATH" ]]; then
+  if ! validate_llm_output "$OUTPUT_PATH"; then
+    ARCHIVE_DIR="$(dirname "$OUTPUT_PATH")/archive"
+    mkdir -p "$ARCHIVE_DIR"
+    ARCHIVE_FILE="$ARCHIVE_DIR/$(basename "$OUTPUT_PATH" .md)_failed_$(date +%s).md"
+    cp "$OUTPUT_PATH" "$ARCHIVE_FILE"
+    echo "Failed output archived to: $ARCHIVE_FILE"
+    exit 2  # Distinct exit code for validation failure
   fi
 fi
 
