@@ -316,19 +316,41 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     fi
 
     # Step 2.5: Load pandoc/texlive modules for PDF generation
-    # These must be loaded in the SLURM job context (not just in outlook_to_pdf.sh)
-    # CHPC uses LMOD at a custom path - must source the correct init for Rocky Linux 8
+    # DIAGNOSTIC VERSION - verbose logging to understand why modules fail in SLURM batch
+    echo "=== PDF MODULE DEBUG ===" >&2
+    echo "LMOD_CMD=${LMOD_CMD:-unset}" >&2
+    echo "MODULEPATH=${MODULEPATH:-unset}" >&2
+    echo "PATH (first 200 chars): ${PATH:0:200}" >&2
+
     LMOD_INIT="/uufs/chpc.utah.edu/sys/installdir/lmod/lmod-r8/init/bash"
     if [[ -f "$LMOD_INIT" ]]; then
+        echo "Sourcing LMOD init: $LMOD_INIT" >&2
         source "$LMOD_INIT"
+        echo "After LMOD source:" >&2
+        echo "  LMOD_CMD=${LMOD_CMD:-unset}" >&2
+        echo "  MODULEPATH=${MODULEPATH:-unset}" >&2
+    else
+        echo "ERROR: LMOD init not found at $LMOD_INIT" >&2
     fi
 
-    # Try texlive/2019 first (has ucharcat.sty), fall back to 2022
-    if ! module load pandoc/2.19.2 texlive/2019 2>/dev/null; then
-        if ! module load pandoc/2.19.2 texlive/2022 2>/dev/null; then
-            echo "WARNING: Failed to load pandoc/texlive modules, PDF generation may fail"
+    echo "Checking module availability..." >&2
+    module avail pandoc 2>&1 | head -5 >&2
+    module avail texlive 2>&1 | head -5 >&2
+
+    echo "Attempting: module load pandoc/2.19.2 texlive/2019" >&2
+    if module load pandoc/2.19.2 texlive/2019 2>&1; then
+        echo "Module load SUCCEEDED" >&2
+        echo "  pandoc: $(which pandoc 2>/dev/null || echo 'NOT IN PATH')" >&2
+        echo "  xelatex: $(which xelatex 2>/dev/null || echo 'NOT IN PATH')" >&2
+    else
+        echo "Module load FAILED - trying texlive/2022..." >&2
+        if module load pandoc/2.19.2 texlive/2022 2>&1; then
+            echo "Fallback to texlive/2022 SUCCEEDED" >&2
+        else
+            echo "Both texlive versions FAILED to load" >&2
         fi
     fi
+    echo "=== END PDF MODULE DEBUG ===" >&2
 
     # Step 3: Generate LLM outlook
     # Failures here don't block the pipeline - forecast data is already saved
