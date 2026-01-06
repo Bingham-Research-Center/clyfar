@@ -317,9 +317,19 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
 
     # Step 2.5: Load pandoc/texlive modules for PDF generation
     # These must be loaded in the SLURM job context (not just in outlook_to_pdf.sh)
-    module load pandoc/2.19.2 texlive/2022 2>/dev/null || {
-        echo "WARNING: Failed to load pandoc/texlive modules, PDF generation may fail"
-    }
+    # Ensure LMOD is initialized in SLURM batch context (may not be sourced automatically)
+    if [[ -f /etc/profile.d/lmod.sh ]]; then
+        source /etc/profile.d/lmod.sh 2>/dev/null || true
+    elif [[ -f /etc/profile.d/modules.sh ]]; then
+        source /etc/profile.d/modules.sh 2>/dev/null || true
+    fi
+
+    # Try texlive/2019 first (has ucharcat.sty), fall back to 2022
+    if ! module load pandoc/2.19.2 texlive/2019 2>/dev/null; then
+        if ! module load pandoc/2.19.2 texlive/2022 2>/dev/null; then
+            echo "WARNING: Failed to load pandoc/texlive modules, PDF generation may fail"
+        fi
+    fi
 
     # Step 3: Generate LLM outlook
     # Failures here don't block the pipeline - forecast data is already saved
