@@ -4,10 +4,9 @@
 
 set -euo pipefail
 
-# Load modern pandoc and texlive on CHPC
-if command -v module &>/dev/null; then
-  module load pandoc/2.19.2 texlive/2022 2>/dev/null || true
-fi
+# NOTE: Module loading is now handled by submit_clyfar.sh before calling this script.
+# The 'module' function isn't inherited by subprocesses anyway, so this was silently failing.
+# Parent script exports PATH after module load, so pandoc/xelatex should be in PATH.
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <outlook.md> [output.pdf]" >&2

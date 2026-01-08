@@ -328,7 +328,8 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
         source "$LMOD_INIT"
 
         # LMOD init doesn't set MODULEPATH - must set it explicitly for SLURM batch
-        if [[ -z "$MODULEPATH" ]]; then
+        # Use ${MODULEPATH:-} to avoid "unbound variable" error with set -u
+        if [[ -z "${MODULEPATH:-}" ]]; then
             export MODULEPATH="/uufs/chpc.utah.edu/sys/modulefiles/CHPC-r8/Core:/uufs/chpc.utah.edu/sys/modulefiles/CHPC-r8/Linux"
             echo "Set MODULEPATH explicitly (was empty)" >&2
         fi
@@ -347,12 +348,14 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     echo "Attempting: module load pandoc/2.19.2 texlive/2019" >&2
     if module load pandoc/2.19.2 texlive/2019 2>&1; then
         echo "Module load SUCCEEDED" >&2
+        export PATH  # Ensure subprocess (outlook_to_pdf.sh) sees updated PATH
         echo "  pandoc: $(which pandoc 2>/dev/null || echo 'NOT IN PATH')" >&2
         echo "  xelatex: $(which xelatex 2>/dev/null || echo 'NOT IN PATH')" >&2
     else
         echo "Module load FAILED - trying texlive/2022..." >&2
         if module load pandoc/2.19.2 texlive/2022 2>&1; then
             echo "Fallback to texlive/2022 SUCCEEDED" >&2
+            export PATH  # Ensure subprocess sees updated PATH
         else
             echo "Both texlive versions FAILED to load" >&2
         fi
