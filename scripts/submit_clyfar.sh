@@ -326,6 +326,13 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     if [[ -f "$LMOD_INIT" ]]; then
         echo "Sourcing LMOD init: $LMOD_INIT" >&2
         source "$LMOD_INIT"
+
+        # LMOD init doesn't set MODULEPATH - must set it explicitly for SLURM batch
+        if [[ -z "$MODULEPATH" ]]; then
+            export MODULEPATH="/uufs/chpc.utah.edu/sys/modulefiles/CHPC-r8/Core:/uufs/chpc.utah.edu/sys/modulefiles/CHPC-r8/Linux"
+            echo "Set MODULEPATH explicitly (was empty)" >&2
+        fi
+
         echo "After LMOD source:" >&2
         echo "  LMOD_CMD=${LMOD_CMD:-unset}" >&2
         echo "  MODULEPATH=${MODULEPATH:-unset}" >&2
