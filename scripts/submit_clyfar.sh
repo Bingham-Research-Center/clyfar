@@ -341,8 +341,8 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     fi
 
     echo "Checking module availability..." >&2
-    module avail pandoc 2>&1 | head -5 >&2
-    module avail texlive 2>&1 | head -5 >&2
+    module avail pandoc 2>&1 | head -5 >&2 || true
+    module avail texlive 2>&1 | head -5 >&2 || true
 
     echo "Attempting: module load pandoc/2.19.2 texlive/2019" >&2
     if module load pandoc/2.19.2 texlive/2019 2>&1; then
