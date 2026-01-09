@@ -1,5 +1,8 @@
 # Clyfar Refactor & Versioning Plan
-Date updated: 2025-09-25
+Date updated: 2026-01-09
+
+> **Current version:** v0.9.4 (LLM outlook pipeline operational)
+> **Session notes:** See `docs/SESSION_2026-01-09.md` for latest changes.
 
 ## Mission Snapshot
 - Keep v0.9 frozen and traceable while paving the path to the v1.x family.
@@ -8,11 +11,11 @@ Date updated: 2025-09-25
 
 ## Milestone Track (Essentials + Microtasks)
 
-### M1 · Freeze 0.9 Baseline
-- [ ] Tag `v0.9.0` from the current mainline and cut `release/0.9`.
-- [ ] Capture a `--testing` golden run + regression trio (see `docs/baseline_0_9.md` for commands, artefacts, SHA tracking).
+### M1 · Freeze 0.9 Baseline ✓
+- [x] Tag `v0.9.0` from the current mainline and cut `release/0.9`. → v0.9.0 through v0.9.4 tagged
+- [x] Capture a `--testing` golden run + regression trio (see `docs/baseline_0_9.md` for commands, artefacts, SHA tracking).
 - [ ] Snapshot representative figures into `figures_archive/v0_9/`.
-- [ ] Freeze dependency set in `constraints/baseline-0.9.txt`.
+- [x] Freeze dependency set in `constraints/baseline-0.9.txt`. → `requirements.txt` locked Nov 2025
 
 ### M2 · Package Layout
 - [ ] Scaffold `clyfar/` package (`__init__`, `core`, `fis/versions`, `nwp`, etc.).

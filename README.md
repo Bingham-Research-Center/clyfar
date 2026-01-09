@@ -111,7 +111,7 @@ Notes
 
 ## AI-Generated Outlook PDFs (Alpha)
 
-> **Status:** Internal review, January 2025
+> **Status:** Operational, January 2026
 
 Clyfar generates AI-assisted ozone outlooks using the "Ffion" forecaster (Claude LLM). Each outlook is available as a professionally formatted PDF.
 
