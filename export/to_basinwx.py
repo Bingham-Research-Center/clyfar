@@ -755,35 +755,65 @@ def upload_pdf_to_basinwx(pdf_path: str) -> bool:
     Returns:
         True if upload succeeded, False otherwise
     """
+    return upload_outlook_to_basinwx(pdf_path)
+
+
+def upload_outlook_to_basinwx(file_path: str) -> bool:
+    """Upload an LLM outlook file (PDF or markdown) to BasinWx API.
+
+    Args:
+        file_path: Path to PDF or markdown file
+
+    Returns:
+        True if upload succeeded, False otherwise
+    """
     import requests
     import socket
 
     api_key = os.getenv('DATA_UPLOAD_API_KEY')
     if not api_key:
-        logger.warning("DATA_UPLOAD_API_KEY not set, skipping PDF upload")
+        logger.warning("DATA_UPLOAD_API_KEY not set, skipping outlook upload")
         return False
 
     api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-    upload_url = f"{api_url}/api/upload/outlooks"
+    upload_url = f"{api_url}/api/upload/llm_outlooks"
     hostname = socket.getfqdn()
     headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
 
+    # Detect MIME type from extension
+    ext = os.path.splitext(file_path)[1].lower()
+    mime_types = {'.pdf': 'application/pdf', '.md': 'text/markdown'}
+    mime_type = mime_types.get(ext, 'application/octet-stream')
+
     try:
         with requests.Session() as session:
-            with open(pdf_path, 'rb') as f:
-                files = {'file': (os.path.basename(pdf_path), f, 'application/pdf')}
+            with open(file_path, 'rb') as f:
+                files = {'file': (os.path.basename(file_path), f, mime_type)}
                 response = session.post(upload_url, files=files, headers=headers, timeout=60)
 
             if response.status_code == 200:
-                logger.info(f"Uploaded PDF: {os.path.basename(pdf_path)}")
+                logger.info(f"Uploaded outlook: {os.path.basename(file_path)}")
                 return True
             else:
-                logger.error(f"PDF upload failed ({response.status_code}): {response.text}")
+                logger.error(f"Outlook upload failed ({response.status_code}): {response.text}")
                 return False
 
     except Exception as e:
-        logger.error(f"Failed to upload PDF {pdf_path}: {e}")
+        logger.error(f"Failed to upload outlook {file_path}: {e}")
         return False
+
+
+def upload_json_to_basinwx(filepath: str, data_type: str = "forecasts") -> bool:
+    """Upload a JSON file to BasinWx API.
+
+    Args:
+        filepath: Path to JSON file
+        data_type: Data type for API routing (default 'forecasts')
+
+    Returns:
+        True if upload succeeded, False otherwise
+    """
+    return _upload_to_basinwx(filepath, data_type)
 
 
 def export_figures_to_basinwx(
@@ -867,19 +897,29 @@ def export_figures_to_basinwx(
     logger.info(f"Found {len(results['heatmaps'])} heatmaps, "
                 f"{len(results['meteograms'])} meteograms for {init_pattern}")
 
-    # Collect LLM outlook PDFs from json_tests directory
-    all_pdfs = []
+    # Collect LLM outlook files (PDFs + markdown) from json_tests directory
+    all_outlook_files = []
+    all_clustering_jsons = []
     if json_tests_root:
         init_str = init_dt.strftime('%Y%m%d_%H%MZ')
-        llm_text_dir = os.path.join(json_tests_root, f"CASE_{init_str}", "llm_text")
+        case_dir = os.path.join(json_tests_root, f"CASE_{init_str}")
+        llm_text_dir = os.path.join(case_dir, "llm_text")
         if os.path.isdir(llm_text_dir):
             for f in os.listdir(llm_text_dir):
-                if f.endswith('.pdf'):
+                if f.startswith('LLM-OUTLOOK-') and f.endswith(('.pdf', '.md')):
                     fpath = os.path.join(llm_text_dir, f)
                     results["outlooks"].append(fpath)
-                    all_pdfs.append(fpath)
-            if all_pdfs:
-                logger.info(f"Found {len(all_pdfs)} outlook PDFs in {llm_text_dir}")
+                    all_outlook_files.append(fpath)
+            if all_outlook_files:
+                logger.info(f"Found {len(all_outlook_files)} outlook files in {llm_text_dir}")
+
+        # Collect clustering summary JSON (uploaded with forecast data)
+        # Try dated filename first, fall back to legacy name
+        clustering_path = os.path.join(case_dir, f"forecast_clustering_summary_{init_str}.json")
+        if not os.path.isfile(clustering_path):
+            clustering_path = os.path.join(case_dir, "clustering_summary.json")
+        if os.path.isfile(clustering_path):
+            all_clustering_jsons.append(clustering_path)
 
     # Parallel upload with shared session for proper connection cleanup
     if upload and all_pngs:
@@ -915,13 +955,21 @@ def export_figures_to_basinwx(
             # Explicitly close session to ensure all connections are cleaned up
             session.close()
 
-    # Upload PDFs separately (different endpoint)
-    if upload and all_pdfs:
-        pdf_success = 0
-        for pdf_path in all_pdfs:
-            if upload_pdf_to_basinwx(pdf_path):
-                pdf_success += 1
-        logger.info(f"Uploaded {pdf_success}/{len(all_pdfs)} outlook PDFs")
+    # Upload outlook files (PDFs + markdown) to llm_outlooks endpoint
+    if upload and all_outlook_files:
+        outlook_success = 0
+        for fpath in all_outlook_files:
+            if upload_outlook_to_basinwx(fpath):
+                outlook_success += 1
+        logger.info(f"Uploaded {outlook_success}/{len(all_outlook_files)} outlook files")
+
+    # Upload clustering JSON with forecast data
+    if upload and all_clustering_jsons:
+        clust_success = 0
+        for fpath in all_clustering_jsons:
+            if _upload_to_basinwx(fpath, "forecasts"):
+                clust_success += 1
+        logger.info(f"Uploaded {clust_success}/{len(all_clustering_jsons)} clustering JSONs")
 
     return results
 

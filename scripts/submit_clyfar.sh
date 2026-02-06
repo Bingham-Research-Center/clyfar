@@ -315,57 +315,31 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
         source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
     fi
 
-    # Step 2.5: Load pandoc/texlive modules for PDF generation
-    # DIAGNOSTIC VERSION - verbose logging to understand why modules fail in SLURM batch
-    echo "=== PDF MODULE DEBUG ===" >&2
-    echo "LMOD_CMD=${LMOD_CMD:-unset}" >&2
-    echo "MODULEPATH=${MODULEPATH:-unset}" >&2
-    echo "PATH (first 200 chars): ${PATH:0:200}" >&2
-
-    LMOD_INIT="/uufs/chpc.utah.edu/sys/installdir/lmod/lmod-r8/init/bash"
-    if [[ -f "$LMOD_INIT" ]]; then
-        echo "Sourcing LMOD init: $LMOD_INIT" >&2
-        source "$LMOD_INIT"
-
-        # LMOD init doesn't set MODULEPATH - must set it explicitly for SLURM batch
-        # Use ${MODULEPATH:-} to avoid "unbound variable" error with set -u
-        if [[ -z "${MODULEPATH:-}" ]]; then
-            export MODULEPATH="/uufs/chpc.utah.edu/sys/modulefiles/CHPC-r8/Core:/uufs/chpc.utah.edu/sys/modulefiles/CHPC-r8/Linux"
-            echo "Set MODULEPATH explicitly (was empty)" >&2
-        fi
-
-        echo "After LMOD source:" >&2
-        echo "  LMOD_CMD=${LMOD_CMD:-unset}" >&2
-        echo "  MODULEPATH=${MODULEPATH:-unset}" >&2
-    else
-        echo "ERROR: LMOD init not found at $LMOD_INIT" >&2
-    fi
-
-    echo "Checking module availability..." >&2
-    module avail pandoc 2>&1 | head -5 >&2 || true
-    module avail texlive 2>&1 | head -5 >&2 || true
-
-    echo "Attempting: module load pandoc/2.19.2 texlive/2019" >&2
-    if module load pandoc/2.19.2 texlive/2019 2>&1; then
-        echo "Module load SUCCEEDED" >&2
-        export PATH  # Ensure subprocess (outlook_to_pdf.sh) sees updated PATH
-        echo "  pandoc: $(which pandoc 2>/dev/null || echo 'NOT IN PATH')" >&2
+    # Step 2.5: Add texlive to PATH for PDF generation
+    # Note: CHPC module system has broken libreadline.so.6 dependency after restart,
+    # so we add texlive bin directory directly to PATH.
+    # Pandoc 3.8+ is installed via conda in clyfar-nov2025 environment.
+    TEXLIVE_BIN="/uufs/chpc.utah.edu/sys/installdir/texlive/2022/bin/x86_64-linux"
+    if [[ -d "$TEXLIVE_BIN" ]]; then
+        export PATH="$TEXLIVE_BIN:$PATH"
+        echo "Added texlive 2022 to PATH" >&2
         echo "  xelatex: $(which xelatex 2>/dev/null || echo 'NOT IN PATH')" >&2
+        echo "  pandoc: $(which pandoc 2>/dev/null || echo 'NOT IN PATH')" >&2
     else
-        echo "Module load FAILED - trying texlive/2022..." >&2
-        if module load pandoc/2.19.2 texlive/2022 2>&1; then
-            echo "Fallback to texlive/2022 SUCCEEDED" >&2
-            export PATH  # Ensure subprocess sees updated PATH
-        else
-            echo "Both texlive versions FAILED to load" >&2
-        fi
+        echo "WARNING: texlive directory not found at $TEXLIVE_BIN" >&2
     fi
-    echo "=== END PDF MODULE DEBUG ===" >&2
 
     # Step 3: Generate LLM outlook
     # Failures here don't block the pipeline - forecast data is already saved
     # IMPORTANT: Use default CLI path (unset custom commands to prevent meta-responses)
     unset LLM_CLI_COMMAND LLM_CLI_BIN LLM_CLI_ARGS 2>/dev/null || true
+
+    # Ensure ~/.local/bin is in PATH (claude CLI is installed there)
+    # ~/.bashrc_basinwx doesn't include this, so SLURM jobs miss it
+    export PATH="$HOME/.local/bin:$PATH"
+
+    # Enable retry for meta-response resilience in batch jobs
+    export LLM_MAX_RETRIES=3
 
     echo "Running LLM-GENERATE.sh for init $INIT_TIME..."
     LLM_EXIT=0
@@ -391,6 +365,19 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
             echo "LLM outlook generated: $OUTLOOK_FILE"
             # Extract and display AlertLevel
             grep -E "^AlertLevel:|^Confidence:" "$OUTLOOK_FILE" | head -2 || true
+        fi
+
+        # Upload PDF to BasinWx (after LLM generation creates it)
+        PDF_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.pdf"
+        if [ -f "$PDF_FILE" ] && [ -n "$DATA_UPLOAD_API_KEY" ]; then
+            echo "Uploading LLM outlook PDF to BasinWx..."
+            python3 -c "
+from export.to_basinwx import upload_pdf_to_basinwx
+if upload_pdf_to_basinwx('$PDF_FILE'):
+    print('PDF uploaded successfully')
+else:
+    print('PDF upload failed')
+"
         fi
     fi
 else
