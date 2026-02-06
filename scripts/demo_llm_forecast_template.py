@@ -311,7 +311,10 @@ def main() -> None:
         lines.append("")
 
     # Embed clustering summary if available (small, critical context for Claude)
-    clustering_file = case_root / "clustering_summary.json"
+    # Try dated filename first, fall back to legacy name
+    clustering_file = case_root / f"forecast_clustering_summary_{norm_init}.json"
+    if not clustering_file.exists():
+        clustering_file = case_root / "clustering_summary.json"
     lines.append("## Ensemble Clustering Summary")
     lines.append("")
     if clustering_file.exists():

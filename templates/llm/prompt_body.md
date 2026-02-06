@@ -3,7 +3,7 @@
 ultrathink.
 
 **FILE ACCESS:**
-You have Read/Glob/Grep tool access to the CASE directory. Start with `clustering_summary.json` for ensemble structure, then read files as needed.
+You have Read/Glob/Grep tool access to the CASE directory. Start with `forecast_clustering_summary_*.json` for ensemble structure, then read files as needed.
 
 **DATA LOGGER REQUIREMENT:**
 End your outlook with a "Data Logger" section listing files read. Use "...and N similar" for bulk reads.
@@ -56,7 +56,7 @@ If no previous outlook is available, note: "This is the first outlook in this se
 - `probs/` - exceedance probabilities (1 file)
 - `possibilities/` - category heatmaps per scenario (31 files)
 - `weather/` - GEFS precursors per scenario + percentiles (32 files)
-- `clustering_summary.json` - ensemble structure and GEFS↔Clyfar linkage
+- `forecast_clustering_summary_*.json` - ensemble structure and GEFS↔Clyfar linkage
 
 Prioritize possibility categories over ppb values. Use wide ranges (e.g., "35-55 ppb").
 

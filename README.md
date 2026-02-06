@@ -117,12 +117,12 @@ Clyfar generates AI-assisted ozone outlooks using the "Ffion" forecaster (Claude
 
 **Public access URL:**
 ```
-https://basinwx.com/api/outlooks/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
+https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
 ```
 
 **Example (replace with current date/time):**
 ```
-https://basinwx.com/api/outlooks/LLM-OUTLOOK-20260102_0600Z.pdf
+https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.pdf
 ```
 
 **Local generation + upload:**

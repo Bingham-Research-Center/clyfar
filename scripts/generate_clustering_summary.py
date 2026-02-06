@@ -329,10 +329,16 @@ def main() -> None:
         "spread_summary": spread_summary,
     }
 
-    # Write output
-    out_path = case_root / "clustering_summary.json"
+    # Write output (new dated filename for consistency with other forecast products)
+    out_path = case_root / f"forecast_clustering_summary_{norm_init}.json"
     with open(out_path, "w") as f:
         json.dump(summary, f, indent=2)
+
+    # Backward compat: symlink old name → new name
+    legacy_path = case_root / "clustering_summary.json"
+    if legacy_path.is_symlink() or legacy_path.exists():
+        legacy_path.unlink()
+    legacy_path.symlink_to(out_path.name)
 
     print(f"Wrote clustering summary to: {out_path}")
     print(f"  {len(clusters)} clusters, representatives: {representative_members}")

@@ -37,6 +37,15 @@ PYTHON_BIN="${PYTHON:-python}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Auto-source ~/.bashrc_basinwx for API key if not already set (ad-hoc runs)
+if [[ -z "${DATA_UPLOAD_API_KEY:-}" && -f ~/.bashrc_basinwx ]]; then
+  echo "Sourcing ~/.bashrc_basinwx for API credentials..."
+  source ~/.bashrc_basinwx
+fi
+
+# Ensure ~/.local/bin is in PATH (claude CLI location)
+export PATH="$HOME/.local/bin:$PATH"
+
 # Auto-detect Q&A file if not set via environment variable
 DEFAULT_QA_FILE="$SCRIPT_DIR/data/llm_qa_context.md"
 if [[ -z "$QA_FILE" && -f "$DEFAULT_QA_FILE" ]]; then
@@ -84,12 +93,30 @@ if [[ -n "$QA_FILE" ]]; then
 fi
 
 # Generate clustering summary if not present (for ensemble structure context)
-if [[ ! -f "$CASE_DIR/clustering_summary.json" ]]; then
+CLUSTERING_FILE="$CASE_DIR/forecast_clustering_summary_${NORM_INIT}.json"
+CLUSTERING_LEGACY="$CASE_DIR/clustering_summary.json"
+if [[ ! -f "$CLUSTERING_FILE" && ! -f "$CLUSTERING_LEGACY" ]]; then
   echo "Generating clustering summary for $NORM_INIT..."
   if "$PYTHON_BIN" scripts/generate_clustering_summary.py "$NORM_INIT" 2>/dev/null; then
-    echo "  Created: $CASE_DIR/clustering_summary.json"
+    echo "  Created: $CLUSTERING_FILE"
   else
     echo "  Warning: Could not generate clustering summary (non-fatal)"
+  fi
+fi
+# Resolve actual path (new name preferred, fall back to legacy)
+if [[ ! -f "$CLUSTERING_FILE" && -f "$CLUSTERING_LEGACY" ]]; then
+  CLUSTERING_FILE="$CLUSTERING_LEGACY"
+fi
+
+# Upload clustering summary to BasinWx (with forecast data)
+if [[ -f "$CLUSTERING_FILE" && -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
+  if "$PYTHON_BIN" -c "
+from export.to_basinwx import upload_json_to_basinwx
+exit(0 if upload_json_to_basinwx('$CLUSTERING_FILE', 'forecasts') else 1)
+" 2>/dev/null; then
+    echo "Clustering summary uploaded to BasinWx"
+  else
+    echo "Warning: Clustering summary upload failed (non-fatal)" >&2
   fi
 fi
 
@@ -113,44 +140,17 @@ fi
 mkdir -p "$(dirname "$OUTPUT_PATH")"
 echo "Writing LLM output to: $OUTPUT_PATH"
 
-if [[ -n "$CLI_COMMAND" ]]; then
-  echo "Running custom CLI command: $CLI_COMMAND"
-  # Run from JSON_TESTS_ROOT so --add-dir . gives access to all CASE directories (for dRisk/dt)
-  if ! bash -lc "cd '$JSON_TESTS_ROOT' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
-    echo "LLM CLI command failed." >&2
-    exit 1
-  fi
-else
+# Retry configuration (override with LLM_MAX_RETRIES env var)
+# Default 1 (no retry) to keep SLURM jobs predictable; set higher for ad-hoc runs
+MAX_RETRIES="${LLM_MAX_RETRIES:-1}"
+RETRY_DELAY=30  # seconds between retries
+
+# Check CLI availability once before the retry loop
+if [[ -z "$CLI_COMMAND" ]]; then
   if ! command -v "$CLI_BIN" >/dev/null 2>&1; then
     echo "CLI binary not found: $CLI_BIN (set LLM_CLI_COMMAND or LLM_CLI_BIN)" >&2
+    echo "Hint: ensure ~/.local/bin is in PATH" >&2
     exit 1
-  fi
-  # shellcheck disable=SC2206
-  CLI_EXTRA=($CLI_ARGS)
-  echo "Running ${CLI_BIN} -p --model opus --allowedTools Read,Glob,Grep --permission-mode default --add-dir $JSON_TESTS_ROOT ${CLI_EXTRA[*]}"
-  if ! "$CLI_BIN" -p --model opus \
-      --allowedTools "Read,Glob,Grep" \
-      --permission-mode default \
-      --add-dir "$JSON_TESTS_ROOT" \
-      "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
-    echo "LLM CLI invocation failed." >&2
-    exit 1
-  fi
-fi
-
-# Post-process: ensure output starts with "---" (strip any LLM preamble)
-if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
-  first_line=$(head -1 "$OUTPUT_PATH")
-  if [[ "$first_line" != "---" ]]; then
-    if grep -q "^---$" "$OUTPUT_PATH"; then
-      # Strip everything before first "---"
-      sed -i '1,/^---$/{/^---$/!d}' "$OUTPUT_PATH"
-      echo "Post-processed: stripped preamble before first '---'"
-    else
-      # No "---" found at all - prepend it as safety net
-      sed -i '1i---' "$OUTPUT_PATH"
-      echo "Post-processed: prepended '---' (was missing)"
-    fi
   fi
 fi
 
@@ -175,30 +175,105 @@ validate_llm_output() {
   fi
 
   if [[ ${#errors[@]} -gt 0 ]]; then
-    echo "========================================" >&2
+    echo "----------------------------------------" >&2
     echo "LLM OUTPUT VALIDATION FAILED" >&2
-    echo "========================================" >&2
+    echo "----------------------------------------" >&2
     printf "  - %s\n" "${errors[@]}" >&2
-    echo "" >&2
-    echo "Output saved to: $file" >&2
-    echo "Retry: ./LLM-GENERATE.sh $INIT" >&2
-    echo "========================================" >&2
+    echo "----------------------------------------" >&2
     return 1
   fi
   echo "Validation passed: $lines lines, all markers present"
   return 0
 }
 
-# Run validation after post-processing
-if [[ -f "$OUTPUT_PATH" ]]; then
-  if ! validate_llm_output "$OUTPUT_PATH"; then
-    ARCHIVE_DIR="$(dirname "$OUTPUT_PATH")/archive"
-    mkdir -p "$ARCHIVE_DIR"
-    ARCHIVE_FILE="$ARCHIVE_DIR/$(basename "$OUTPUT_PATH" .md)_failed_$(date +%s).md"
-    cp "$OUTPUT_PATH" "$ARCHIVE_FILE"
-    echo "Failed output archived to: $ARCHIVE_FILE"
-    exit 2  # Distinct exit code for validation failure
+# Retry loop: invoke LLM, post-process, validate
+LLM_SUCCEEDED=false
+for attempt in $(seq 1 "$MAX_RETRIES"); do
+  echo ""
+  echo "=== LLM attempt $attempt of $MAX_RETRIES ==="
+
+  # Invoke LLM CLI
+  CLI_OK=true
+  if [[ -n "$CLI_COMMAND" ]]; then
+    echo "Running custom CLI command: $CLI_COMMAND"
+    if ! bash -lc "cd '$JSON_TESTS_ROOT' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
+      echo "LLM CLI command failed (attempt $attempt)." >&2
+      CLI_OK=false
+    fi
+  else
+    # shellcheck disable=SC2206
+    CLI_EXTRA=($CLI_ARGS)
+    # Timeout prevents hangs in batch environments (10 min should be plenty)
+    LLM_TIMEOUT="${LLM_TIMEOUT:-600}"
+    echo "Running ${CLI_BIN} -p --model opus --allowedTools Read,Glob,Grep --permission-mode default --add-dir $JSON_TESTS_ROOT ${CLI_EXTRA[*]} (timeout ${LLM_TIMEOUT}s)"
+    if ! timeout "$LLM_TIMEOUT" "$CLI_BIN" -p --model opus \
+        --allowedTools "Read,Glob,Grep" \
+        --permission-mode default \
+        --add-dir "$JSON_TESTS_ROOT" \
+        "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
+      echo "LLM CLI invocation failed (attempt $attempt)." >&2
+      CLI_OK=false
+    fi
   fi
+
+  if [[ "$CLI_OK" == false ]]; then
+    if [[ $attempt -lt $MAX_RETRIES ]]; then
+      echo "Retrying in ${RETRY_DELAY}s..."
+      sleep "$RETRY_DELAY"
+      continue
+    fi
+    echo "All $MAX_RETRIES LLM attempts failed (CLI error)." >&2
+    exit 1
+  fi
+
+  # Post-process: ensure output starts with "---" (strip any LLM preamble)
+  if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
+    first_line=$(head -1 "$OUTPUT_PATH")
+    if [[ "$first_line" != "---" ]]; then
+      if grep -q "^---$" "$OUTPUT_PATH"; then
+        sed -i '1,/^---$/{/^---$/!d}' "$OUTPUT_PATH"
+        echo "Post-processed: stripped preamble before first '---'"
+      else
+        sed -i '1i---' "$OUTPUT_PATH"
+        echo "Post-processed: prepended '---' (was missing)"
+      fi
+    fi
+  fi
+
+  # Validate
+  if [[ -f "$OUTPUT_PATH" ]] && validate_llm_output "$OUTPUT_PATH"; then
+    LLM_SUCCEEDED=true
+    break
+  fi
+
+  # Archive failed output
+  ARCHIVE_DIR="$(dirname "$OUTPUT_PATH")/archive"
+  mkdir -p "$ARCHIVE_DIR"
+  ARCHIVE_FILE="$ARCHIVE_DIR/$(basename "$OUTPUT_PATH" .md)_failed_$(date +%s).md"
+  cp "$OUTPUT_PATH" "$ARCHIVE_FILE"
+  echo "Failed output archived to: $ARCHIVE_FILE"
+
+  if [[ $attempt -lt $MAX_RETRIES ]]; then
+    echo "Retrying in ${RETRY_DELAY}s..."
+    sleep "$RETRY_DELAY"
+  fi
+done
+
+if [[ "$LLM_SUCCEEDED" == false ]]; then
+  echo "========================================" >&2
+  echo "All $MAX_RETRIES LLM attempts failed validation." >&2
+  echo "Manual retry: ./LLM-GENERATE.sh $INIT" >&2
+  echo "========================================" >&2
+  exit 2
+fi
+
+# Add texlive to PATH for PDF generation
+# Note: CHPC module system has broken libreadline.so.6 dependency,
+# so we add texlive bin directory directly to PATH.
+# Pandoc 3.8+ is installed via conda in clyfar-nov2025 environment.
+TEXLIVE_BIN="/uufs/chpc.utah.edu/sys/installdir/texlive/2022/bin/x86_64-linux"
+if [[ -d "$TEXLIVE_BIN" ]]; then
+  export PATH="$TEXLIVE_BIN:$PATH"
 fi
 
 # Generate PDF from the outlook markdown
@@ -206,15 +281,20 @@ if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
   PDF_PATH="${OUTPUT_PATH%.md}.pdf"
   if "$SCRIPT_DIR/scripts/outlook_to_pdf.sh" "$OUTPUT_PATH" "$PDF_PATH"; then
     echo "PDF generated: $PDF_PATH"
-    # Upload PDF to BasinWx API
+    # Upload PDF and markdown to BasinWx API
     if [[ -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
-      if "$PYTHON_BIN" -c "from export.to_basinwx import upload_pdf_to_basinwx; exit(0 if upload_pdf_to_basinwx('$PDF_PATH') else 1)"; then
+      if "$PYTHON_BIN" -c "from export.to_basinwx import upload_outlook_to_basinwx; exit(0 if upload_outlook_to_basinwx('$PDF_PATH') else 1)"; then
         echo "PDF uploaded to BasinWx"
       else
         echo "Warning: PDF upload failed (non-fatal)" >&2
       fi
+      if "$PYTHON_BIN" -c "from export.to_basinwx import upload_outlook_to_basinwx; exit(0 if upload_outlook_to_basinwx('$OUTPUT_PATH') else 1)"; then
+        echo "Markdown uploaded to BasinWx"
+      else
+        echo "Warning: Markdown upload failed (non-fatal)" >&2
+      fi
     else
-      echo "Skipping PDF upload (DATA_UPLOAD_API_KEY not set)"
+      echo "Skipping outlook upload (DATA_UPLOAD_API_KEY not set)"
     fi
   else
     echo "Warning: PDF generation failed (non-fatal)" >&2
