@@ -1,0 +1,92 @@
+{
+  "init": "20260208_1200Z",
+  "n_clusters": 3,
+  "clusters": [
+    {
+      "id": 1,
+      "members": [
+        "clyfar001",
+        "clyfar002",
+        "clyfar003",
+        "clyfar004",
+        "clyfar005",
+        "clyfar006",
+        "clyfar007",
+        "clyfar008",
+        "clyfar009",
+        "clyfar010",
+        "clyfar011",
+        "clyfar012",
+        "clyfar013",
+        "clyfar014",
+        "clyfar015",
+        "clyfar016",
+        "clyfar017",
+        "clyfar018",
+        "clyfar019",
+        "clyfar020",
+        "clyfar021",
+        "clyfar022",
+        "clyfar023",
+        "clyfar025",
+        "clyfar026",
+        "clyfar027",
+        "clyfar028",
+        "clyfar029",
+        "clyfar030"
+      ],
+      "fraction": 0.94,
+      "medoid": "clyfar001",
+      "gefs_weather": {
+        "snow_tendency": "low (<1 inch)",
+        "wind_tendency": "light (7 mph)",
+        "pattern": "variable"
+      },
+      "clyfar_ozone": {
+        "dominant_category": "background",
+        "risk_level": "low"
+      }
+    },
+    {
+      "id": 2,
+      "members": [
+        "clyfar024"
+      ],
+      "fraction": 0.03,
+      "medoid": "clyfar024",
+      "gefs_weather": {
+        "snow_tendency": "low (<1 inch)",
+        "wind_tendency": "light (6 mph)",
+        "pattern": "variable"
+      },
+      "clyfar_ozone": {
+        "dominant_category": "background",
+        "risk_level": "low"
+      }
+    },
+    {
+      "id": 3,
+      "members": [
+        "clyfar000"
+      ],
+      "fraction": 0.03,
+      "medoid": "clyfar000",
+      "gefs_weather": {
+        "snow_tendency": "low (<1 inch)",
+        "wind_tendency": "light (7 mph)",
+        "pattern": "variable"
+      },
+      "clyfar_ozone": {
+        "dominant_category": "background",
+        "risk_level": "low"
+      }
+    }
+  ],
+  "representative_members": [
+    "clyfar001",
+    "clyfar024",
+    "clyfar000"
+  ],
+  "linkage_note": "variable \u2192 background ozone (Cluster 1). variable \u2192 background ozone (Cluster 2). variable \u2192 background ozone (Cluster 3).",
+  "spread_summary": "3 clusters; 94% low risk, 3% low risk, 3% low risk"
+}
