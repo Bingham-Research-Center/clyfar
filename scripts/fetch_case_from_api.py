@@ -9,6 +9,7 @@ For a given init time, this script:
       * forecast_possibility_heatmap_*_{init}.json  -> CASE_.../possibilities/
       * forecast_percentile_scenarios_*_{init}.json -> CASE_.../percentiles/
       * forecast_exceedance_probabilities_{init}.json -> CASE_.../probs/
+      * forecast_clustering_summary_{init}.json -> CASE_.../
  - Creates/updates data/json_tests/CASE_YYYYMMDD_HHMMZ/ accordingly
 
 Usage (from repo root):
@@ -133,6 +134,9 @@ def main() -> None:
             if not files:
                 needs_fetch = True
                 break
+        clustering_file = case_root / f"forecast_clustering_summary_{init_str}.json"
+        if not clustering_file.exists():
+            needs_fetch = True
         if not needs_fetch:
             print(f"CASE {case_root.name} already populated; skipping download.")
             continue
@@ -144,7 +148,12 @@ def main() -> None:
 
         print(f"Populating CASE {case_root.name} ...")
 
-        groups: Dict[str, List[str]] = {"possibilities": [], "percentiles": [], "probs": []}
+        groups: Dict[str, List[str]] = {
+            "possibilities": [],
+            "percentiles": [],
+            "probs": [],
+            "clustering": [],
+        }
         for name in matches:
             if name.startswith("forecast_possibility_heatmap_"):
                 groups["possibilities"].append(name)
@@ -152,6 +161,8 @@ def main() -> None:
                 groups["percentiles"].append(name)
             elif name.startswith("forecast_exceedance_probabilities_"):
                 groups["probs"].append(name)
+            elif name.startswith("forecast_clustering_summary_"):
+                groups["clustering"].append(name)
 
         for group, files in groups.items():
             if not files:
@@ -160,7 +171,10 @@ def main() -> None:
             for fname in files:
                 if group == "probs" and len(files) > 1 and fname != f"forecast_exceedance_probabilities_{init_str}.json":
                     continue
-                dest = case_root / group / fname
+                if group == "clustering":
+                    dest = case_root / fname
+                else:
+                    dest = case_root / group / fname
                 download_file(args.base_url, fname, dest)
 
     print("Done fetching CASE directories.")
