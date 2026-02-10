@@ -6,6 +6,11 @@ Ffion version: v1.0 (tag: ffion-v1.0).
 - Q&A outputs can be verbose if prompt conditioning drifts from the default path.
 - Clustering logic still needs review; treat summaries as provisional.
 
+## Versioning policy
+- Clyfar tags (`v0.9.x`, `v1.0`, ...) track scientific/output logic changes (FIS, clustering, preprocessing, exports).
+- Ffion tags (`ffion-v1.x`) track prompt/workflow/LLM pipeline changes and can advance independently.
+- Record both tags in release notes or session logs when they move in tandem.
+
 ## Quick Start (Ad-hoc)
 
 ```bash
