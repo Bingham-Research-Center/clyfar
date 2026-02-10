@@ -14,7 +14,7 @@
 #   ./scripts/run_llm_outlook.sh 2025123100           # Standard run
 #   ./scripts/run_llm_outlook.sh 2025123100 --check   # Check files only
 #   ./scripts/run_llm_outlook.sh 2025123100 --force   # Regenerate even if exists
-#   ./scripts/run_llm_outlook.sh 2025123100 --no-qa   # Skip Q&A context
+#   ./scripts/run_llm_outlook.sh 2025123100 --with-qa # Include operator Q&A notes
 #
 # For old case studies, ensure the export data exists in:
 #   ~/basinwx-data/clyfar/basinwx_export/
@@ -43,7 +43,8 @@ usage() {
     echo "Options:"
     echo "  --check    Check prerequisites only, don't generate"
     echo "  --force    Regenerate even if outlook already exists"
-    echo "  --no-qa    Skip Q&A context (solar bias warning)"
+    echo "  --with-qa  Include Q&A context from scripts/set_llm_qa.sh"
+    echo "  --no-qa    Deprecated alias (default already omits Q&A)"
     echo "  --history N  Number of previous inits to sync (default: 5)"
     echo "  --help     Show this help"
     exit 1
@@ -53,7 +54,7 @@ usage() {
 INIT_TIME=""
 CHECK_ONLY=false
 FORCE=false
-NO_QA=false
+WITH_QA=false
 HISTORY=5
 
 while [[ $# -gt 0 ]]; do
@@ -66,8 +67,12 @@ while [[ $# -gt 0 ]]; do
             FORCE=true
             shift
             ;;
+        --with-qa)
+            WITH_QA=true
+            shift
+            ;;
         --no-qa)
-            NO_QA=true
+            WITH_QA=false
             shift
             ;;
         --history)
@@ -192,9 +197,9 @@ fi
 echo ""
 echo -e "${BLUE}[5/5] Generating LLM outlook...${NC}"
 
-# Enable Q&A context unless disabled
-if [[ "$NO_QA" = false ]] && [[ -f "$CLYFAR_DIR/scripts/set_llm_qa.sh" ]]; then
-    echo "Enabling Q&A context (solar bias warning)..."
+# Enable Q&A context only when explicitly requested
+if [[ "$WITH_QA" = true ]] && [[ -f "$CLYFAR_DIR/scripts/set_llm_qa.sh" ]]; then
+    echo "Enabling Q&A context..."
     source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
 fi
 

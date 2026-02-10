@@ -46,13 +46,6 @@ fi
 # Ensure ~/.local/bin is in PATH (claude CLI location)
 export PATH="$HOME/.local/bin:$PATH"
 
-# Auto-detect Q&A file if not set via environment variable
-DEFAULT_QA_FILE="$SCRIPT_DIR/data/llm_qa_context.md"
-if [[ -z "$QA_FILE" && -f "$DEFAULT_QA_FILE" ]]; then
-  QA_FILE="$DEFAULT_QA_FILE"
-  echo "Auto-detected Q&A context file: $QA_FILE"
-fi
-
 normalise_init() {
   local raw="$1"
   if [[ "$raw" == *_*Z ]]; then
@@ -87,36 +80,18 @@ fi
 if [[ -n "$QA_FILE" ]]; then
   echo ""
   echo ">>> Q&A CONTEXT ACTIVE: $QA_FILE"
-  echo ">>> Warnings from this file will appear in the LLM output."
-  echo ">>> To disable: source scripts/set_llm_qa.sh off"
+  echo ">>> Notes from this file will be used only where relevant."
   echo ""
 fi
 
 # Generate clustering summary if not present (for ensemble structure context)
 CLUSTERING_FILE="$CASE_DIR/forecast_clustering_summary_${NORM_INIT}.json"
-CLUSTERING_LEGACY="$CASE_DIR/clustering_summary.json"
-if [[ ! -f "$CLUSTERING_FILE" && ! -f "$CLUSTERING_LEGACY" ]]; then
+if [[ ! -f "$CLUSTERING_FILE" ]]; then
   echo "Generating clustering summary for $NORM_INIT..."
   if "$PYTHON_BIN" scripts/generate_clustering_summary.py "$NORM_INIT" 2>/dev/null; then
     echo "  Created: $CLUSTERING_FILE"
   else
     echo "  Warning: Could not generate clustering summary (non-fatal)"
-  fi
-fi
-# Resolve actual path (new name preferred, fall back to legacy)
-if [[ ! -f "$CLUSTERING_FILE" && -f "$CLUSTERING_LEGACY" ]]; then
-  CLUSTERING_FILE="$CLUSTERING_LEGACY"
-fi
-
-# Upload clustering summary to BasinWx (with forecast data)
-if [[ -f "$CLUSTERING_FILE" && -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
-  if "$PYTHON_BIN" -c "
-from export.to_basinwx import upload_json_to_basinwx
-exit(0 if upload_json_to_basinwx('$CLUSTERING_FILE', 'forecasts') else 1)
-" 2>/dev/null; then
-    echo "Clustering summary uploaded to BasinWx"
-  else
-    echo "Warning: Clustering summary upload failed (non-fatal)" >&2
   fi
 fi
 

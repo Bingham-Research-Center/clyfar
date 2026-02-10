@@ -60,7 +60,7 @@ If no previous outlook is available, note: "This is the first outlook in this se
 
 Prioritize possibility categories over ppb values. Use wide ranges (e.g., "35-55 ppb").
 
-If a Q&A block was provided, repeat its warnings in every section.
+If short-term bias notes are provided above, apply them only where relevant to the affected lead windows/scenarios and weave them naturally into the forecast.
 
 ### Task 1 – Three 5-day summaries at three complexity levels
 
@@ -205,4 +205,3 @@ Output the forecast document DIRECTLY. Your response must START with:
 
 Any response that begins with explanatory text is INVALID and will be rejected.
 ----
-

@@ -57,14 +57,18 @@ python scripts/sync_case_from_local.py --init YYYYMMDDHH \
 
 ## Q&A Context
 
-Inject warnings into outlook:
+Inject optional operator notes into outlook:
 ```bash
 source scripts/set_llm_qa.sh        # enable (edit QA_CONTENT first)
 ./LLM-GENERATE.sh INIT
 source scripts/set_llm_qa.sh off    # disable
 ```
 
-Or manually: `export LLM_QA_FILE=/path/to/warnings.md`
+Or manually: `export LLM_QA_FILE=/path/to/notes.md`
+
+Notes are applied only where relevant to affected lead windows/scenarios.
+
+Default short-term bias definitions are loaded from `templates/llm/short_term_biases.json`.
 
 ---
 
@@ -84,7 +88,7 @@ No manual intervention needed. Check logs at `~/logs/basinwx/clyfar_*.out`.
 
 ```
 CASE_YYYYMMDD_HHMMZ/
-├── clustering_summary.json     # Auto-generated ensemble structure
+├── forecast_clustering_summary_YYYYMMDD_HHMMZ.json  # Auto-generated ensemble structure
 ├── possibilities/              # 31 ozone category heatmaps
 ├── percentiles/                # 31 ozone percentile scenarios
 ├── probs/                      # 1 exceedance probability file
