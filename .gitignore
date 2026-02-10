@@ -39,6 +39,7 @@ docs/session_log.md
 
 # LLM fixture sample (keep other data ignored)
 !data/
+data/*
 !data/json_tests/
 data/json_tests/*
 !data/json_tests/CASE_20260208_1200Z/
