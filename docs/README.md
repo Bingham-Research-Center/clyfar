@@ -6,7 +6,7 @@ Use this page as the jumping-off point for orientation, planning, and deeper res
 ## Quick start
 - [`README.md`](../README.md#environment-setup) — Project summary, prerequisites, and the canonical smoke test (mirrored in [`AGENTS.md`](../AGENTS.md#testing-guidelines)).
 - [`AGENTS.md`](../AGENTS.md#testing-guidelines) — Collaboration guardrails, coding conventions, day-to-day workflows, and the same smoke command under Testing Guidelines (points back to the README entry above for consistency).
-- `docs/AI_AGENT_ONBOARDING.md` — **AI agents start here:** efficient protocol to minimize token usage and respect team conventions.
+- `docs/archive/AI_AGENT_ONBOARDING.md` — **AI agents start here:** efficient protocol to minimize token usage and respect team conventions.
 - `docs/project_overview.md` — Narrative tour of the architecture and possibility-theory framing.
 - `docs/roadmap.md` — Current refactor milestones, microtasks, and execution plan.
 

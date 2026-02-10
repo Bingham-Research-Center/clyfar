@@ -1,5 +1,11 @@
 # LLM Forecast SOP
 
+Ffion version: v1.0 (tag: ffion-v1.0).
+
+## Known issues
+- Q&A outputs can be verbose if prompt conditioning drifts from the default path.
+- Clustering logic still needs review; treat summaries as provisional.
+
 ## Quick Start (Ad-hoc)
 
 ```bash
