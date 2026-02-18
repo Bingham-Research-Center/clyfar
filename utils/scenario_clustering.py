@@ -1,8 +1,8 @@
 """Scenario clustering helpers for Ffion/Clyfar ensemble summaries.
 
 Implements a deterministic two-stage approach:
-1) Identify a null/background-dominated subset first.
-2) Cluster the remaining members with weighted block distances.
+1) Reserve cluster 0 for strict background-only Clyfar members.
+2) Cluster remaining members over an adaptive non-background active window.
 """
 
 from __future__ import annotations
@@ -20,20 +20,15 @@ BLOCK_NAMES = ("days_1_5", "days_6_10", "days_11_15")
 BLOCK_BOUNDS = ((0, 5), (5, 10), (10, None))
 BLOCK_WEIGHTS = np.array([0.55, 0.30, 0.15], dtype=float)
 
-# Stage-1 null-selection defaults
-NULL_THRESHOLDS = {
-    "weighted_high_max": 0.22,
-    "weighted_extreme_max": 0.08,
-    "weighted_background_min": 0.55,
-}
-NULL_MIN_FRACTION = 0.20
-NULL_MIN_SIZE = 4
-NULL_MIN_NON_NULL = 2
+# Stage-1 strict null-selection (cluster 0)
+STRICT_BACKGROUND_TARGET = 1.0
+STRICT_OTHER_TARGET = 0.0
+STRICT_TOLERANCE = 1e-6
 
 # Stage-2 clustering defaults
 DISTANCE_WEIGHTS = {"possibility": 0.60, "percentile": 0.40}
-K_MIN = 2
-K_MAX = 4
+K_MIN = 1
+K_MAX = 3
 
 
 def _block_ranges(n_steps: int) -> List[Tuple[str, int, int, float]]:
@@ -112,10 +107,11 @@ def _fill_nan_with_col_median(X: np.ndarray) -> np.ndarray:
     out = X.copy()
     for j in range(out.shape[1]):
         col = out[:, j]
+        if np.isnan(col).all():
+            out[:, j] = 0.0
+            continue
         if np.isnan(col).any():
             med = np.nanmedian(col)
-            if np.isnan(med):
-                med = 0.0
             col[np.isnan(col)] = med
             out[:, j] = col
     return out
@@ -189,7 +185,7 @@ def _min_cluster_size(labels: np.ndarray) -> int:
 
 
 def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
-    """Select cluster count in [2, 4] with silhouette and min-size guard."""
+    """Select cluster count in [1, 3] with silhouette and min-size guard."""
     n = D.shape[0]
     if n <= 1:
         labels = np.ones(n, dtype=int)
@@ -200,8 +196,18 @@ def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
             "fallback_used": False,
         }
 
+    if n <= 2:
+        labels = np.ones(n, dtype=int)
+        return labels, {
+            "selected_k": 1,
+            "min_cluster_size_required": 1,
+            "scores": {},
+            "fallback_used": False,
+        }
+
     max_k = min(K_MAX, n - 1)
-    if max_k < K_MIN:
+    min_k = max(2, K_MIN)
+    if max_k < min_k:
         labels = np.ones(n, dtype=int)
         return labels, {
             "selected_k": 1,
@@ -216,7 +222,7 @@ def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
     best_k: int | None = None
     best_score = -2.0
 
-    for k in range(K_MIN, max_k + 1):
+    for k in range(min_k, max_k + 1):
         labels_k = _cluster_from_distance(D, k)
         if _min_cluster_size(labels_k) < min_size_required:
             continue
@@ -236,11 +242,14 @@ def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         }
 
     # Fallback when silhouette/size constraints fail.
-    fallback_k = min(2, n)
-    labels_fb = _cluster_from_distance(D, fallback_k)
-    if _min_cluster_size(labels_fb) < min_size_required and min_size_required > 1:
+    fallback_k = 1 if K_MIN == 1 else min(2, n)
+    if fallback_k == 1:
         labels_fb = np.ones(n, dtype=int)
-        fallback_k = 1
+    else:
+        labels_fb = _cluster_from_distance(D, fallback_k)
+        if _min_cluster_size(labels_fb) < min_size_required and min_size_required > 1:
+            labels_fb = np.ones(n, dtype=int)
+            fallback_k = 1
 
     return labels_fb, {
         "selected_k": int(fallback_k),
@@ -250,15 +259,23 @@ def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
     }
 
 
-def _classify_risk(weighted_high: float, weighted_extreme: float) -> Tuple[str, str]:
-    """Return (dominant_category, risk_level) from weighted high/extreme."""
-    if np.isnan(weighted_high) or np.isnan(weighted_extreme):
+def _classify_risk(
+    weighted_non_background: float,
+    weighted_high: float,
+    weighted_extreme: float,
+) -> Tuple[str, str]:
+    """Return (dominant_category, risk_level) from weighted risk summaries."""
+    if (
+        np.isnan(weighted_non_background)
+        or np.isnan(weighted_high)
+        or np.isnan(weighted_extreme)
+    ):
         return "unknown", "unknown"
     if weighted_extreme >= 0.30:
         return "extreme", "very high"
     if weighted_high >= 0.50:
         return "elevated", "high"
-    if weighted_high >= 0.30:
+    if weighted_non_background >= 0.30:
         return "moderate", "medium"
     return "background", "low"
 
@@ -320,27 +337,41 @@ def _member_metrics(member_poss: Dict[str, pd.DataFrame], members: List[str], in
     for m in members:
         df = member_poss[m].reindex(index)
         bg = np.nan_to_num(df["background"].to_numpy(dtype=float), nan=0.0)
+        moderate = np.nan_to_num(df["moderate"].to_numpy(dtype=float), nan=0.0)
         elev = np.nan_to_num(df["elevated"].to_numpy(dtype=float), nan=0.0)
         ext = np.nan_to_num(df["extreme"].to_numpy(dtype=float), nan=0.0)
         high = elev + ext
+        non_background = moderate + high
 
+        moderate_blocks = _blockwise_means(moderate)
         high_blocks = _blockwise_means(high)
+        non_background_blocks = _blockwise_means(non_background)
         ext_blocks = _blockwise_means(ext)
         bg_blocks = _blockwise_means(bg)
 
+        weighted_moderate = _weighted_from_block_means(moderate_blocks)
         weighted_high = _weighted_from_block_means(high_blocks)
+        weighted_non_background = _weighted_from_block_means(non_background_blocks)
         weighted_extreme = _weighted_from_block_means(ext_blocks)
         weighted_background = _weighted_from_block_means(bg_blocks)
 
-        # Lower score means more null-like/background-dominated.
-        null_score = weighted_high + 0.60 * weighted_extreme - 0.30 * weighted_background
+        # Lower score means more strict-background / less non-background signal.
+        null_score = (
+            weighted_non_background
+            + 0.60 * weighted_extreme
+            - 0.30 * weighted_background
+        )
 
         metrics[m] = {
+            "weighted_moderate": float(weighted_moderate),
             "weighted_high": float(weighted_high),
+            "weighted_non_background": float(weighted_non_background),
             "weighted_extreme": float(weighted_extreme),
             "weighted_background": float(weighted_background),
             "block_means": {
+                "moderate": moderate_blocks,
                 "high": high_blocks,
+                "non_background": non_background_blocks,
                 "extreme": ext_blocks,
                 "background": bg_blocks,
             },
@@ -349,55 +380,55 @@ def _member_metrics(member_poss: Dict[str, pd.DataFrame], members: List[str], in
     return metrics
 
 
-def _select_null_members(metrics: Dict[str, Dict[str, Any]]) -> Tuple[List[str], Dict[str, Any]]:
-    """Select null members with threshold + fallback guarantee."""
-    members = sorted(metrics.keys())
-    n_members = len(members)
-    if n_members == 0:
-        return [], {"fallback_used": False, "selected_by_threshold": 0, "target_size": 0}
+def _is_strict_background_member(df: pd.DataFrame) -> bool:
+    """Return True when all lead days are background-only within numeric tolerance."""
+    if df.empty:
+        return False
+    values = df[["background", "moderate", "elevated", "extreme"]].to_numpy(dtype=float)
+    if not np.isfinite(values).all():
+        return False
+    background = values[:, 0]
+    others = values[:, 1:]
+    return bool(
+        np.all(background >= (STRICT_BACKGROUND_TARGET - STRICT_TOLERANCE))
+        and np.all(others <= (STRICT_OTHER_TARGET + STRICT_TOLERANCE))
+    )
 
-    selected = [
-        m for m in members
-        if (
-            metrics[m]["weighted_high"] <= NULL_THRESHOLDS["weighted_high_max"]
-            and metrics[m]["weighted_extreme"] <= NULL_THRESHOLDS["weighted_extreme_max"]
-            and metrics[m]["weighted_background"] >= NULL_THRESHOLDS["weighted_background_min"]
+
+def _active_window_mask(
+    member_poss: Dict[str, pd.DataFrame],
+    members: List[str],
+    index: pd.Index,
+) -> np.ndarray:
+    """Return per-day mask where any member has non-background possibility."""
+    n_steps = len(index)
+    if n_steps == 0 or not members:
+        return np.zeros(0, dtype=bool)
+
+    active = np.zeros(n_steps, dtype=bool)
+    for m in members:
+        df = member_poss[m].reindex(index)
+        moderate = np.nan_to_num(df["moderate"].to_numpy(dtype=float), nan=0.0)
+        elevated = np.nan_to_num(df["elevated"].to_numpy(dtype=float), nan=0.0)
+        extreme = np.nan_to_num(df["extreme"].to_numpy(dtype=float), nan=0.0)
+        active |= (
+            (moderate > (STRICT_OTHER_TARGET + STRICT_TOLERANCE))
+            | (elevated > (STRICT_OTHER_TARGET + STRICT_TOLERANCE))
+            | (extreme > (STRICT_OTHER_TARGET + STRICT_TOLERANCE))
         )
-    ]
+    return active
 
-    sorted_by_null = sorted(members, key=lambda x: metrics[x]["null_score"])
-    target_size = max(NULL_MIN_SIZE, int(np.ceil(NULL_MIN_FRACTION * n_members)))
-    fallback_used = False
 
-    if len(selected) < target_size:
-        fallback_used = True
-        selected_set = set(selected)
-        for m in sorted_by_null:
-            selected_set.add(m)
-            if len(selected_set) >= target_size:
-                break
-        selected = sorted(selected_set)
-
-    # Keep at least a minimum pool for stage-2 clustering when possible.
-    max_null = max(0, n_members - NULL_MIN_NON_NULL)
-    if max_null > 0 and len(selected) > max_null:
-        fallback_used = True
-        selected = sorted_by_null[:max_null]
-
-    return selected, {
-        "fallback_used": fallback_used,
-        "selected_by_threshold": int(
-            len([
-                m for m in members
-                if (
-                    metrics[m]["weighted_high"] <= NULL_THRESHOLDS["weighted_high_max"]
-                    and metrics[m]["weighted_extreme"] <= NULL_THRESHOLDS["weighted_extreme_max"]
-                    and metrics[m]["weighted_background"] >= NULL_THRESHOLDS["weighted_background_min"]
-                )
-            ])
-        ),
-        "target_size": int(target_size),
-    }
+def _all_members_background(
+    member_poss: Dict[str, pd.DataFrame],
+    members: List[str],
+    index: pd.Index,
+) -> bool:
+    """Return True if every member is strict-background across all lead days."""
+    for m in members:
+        if not _is_strict_background_member(member_poss[m].reindex(index)):
+            return False
+    return True
 
 
 def _build_feature_matrices(
@@ -405,10 +436,22 @@ def _build_feature_matrices(
     member_percentiles: Dict[str, pd.DataFrame],
     members: List[str],
     index: pd.Index,
+    active_mask: np.ndarray | None = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Build weighted, standardized possibility and percentile feature matrices."""
+    """Build standardized Clyfar possibility/percentile feature matrices."""
     n_steps = len(index)
-    day_w = _daily_weights(n_steps)
+    if (
+        active_mask is None
+        or len(active_mask) != n_steps
+        or not np.any(active_mask)
+    ):
+        mask = np.ones(n_steps, dtype=bool)
+    else:
+        mask = active_mask.astype(bool)
+
+    # Equalized active-window weighting for scenario branching.
+    day_w = np.zeros(n_steps, dtype=float)
+    day_w[mask] = 1.0 / np.sqrt(float(mask.sum()))
 
     poss_rows: List[np.ndarray] = []
     pct_rows: List[np.ndarray] = []
@@ -417,12 +460,16 @@ def _build_feature_matrices(
         poss_df = member_poss[m].reindex(index)
         pct_df = member_percentiles[m].reindex(index)
 
-        high = np.nan_to_num(
-            (poss_df["elevated"] + poss_df["extreme"]).to_numpy(dtype=float),
-            nan=0.0,
-        )
+        moderate = np.nan_to_num(poss_df["moderate"].to_numpy(dtype=float), nan=0.0)
+        elevated = np.nan_to_num(poss_df["elevated"].to_numpy(dtype=float), nan=0.0)
         extreme = np.nan_to_num(poss_df["extreme"].to_numpy(dtype=float), nan=0.0)
-        poss_vec = np.concatenate([high * day_w, extreme * day_w])
+        non_background = moderate + elevated + extreme
+        poss_vec = np.concatenate([
+            moderate * day_w,
+            elevated * day_w,
+            extreme * day_w,
+            non_background * day_w,
+        ])
         poss_rows.append(poss_vec)
 
         p50 = pct_df["p50"].to_numpy(dtype=float)
@@ -444,13 +491,21 @@ def _cluster_profile(
     weather_data: Dict[str, Dict[str, Sequence[float]]],
 ) -> Dict[str, Any]:
     """Build cluster-level profile payload."""
+    weighted_non_background = float(
+        np.mean([metrics[m]["weighted_non_background"] for m in members_c])
+    )
+    weighted_moderate = float(np.mean([metrics[m]["weighted_moderate"] for m in members_c]))
     weighted_high = float(np.mean([metrics[m]["weighted_high"] for m in members_c]))
     weighted_extreme = float(np.mean([metrics[m]["weighted_extreme"] for m in members_c]))
     weighted_background = float(np.mean([metrics[m]["weighted_background"] for m in members_c]))
-    dominant, risk = _classify_risk(weighted_high, weighted_extreme)
+    dominant, risk = _classify_risk(
+        weighted_non_background,
+        weighted_high,
+        weighted_extreme,
+    )
 
     block_summary: Dict[str, Dict[str, float]] = {}
-    for metric_name in ("high", "extreme", "background"):
+    for metric_name in ("moderate", "high", "non_background", "extreme", "background"):
         block_summary[metric_name] = {
             name: float(
                 np.mean([metrics[m]["block_means"][metric_name].get(name, np.nan) for m in members_c])
@@ -469,6 +524,8 @@ def _cluster_profile(
             "risk_level": risk,
         },
         "risk_profile": {
+            "weighted_non_background": round(weighted_non_background, 3),
+            "weighted_moderate": round(weighted_moderate, 3),
             "weighted_high": round(weighted_high, 3),
             "weighted_extreme": round(weighted_extreme, 3),
             "weighted_background": round(weighted_background, 3),
@@ -512,7 +569,22 @@ def build_clustering_summary(
     index = pd.DatetimeIndex(index).sort_values()
 
     metrics = _member_metrics(member_poss, members, index)
-    null_members, null_meta = _select_null_members(metrics)
+    active_mask = _active_window_mask(member_poss, members, index)
+    active_day_count = int(active_mask.sum())
+
+    null_members = sorted(
+        [
+            m for m in members
+            if _is_strict_background_member(member_poss[m].reindex(index))
+        ]
+    )
+    strict_all_background = len(null_members) == len(members)
+    null_meta = {
+        "fallback_used": False,
+        "selected_by_threshold": len(null_members),
+        "target_size": len(null_members),
+        "strict_all_background": strict_all_background,
+    }
     null_set = set(null_members)
     non_null_members = [m for m in members if m not in null_set]
 
@@ -533,7 +605,9 @@ def build_clustering_summary(
         "fallback_used": False,
     }
 
-    if len(non_null_members) == 1:
+    if not non_null_members:
+        clustering_meta["selected_k"] = 0
+    elif len(non_null_members) == 1:
         labels_by_member[non_null_members[0]] = 1
         clusters_by_id[1] = [non_null_members[0]]
         medoid_by_cluster[1] = non_null_members[0]
@@ -544,6 +618,7 @@ def build_clustering_summary(
             member_percentiles=member_percentiles,
             members=non_null_members,
             index=index,
+            active_mask=active_mask,
         )
         D_poss = _pairwise_euclidean(X_poss)
         D_pct = _pairwise_euclidean(X_pct)
@@ -567,11 +642,12 @@ def build_clustering_summary(
             medoid_local = int(np.argmin(sums))
             raw_medoids[raw_id] = members_c[medoid_local]
 
-        # Order non-null clusters by increasing weighted high-risk severity.
+        # Order non-null clusters by increasing non-background severity.
         ordered_raw = sorted(
             raw_to_members.keys(),
-            key=lambda raw: float(
-                np.mean([metrics[m]["weighted_high"] for m in raw_to_members[raw]])
+            key=lambda raw: (
+                float(np.mean([metrics[m]["weighted_non_background"] for m in raw_to_members[raw]])),
+                float(np.mean([metrics[m]["weighted_high"] for m in raw_to_members[raw]])),
             ),
         )
 
@@ -613,15 +689,21 @@ def build_clustering_summary(
         spread_parts.append(f"{frac_pct}% {c['clyfar_ozone']['risk_level']} risk")
 
     summary = {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "init": norm_init,
         "method": {
             "stage_1": {
-                "name": "null_first_threshold_plus_fallback",
-                "thresholds": NULL_THRESHOLDS,
-                "null_min_fraction": NULL_MIN_FRACTION,
-                "null_min_size": NULL_MIN_SIZE,
-                "min_non_null_members": NULL_MIN_NON_NULL,
+                "name": "strict_background_only",
+                "strict_all_background": {
+                    "background_target": STRICT_BACKGROUND_TARGET,
+                    "other_target": STRICT_OTHER_TARGET,
+                    "tolerance": STRICT_TOLERANCE,
+                },
+                "active_window": {
+                    "name": "ensemble_non_background_days",
+                    "active_days": active_day_count,
+                    "total_days": len(index),
+                },
             },
             "stage_2": {
                 "name": "agglomerative_average_precomputed_distance",
@@ -648,6 +730,9 @@ def build_clustering_summary(
             "null_fallback_applied": bool(null_meta["fallback_used"]),
             "null_selected_by_threshold": int(null_meta["selected_by_threshold"]),
             "null_target_size": int(null_meta["target_size"]),
+            "strict_all_background": bool(null_meta.get("strict_all_background", False)),
+            "strict_null_members": int(len(null_members)),
+            "active_window_days": active_day_count,
             "dropped_members_missing_percentiles": dropped_missing_pct,
             "dropped_members_missing_possibilities": dropped_missing_poss,
         },
