@@ -1,9 +1,53 @@
 {
+  "schema_version": "1.1",
   "init": "20260208_1200Z",
-  "n_clusters": 3,
+  "method": {
+    "stage_1": {
+      "name": "null_first_threshold_plus_fallback",
+      "thresholds": {
+        "weighted_high_max": 0.22,
+        "weighted_extreme_max": 0.08,
+        "weighted_background_min": 0.55
+      },
+      "strict_all_background": {
+        "background_min": 0.99,
+        "other_max": 0.01
+      },
+      "null_min_fraction": 0.2,
+      "null_min_size": 4,
+      "min_non_null_members": 1
+    },
+    "stage_2": {
+      "name": "agglomerative_average_precomputed_distance",
+      "k_min": 1,
+      "k_max": 3,
+      "selected_k": 1,
+      "silhouette_scores": {},
+      "fallback_used": false,
+      "distance_weights": {
+        "possibility": 0.6,
+        "percentile": 0.4
+      }
+    },
+    "time_blocks": {
+      "names": [
+        "days_1_5",
+        "days_6_10",
+        "days_11_15"
+      ],
+      "weights": [
+        0.55,
+        0.3,
+        0.15
+      ]
+    }
+  },
+  "n_members": 31,
+  "n_clusters": 2,
   "clusters": [
     {
-      "id": 1,
+      "id": 0,
+      "kind": "null",
       "members": [
         "clyfar001",
         "clyfar002",
@@ -28,6 +72,7 @@
         "clyfar021",
         "clyfar022",
         "clyfar023",
+        "clyfar024",
         "clyfar025",
         "clyfar026",
         "clyfar027",
@@ -35,58 +80,126 @@
         "clyfar029",
         "clyfar030"
       ],
-      "fraction": 0.94,
+      "fraction": 0.968,
       "medoid": "clyfar001",
+      "clyfar_ozone": {
+        "dominant_category": "background",
+        "risk_level": "low"
+      },
+      "risk_profile": {
+        "weighted_high": 0.0,
+        "weighted_extreme": 0.0,
+        "weighted_background": 0.998,
+        "block_means": {
+          "high": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.002
+          },
+          "extreme": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.0
+          },
+          "background": {
+            "days_1_5": 1.0,
+            "days_6_10": 1.0,
+            "days_11_15": 0.988
+          }
+        }
+      },
       "gefs_weather": {
         "snow_tendency": "low (<1 inch)",
         "wind_tendency": "light (7 mph)",
         "pattern": "variable"
-      },
-      "clyfar_ozone": {
-        "dominant_category": "background",
-        "risk_level": "low"
       }
     },
     {
-      "id": 2,
-      "members": [
-        "clyfar024"
-      ],
-      "fraction": 0.03,
-      "medoid": "clyfar024",
-      "gefs_weather": {
-        "snow_tendency": "low (<1 inch)",
-        "wind_tendency": "light (6 mph)",
-        "pattern": "variable"
-      },
-      "clyfar_ozone": {
-        "dominant_category": "background",
-        "risk_level": "low"
-      }
-    },
-    {
-      "id": 3,
+      "id": 1,
+      "kind": "scenario",
       "members": [
         "clyfar000"
       ],
-      "fraction": 0.03,
+      "fraction": 0.032,
       "medoid": "clyfar000",
+      "clyfar_ozone": {
+        "dominant_category": "background",
+        "risk_level": "low"
+      },
+      "risk_profile": {
+        "weighted_high": 0.008,
+        "weighted_extreme": 0.0,
+        "weighted_background": 0.939,
+        "block_means": {
+          "high": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.056
+          },
+          "extreme": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.0
+          },
+          "background": {
+            "days_1_5": 1.0,
+            "days_6_10": 1.0,
+            "days_11_15": 0.591
+          }
+        }
+      },
       "gefs_weather": {
         "snow_tendency": "low (<1 inch)",
         "wind_tendency": "light (7 mph)",
         "pattern": "variable"
-      },
-      "clyfar_ozone": {
-        "dominant_category": "background",
-        "risk_level": "low"
       }
     }
   ],
   "representative_members": [
     "clyfar001",
-    "clyfar024",
     "clyfar000"
   ],
-  "linkage_note": "variable \u2192 background ozone (Cluster 1). variable \u2192 background ozone (Cluster 2). variable \u2192 background ozone (Cluster 3).",
-  "spread_summary": "3 clusters; 94% low risk, 3% low risk, 3% low risk"
+  "member_assignment": {
+    "clyfar000": 1,
+    "clyfar001": 0,
+    "clyfar002": 0,
+    "clyfar003": 0,
+    "clyfar004": 0,
+    "clyfar005": 0,
+    "clyfar006": 0,
+    "clyfar007": 0,
+    "clyfar008": 0,
+    "clyfar009": 0,
+    "clyfar010": 0,
+    "clyfar011": 0,
+    "clyfar012": 0,
+    "clyfar013": 0,
+    "clyfar014": 0,
+    "clyfar015": 0,
+    "clyfar016": 0,
+    "clyfar017": 0,
+    "clyfar018": 0,
+    "clyfar019": 0,
+    "clyfar020": 0,
+    "clyfar021": 0,
+    "clyfar022": 0,
+    "clyfar023": 0,
+    "clyfar024": 0,
+    "clyfar025": 0,
+    "clyfar026": 0,
+    "clyfar027": 0,
+    "clyfar028": 0,
+    "clyfar029": 0,
+    "clyfar030": 0
+  },
+  "linkage_note": "variable \u2192 background ozone (Cluster 0). variable \u2192 background ozone (Cluster 1).",
+  "spread_summary": "2 clusters; 97% low risk, 3% low risk",
+  "quality_flags": {
+    "null_fallback_applied": true,
+    "null_selected_by_threshold": 31,
+    "null_target_size": 7,
+    "strict_all_background": false,
+    "dropped_members_missing_percentiles": [],
+    "dropped_members_missing_possibilities": []
+  }
 }
