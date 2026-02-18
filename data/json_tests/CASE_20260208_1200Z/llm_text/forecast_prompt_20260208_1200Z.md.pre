@@ -1,3 +1,262 @@
+# Clyfar Forecast – LLM Report Template (20260208_1200Z)
+
+## Case metadata
+
+- Init time: `20260208_1200Z`
+- Case root: `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_1200Z`
+- JSON · percentiles: 31 files at `percentiles/`
+- JSON · probs: 1 files at `probs/`
+- JSON · possibilities: 31 files at `possibilities/`
+- JSON · weather: 32 files at `weather/`
+
+## Figure subfolders
+
+- `quantities` → `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_1200Z/figs/quantities` – Boxplots, ensemble fan, and histogram for p10/p50/p90 (ozone ppb).
+- `possibility_heatmaps` → `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_1200Z/figs/possibility/heatmaps` – Per‑member daily‑max category heatmaps in the same style as operational Clyfar output.
+
+## Recent cases (for run-to-run context)
+
+| Init | Case path |
+|------|-----------|
+| `20260208_0000Z` | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_0000Z` |
+| `20260208_0600Z` | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_0600Z` |
+| `20260208_1200Z` (this case) | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_1200Z` |
+| `20260208_1800Z` | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_1800Z` |
+| `20260209_0000Z` | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260209_0000Z` |
+| `20260209_0600Z` | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260209_0600Z` |
+| `20260209_1200Z` | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260209_1200Z` |
+| `20260209_1800Z` | `/uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260209_1800Z` |
+
+## Short-Term Bias Context (for LLM only)
+
+> Integrate only where relevant to affected lead windows or scenarios.
+> Do not repeat unchanged cautions in every section.
+
+- No short-term bias entries met relevance criteria for this run.
+
+## Previous Outlook Summaries (for comparison)
+
+> Use these summaries to compare your current assessment against prior outlooks.
+> Explicitly note how your AlertLevel/Confidence differs from the previous run(s).
+> Format: AlertLevel is the ozone category (BACKGROUND/MODERATE/ELEVATED/EXTREME);
+> Confidence reflects ensemble spread, Clyfar reliability, and expert-identified biases.
+
+### Previous: 20260208_0600Z (6h ago)
+- **Alert Level:** BACKGROUND
+- **Confidence:** MEDIUM
+
+### Previous: 20260208_0000Z (12h ago)
+- **Alert Level:** BACKGROUND
+- **Confidence:** MEDIUM
+
+## Ensemble Clustering Summary
+
+> Cluster assignments showing GEFS weather → Clyfar ozone linkage.
+
+```json
+{
+  "schema_version": "1.1",
+  "init": "20260208_1200Z",
+  "method": {
+    "stage_1": {
+      "name": "null_first_threshold_plus_fallback",
+      "thresholds": {
+        "weighted_high_max": 0.22,
+        "weighted_extreme_max": 0.08,
+        "weighted_background_min": 0.55
+      },
+      "null_min_fraction": 0.2,
+      "null_min_size": 4,
+      "min_non_null_members": 2
+    },
+    "stage_2": {
+      "name": "agglomerative_average_precomputed_distance",
+      "k_min": 2,
+      "k_max": 4,
+      "selected_k": 1,
+      "silhouette_scores": {},
+      "fallback_used": false,
+      "distance_weights": {
+        "possibility": 0.6,
+        "percentile": 0.4
+      }
+    },
+    "time_blocks": {
+      "names": [
+        "days_1_5",
+        "days_6_10",
+        "days_11_15"
+      ],
+      "weights": [
+        0.55,
+        0.3,
+        0.15
+      ]
+    }
+  },
+  "n_members": 31,
+  "n_clusters": 2,
+  "clusters": [
+    {
+      "id": 0,
+      "kind": "null",
+      "members": [
+        "clyfar001",
+        "clyfar003",
+        "clyfar004",
+        "clyfar005",
+        "clyfar006",
+        "clyfar007",
+        "clyfar008",
+        "clyfar009",
+        "clyfar010",
+        "clyfar011",
+        "clyfar012",
+        "clyfar013",
+        "clyfar014",
+        "clyfar015",
+        "clyfar016",
+        "clyfar017",
+        "clyfar018",
+        "clyfar019",
+        "clyfar020",
+        "clyfar021",
+        "clyfar022",
+        "clyfar023",
+        "clyfar024",
+        "clyfar025",
+        "clyfar026",
+        "clyfar027",
+        "clyfar028",
+        "clyfar029",
+        "clyfar030"
+      ],
+      "fraction": 0.935,
+      "medoid": "clyfar001",
+      "clyfar_ozone": {
+        "dominant_category": "background",
+        "risk_level": "low"
+      },
+      "risk_profile": {
+        "weighted_high": 0.0,
+        "weighted_extreme": 0.0,
+        "weighted_background": 0.999,
+        "block_means": {
+          "high": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.002
+          },
+          "extreme": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.0
+          },
+          "background": {
+            "days_1_5": 1.0,
+            "days_6_10": 1.0,
+            "days_11_15": 0.995
+          }
+        }
+      },
+      "gefs_weather": {
+        "snow_tendency": "low (<1 inch)",
+        "wind_tendency": "light (7 mph)",
+        "pattern": "variable"
+      }
+    },
+    {
+      "id": 1,
+      "kind": "scenario",
+      "members": [
+        "clyfar000",
+        "clyfar002"
+      ],
+      "fraction": 0.065,
+      "medoid": "clyfar000",
+      "clyfar_ozone": {
+        "dominant_category": "background",
+        "risk_level": "low"
+      },
+      "risk_profile": {
+        "weighted_high": 0.004,
+        "weighted_extreme": 0.0,
+        "weighted_background": 0.954,
+        "block_means": {
+          "high": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.028
+          },
+          "extreme": {
+            "days_1_5": 0.0,
+            "days_6_10": 0.0,
+            "days_11_15": 0.0
+          },
+          "background": {
+            "days_1_5": 1.0,
+            "days_6_10": 1.0,
+            "days_11_15": 0.692
+          }
+        }
+      },
+      "gefs_weather": {
+        "snow_tendency": "low (<1 inch)",
+        "wind_tendency": "light (6 mph)",
+        "pattern": "variable"
+      }
+    }
+  ],
+  "representative_members": [
+    "clyfar001",
+    "clyfar000"
+  ],
+  "member_assignment": {
+    "clyfar000": 1,
+    "clyfar001": 0,
+    "clyfar002": 1,
+    "clyfar003": 0,
+    "clyfar004": 0,
+    "clyfar005": 0,
+    "clyfar006": 0,
+    "clyfar007": 0,
+    "clyfar008": 0,
+    "clyfar009": 0,
+    "clyfar010": 0,
+    "clyfar011": 0,
+    "clyfar012": 0,
+    "clyfar013": 0,
+    "clyfar014": 0,
+    "clyfar015": 0,
+    "clyfar016": 0,
+    "clyfar017": 0,
+    "clyfar018": 0,
+    "clyfar019": 0,
+    "clyfar020": 0,
+    "clyfar021": 0,
+    "clyfar022": 0,
+    "clyfar023": 0,
+    "clyfar024": 0,
+    "clyfar025": 0,
+    "clyfar026": 0,
+    "clyfar027": 0,
+    "clyfar028": 0,
+    "clyfar029": 0,
+    "clyfar030": 0
+  },
+  "linkage_note": "variable \u2192 background ozone (Cluster 0). variable \u2192 background ozone (Cluster 1).",
+  "spread_summary": "2 clusters; 94% low risk, 6% low risk",
+  "quality_flags": {
+    "null_fallback_applied": true,
+    "null_selected_by_threshold": 31,
+    "null_target_size": 7,
+    "dropped_members_missing_percentiles": [],
+    "dropped_members_missing_possibilities": []
+  }
+}
+```
+
+
 # Prompt for the language model
 
 ultrathink.
@@ -21,7 +280,7 @@ Use American English, U.S. units, and a measured and cautious tone.
 
 ```text
 You are explaining a Clyfar ozone outlook for the Uintah Basin.
-The forecast init is {{INIT}} and the CASE directory on disk is {{CASE_ROOT}}.
+The forecast init is 20260208_1200Z and the CASE directory on disk is /uufs/chpc.utah.edu/common/home/u0737349/gits/clyfar/data/json_tests/CASE_20260208_1200Z.
 
 **System:** GEFS = weather precursors (snow, wind, MSLP, solar). Clyfar = FIS that converts GEFS weather into ozone forecasts.
 
@@ -41,9 +300,9 @@ The forecast init is {{INIT}} and the CASE directory on disk is {{CASE_ROOT}}.
 
 **Comparison with Previous Outlooks:**
 If a "Previous Outlook Summaries" section appears above, you MUST:
-1. Compare your current block-specific AlertLevel and Confidence (Days 1–5, 6–10, 11–15) to the previous outlook's values
-2. Explicitly state whether each block represents a strengthening, weakening, or consistent signal
-3. Use language like: "Since the previous outlook issued 6 hours ago, the Days 6–10 elevated-ozone signal has strengthened from MODERATE/LOW to MODERATE/MEDIUM confidence."
+1. Compare your current AlertLevel and Confidence to the previous outlook's values
+2. Explicitly state whether your assessment represents a strengthening, weakening, or consistent signal
+3. Use language like: "Since the previous outlook issued 6 hours ago, the elevated-ozone signal for January 11-12 has strengthened from MODERATE/LOW to MODERATE/MEDIUM confidence."
 4. If the previous outlook identified a key concern that has now resolved (or emerged), note this change
 
 The alert format `CATEGORY/CONFIDENCE` means:
@@ -107,7 +366,7 @@ Write a cohesive outlook (~1 printed page) that includes:
 - Uses WIDE ozone ranges (e.g., "35–55 ppb") not precise values.
 
 **B. Run-to-run consistency (dRisk/dt) — MAIN ANALYSIS HERE:**
-Analyse run-to-run consistency SEPARATELY for GEFS weather and Clyfar ozone. For Clyfar, describe changes by block (Days 1–5, 6–10, 11–15); for GEFS, discuss continuous shifts (e.g., snowfall spread, wind mixing changes) across the full horizon and call out which blocks are most affected.
+Analyse run-to-run consistency SEPARATELY for GEFS weather and Clyfar ozone:
 
 1) **GEFS dRisk/dt** (weather precursors): Are successive GEFS runs trending toward snowier/calmer conditions, or toward snow-free/windier conditions? Is there a consistent directional shift?
 
@@ -118,7 +377,7 @@ Ask:
 - Has a particular scenario (e.g., snow-rich stagnation → elevated ozone) been consistently growing across runs?
 - If GEFS weather trends in one direction but Clyfar ozone doesn't follow, explain why.
 
-If previous cases are available, compare patterns between {{RECENT_CASE_COUNT}} consecutive runs.
+If previous cases are available, compare patterns between 8 consecutive runs.
 Call out whether the current run matches, strengthens, weakens, or contradicts earlier signals.
 Do NOT assume every run shows the same trend—if runs are inconsistent, say so explicitly.
 
@@ -131,9 +390,9 @@ Do NOT assume every run shows the same trend—if runs are inconsistent, say so 
 **E. Monitoring guidance:**
 - Ends with what to monitor in subsequent runs and when the next update arrives.
 
-### Task 3 – Alert level for the website (block-specific worst-case)
+### Task 3 – Alert level for the website
 
-Using all evidence above, assign a reasonable worst-case alert level for EACH block (Days 1–5, 6–10, 11–15). The worst-case should reflect the plausible high-ozone tail scenario(s) while acknowledging that the background/null scenario is always the fallback. Do not output a single all-period alert.
+Using all evidence above, assign a single alert level for the full forecast period that fits the Clyfar outlook synthesised with uncertainty identified in Clyfar and GEFS data:
 
 #### Magnitude, matching Clyfar fuzzy categories sets
 - BACKGROUND – low ozone, no meaningful high-ozone risk expected.
@@ -146,15 +405,11 @@ Using all evidence above, assign a reasonable worst-case alert level for EACH bl
 - MEDIUM: Moderate ensemble agreement, typical uncertainty for lead time
 - HIGH: Strong run-to-run consistency (dRisk/dt) and ensemble agreement
 
-Output these final lines in a machine-readable form *at the very end* of your response:
+Output this final two lines in a machine-readable form *at the very end* of your response:
 
 ```
-AlertLevel_D1_5: BACKGROUND | MODERATE | ELEVATED | EXTREME
-Confidence_D1_5: LOW | MEDIUM | HIGH
-AlertLevel_D6_10: BACKGROUND | MODERATE | ELEVATED | EXTREME
-Confidence_D6_10: LOW | MEDIUM | HIGH
-AlertLevel_D11_15: BACKGROUND | MODERATE | ELEVATED | EXTREME
-Confidence_D11_15: LOW | MEDIUM | HIGH
+AlertLevel: BACKGROUND | MODERATE | ELEVATED | EXTREME
+Confidence: LOW | MEDIUM | HIGH
 ```
 
 ### Output formatting
@@ -166,7 +421,7 @@ Confidence_D11_15: LOW | MEDIUM | HIGH
 4) Days 6–10 (Public, Stakeholder, Expert summaries)
 5) Days 11–15 (Public, Stakeholder, Expert summaries)
 6) Full Outlook (~1 page, includes dRisk/dt analysis)
-7) Alert Level section with block-specific machine-readable code block
+7) Alert Level section with machine-readable code block
 8) Frequently Asked Questions (3-5 Q&A pairs)
 9) Data Logger (files read)
 
