@@ -1,6 +1,6 @@
 # LLM Forecast SOP
 
-Ffion version: v1.0 (tag: ffion-v1.0).
+Ffion version: v1.1 (tag: ffion-v1.1).
 
 ## Known issues
 - Q&A outputs can be verbose if prompt conditioning drifts from the default path.
@@ -10,6 +10,11 @@ Ffion version: v1.0 (tag: ffion-v1.0).
 - Clyfar tags (`v0.9.x`, `v1.0`, ...) track scientific/output logic changes (FIS, clustering, preprocessing, exports).
 - Ffion tags (`ffion-v1.x`) track prompt/workflow/LLM pipeline changes and can advance independently.
 - Record both tags in release notes or session logs when they move in tandem.
+
+## v1.1 branch scope
+- Integration branch: `hotfix/ffion-1.1-clustering` (merged with latest `main`).
+- Reviewed as context only (not merged for v1.1): `feature/case-aware-demo-scripts`, `bugfix/cfgrib-load-fallback`, `michael_branch`.
+- v1.1 focus: unified clustering logic across summary/demo surfaces, stronger clustering diagnostics, confidence-aware prompt conditioning, and more robust markdown→PDF rendering defaults.
 
 ## Quick Start (Ad-hoc)
 

@@ -35,6 +35,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from viz.forecast_plots import ForecastPlotter
+from utils.scenario_clustering import build_clustering_summary
 
 
 def find_available_inits(root: Path) -> List[str]:
@@ -165,9 +166,15 @@ def main() -> None:
     # Prefer CASE layout if present
     case_root = case_root_for_init(data_root, norm_init)
     case_percentiles = case_root / "percentiles"
+    case_possibilities = case_root / "possibilities"
     if not case_percentiles.exists():
         raise SystemExit(
             f"Percentile JSONs not found for {norm_init} under {case_percentiles}.\n"
+            "Fetch the CASE via scripts/fetch_case_from_api.py or set LLM_FROM_API=1 when running the pipeline."
+        )
+    if not case_possibilities.exists():
+        raise SystemExit(
+            f"Possibility JSONs not found for {norm_init} under {case_possibilities}.\n"
             "Fetch the CASE via scripts/fetch_case_from_api.py or set LLM_FROM_API=1 when running the pipeline."
         )
     percentiles_root = case_percentiles
@@ -182,6 +189,7 @@ def main() -> None:
 
     # Load all members' percentiles
     member_percentiles: Dict[str, "np.ndarray"] = {}
+    member_poss: Dict[str, "np.ndarray"] = {}
     dates = None
     for path in sorted(percentiles_root.glob(f"forecast_percentile_scenarios_*_{norm_init}.json")):
         member = path.stem.split("_")[3]
@@ -193,41 +201,49 @@ def main() -> None:
     if not member_percentiles:
         raise SystemExit(f"No percentile_scenarios files found for {norm_init}")
 
-    # Use full horizon as the window for clustering
-    window = slice(0, len(dates))
-    X, members = build_features_for_window(member_percentiles, window)
-    X, members = drop_nonfinite_members(X, members)
+    for path in sorted(case_possibilities.glob(f"forecast_possibility_heatmap_*_{norm_init}.json")):
+        member = path.stem.split("_")[3]
+        df, _ = plotter.load_possibility(path)
+        member_poss[member] = df[["background", "moderate", "elevated", "extreme"]]
 
-    # Standardize features (p50 and p90) to comparable scale
-    X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
+    if not member_poss:
+        raise SystemExit(f"No possibility_heatmap files found for {norm_init}")
 
-    # Simple 3-cluster solution to produce a dominant scenario plus tail scenarios
-    k = 3
-    if len(members) < k:
-        k = max(1, len(members))
-        print(f"Warning: reducing cluster count to {k} due to limited members after filtering.")
-    labels = cluster_members(X, k)
-    medoids = find_medoids(X, labels)
+    summary = build_clustering_summary(
+        norm_init=norm_init,
+        member_poss=member_poss,
+        member_percentiles=member_percentiles,
+        weather_data={},
+    )
+    clusters = sorted(summary.get("clusters", []), key=lambda c: int(c["id"]))
+    if not clusters:
+        raise SystemExit("No clusters produced by build_clustering_summary.")
 
     # Scenario summary
-    cluster_members_map: Dict[int, List[str]] = defaultdict(list)
-    for m, label in zip(members, labels):
-        cluster_members_map[label].append(m)
-
-    print("Scenario clusters (full forecast horizon):")
-    for cid in sorted(cluster_members_map):
-        members_c = cluster_members_map[cid]
-        frac = len(members_c) / float(len(members))
-        medoid_idx = medoids[cid]
-        medoid_member = members[medoid_idx]
+    cluster_members_map: Dict[int, List[str]] = {}
+    medoids: Dict[int, str] = {}
+    total_members = int(summary.get("n_members", len(member_percentiles)))
+    print("Scenario clusters (production summary assignments):")
+    for cluster in clusters:
+        cid = int(cluster["id"])
+        members_c = [
+            m for m in cluster.get("members", [])
+            if m in member_percentiles
+        ]
+        cluster_members_map[cid] = members_c
+        medoids[cid] = str(cluster.get("medoid", members_c[0] if members_c else ""))
+        frac = (len(members_c) / float(total_members)) if total_members else 0.0
+        medoid_member = medoids[cid]
         print(
-            f"  Scenario {cid}: {len(members_c)}/{len(members)} members "
+            f"  Scenario {cid}: {len(members_c)}/{total_members} members "
             f"({frac:.0%}), medoid={medoid_member}"
         )
 
     # Plot union spaghetti envelope for each cluster separately
     for cid in sorted(cluster_members_map):
         subset = {m: member_percentiles[m] for m in cluster_members_map[cid]}
+        if not subset:
+            continue
         fig, ax = plotter.plot_percentile_spaghetti_union(
             subset,
             title=f"Scenario {cid} union envelope (p10–p90) · {norm_init}",
@@ -237,7 +253,9 @@ def main() -> None:
 
     # Also plot medoid fan chart for each scenario
     for cid in sorted(cluster_members_map):
-        medoid_member = members[medoids[cid]]
+        medoid_member = medoids[cid]
+        if not medoid_member or medoid_member not in member_percentiles:
+            continue
         df = member_percentiles[medoid_member]
         fig, ax = plotter.plot_percentile_fan(
             df,

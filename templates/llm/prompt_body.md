@@ -62,6 +62,11 @@ Prioritize possibility categories over ppb values. Use wide ranges (e.g., "35-55
 
 If short-term bias notes are provided above, apply them only where relevant to the affected lead windows/scenarios and weave them naturally into the forecast.
 
+If a "Clustering Diagnostics Snapshot" appears above, use it explicitly when assigning confidence:
+- High spread (large combined-distance median/p75) or `min_size_guard_relaxed: true` => lower confidence by one tier unless other evidence strongly offsets it.
+- Large strict-null fraction with weak non-null tail => avoid over-weighting isolated high-risk scenarios.
+- Small spread plus consistent previous-outlook signal => confidence can be maintained or raised.
+
 ### Task 1 – Three 5-day summaries at three complexity levels
 
 For each block (Days 1–5, Days 6–10, Days 11–15), write:

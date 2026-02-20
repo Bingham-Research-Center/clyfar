@@ -184,6 +184,75 @@ def _min_cluster_size(labels: np.ndarray) -> int:
     return int(counts.min())
 
 
+def _distance_quantiles(D: np.ndarray) -> Dict[str, float]:
+    """Return compact quantiles from the upper triangle of a distance matrix."""
+    n = D.shape[0]
+    if n <= 1:
+        return {
+            "n_pairs": 0,
+            "min": 0.0,
+            "p25": 0.0,
+            "median": 0.0,
+            "p75": 0.0,
+            "max": 0.0,
+        }
+    iu = np.triu_indices(n, k=1)
+    vals = D[iu]
+    if vals.size == 0:
+        return {
+            "n_pairs": 0,
+            "min": 0.0,
+            "p25": 0.0,
+            "median": 0.0,
+            "p75": 0.0,
+            "max": 0.0,
+        }
+    return {
+        "n_pairs": int(vals.size),
+        "min": round(float(np.min(vals)), 4),
+        "p25": round(float(np.quantile(vals, 0.25)), 4),
+        "median": round(float(np.median(vals)), 4),
+        "p75": round(float(np.quantile(vals, 0.75)), 4),
+        "max": round(float(np.max(vals)), 4),
+    }
+
+
+def _nearest_neighbor_diagnostics(
+    D: np.ndarray,
+    members: List[str],
+    top_n: int = 5,
+) -> Dict[str, Any]:
+    """Summarize nearest-neighbor distances for non-null members."""
+    n = D.shape[0]
+    if n <= 1:
+        return {
+            "median": 0.0,
+            "p75": 0.0,
+            "max": 0.0,
+            "top_members": [],
+        }
+
+    nn_vals: List[float] = []
+    member_pairs: List[Tuple[str, float]] = []
+    for i, member in enumerate(members):
+        row = D[i].copy()
+        row[i] = np.inf
+        nearest = float(np.min(row))
+        nn_vals.append(nearest)
+        member_pairs.append((member, nearest))
+
+    member_pairs_sorted = sorted(member_pairs, key=lambda x: x[1], reverse=True)
+    return {
+        "median": round(float(np.median(np.array(nn_vals, dtype=float))), 4),
+        "p75": round(float(np.quantile(np.array(nn_vals, dtype=float), 0.75)), 4),
+        "max": round(float(np.max(np.array(nn_vals, dtype=float))), 4),
+        "top_members": [
+            {"member": m, "nearest_distance": round(float(v), 4)}
+            for m, v in member_pairs_sorted[:max(0, int(top_n))]
+        ],
+    }
+
+
 def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Select cluster count in [1, 3] with silhouette and min-size guard."""
     n = D.shape[0]
@@ -218,15 +287,17 @@ def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
 
     min_size_required = 2 if n >= 6 else 1
     scores: Dict[int, float] = {}
+    all_scores: Dict[int, float] = {}
     best_labels: np.ndarray | None = None
     best_k: int | None = None
     best_score = -2.0
 
     for k in range(min_k, max_k + 1):
         labels_k = _cluster_from_distance(D, k)
+        score = _silhouette_from_distance(D, labels_k)
+        all_scores[k] = score
         if _min_cluster_size(labels_k) < min_size_required:
             continue
-        score = _silhouette_from_distance(D, labels_k)
         scores[k] = score
         if score > best_score:
             best_score = score
@@ -237,24 +308,41 @@ def _choose_k(D: np.ndarray) -> Tuple[np.ndarray, Dict[str, Any]]:
         return best_labels, {
             "selected_k": int(best_k),
             "min_cluster_size_required": int(min_size_required),
-            "scores": {str(k): round(v, 4) for k, v in scores.items()},
+            "scores": {str(k): round(v, 4) for k, v in all_scores.items()},
+            "scores_passing_min_size": {str(k): round(v, 4) for k, v in scores.items()},
+            "min_size_guard_relaxed": False,
             "fallback_used": False,
         }
 
-    # Fallback when silhouette/size constraints fail.
-    fallback_k = 1 if K_MIN == 1 else min(2, n)
+    # Soft fallback: if all candidate k violate min-size, still preserve structure.
+    if all_scores:
+        fallback_k = max(
+            sorted(all_scores.keys()),
+            key=lambda k: (all_scores[k], -k),
+        )
+        labels_fb = _cluster_from_distance(D, fallback_k)
+        return labels_fb, {
+            "selected_k": int(fallback_k),
+            "min_cluster_size_required": int(min_size_required),
+            "scores": {str(k): round(v, 4) for k, v in all_scores.items()},
+            "scores_passing_min_size": {},
+            "min_size_guard_relaxed": True,
+            "fallback_used": True,
+        }
+
+    # Hard fallback for degenerate/no-score conditions.
+    fallback_k = 1
     if fallback_k == 1:
         labels_fb = np.ones(n, dtype=int)
     else:
         labels_fb = _cluster_from_distance(D, fallback_k)
-        if _min_cluster_size(labels_fb) < min_size_required and min_size_required > 1:
-            labels_fb = np.ones(n, dtype=int)
-            fallback_k = 1
 
     return labels_fb, {
         "selected_k": int(fallback_k),
         "min_cluster_size_required": int(min_size_required),
-        "scores": {str(k): round(v, 4) for k, v in scores.items()},
+        "scores": {},
+        "scores_passing_min_size": {},
+        "min_size_guard_relaxed": False,
         "fallback_used": True,
     }
 
@@ -602,7 +690,19 @@ def build_clustering_summary(
         "selected_k": 0,
         "min_cluster_size_required": 1,
         "scores": {},
+        "scores_passing_min_size": {},
+        "min_size_guard_relaxed": False,
         "fallback_used": False,
+    }
+    distance_diagnostics: Dict[str, Any] = {
+        "non_null_members": int(len(non_null_members)),
+        "possibility": _distance_quantiles(np.zeros((len(non_null_members), len(non_null_members)))),
+        "percentile": _distance_quantiles(np.zeros((len(non_null_members), len(non_null_members)))),
+        "combined": _distance_quantiles(np.zeros((len(non_null_members), len(non_null_members)))),
+        "nearest_neighbor": _nearest_neighbor_diagnostics(
+            np.zeros((len(non_null_members), len(non_null_members))),
+            non_null_members,
+        ),
     }
 
     if not non_null_members:
@@ -626,6 +726,13 @@ def build_clustering_summary(
             DISTANCE_WEIGHTS["possibility"] * D_poss
             + DISTANCE_WEIGHTS["percentile"] * D_pct
         )
+        distance_diagnostics = {
+            "non_null_members": int(len(non_null_members)),
+            "possibility": _distance_quantiles(D_poss),
+            "percentile": _distance_quantiles(D_pct),
+            "combined": _distance_quantiles(D),
+            "nearest_neighbor": _nearest_neighbor_diagnostics(D, non_null_members),
+        }
         labels_stage2, clustering_meta = _choose_k(D)
 
         # Raw IDs from scipy are 1..k but we remap by severity.
@@ -711,8 +818,11 @@ def build_clustering_summary(
                 "k_max": K_MAX,
                 "selected_k": int(clustering_meta["selected_k"]),
                 "silhouette_scores": clustering_meta.get("scores", {}),
+                "scores_passing_min_size": clustering_meta.get("scores_passing_min_size", {}),
+                "min_size_guard_relaxed": bool(clustering_meta.get("min_size_guard_relaxed", False)),
                 "fallback_used": bool(clustering_meta.get("fallback_used", False)),
                 "distance_weights": DISTANCE_WEIGHTS,
+                "distance_diagnostics": distance_diagnostics,
             },
             "time_blocks": {
                 "names": list(BLOCK_NAMES),
@@ -732,7 +842,9 @@ def build_clustering_summary(
             "null_target_size": int(null_meta["target_size"]),
             "strict_all_background": bool(null_meta.get("strict_all_background", False)),
             "strict_null_members": int(len(null_members)),
+            "non_null_members": int(len(non_null_members)),
             "active_window_days": active_day_count,
+            "min_size_guard_relaxed": bool(clustering_meta.get("min_size_guard_relaxed", False)),
             "dropped_members_missing_percentiles": dropped_missing_pct,
             "dropped_members_missing_possibilities": dropped_missing_poss,
         },

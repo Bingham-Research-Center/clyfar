@@ -141,3 +141,48 @@ def test_build_clustering_summary_flags_dropped_members_without_percentiles():
     dropped = summary["quality_flags"]["dropped_members_missing_percentiles"]
     assert dropped == ["clyfar001"]
     assert set(summary["member_assignment"].keys()) == {"clyfar000"}
+
+
+def test_build_clustering_summary_relaxes_min_size_guard_for_outlier_tail():
+    index = pd.date_range("2026-01-01", periods=15, freq="D")
+
+    member_poss = {}
+    member_pct = {}
+    for i in range(5):
+        member = f"clyfar0{i:02d}"
+        member_poss[member] = _build_poss_df(
+            index,
+            background=np.full(15, 0.75),
+            elevated=np.full(15, 0.08),
+            extreme=np.full(15, 0.01),
+        )
+        member_pct[member] = _build_pct_df(
+            index,
+            p50=np.full(15, 52.0 + i),
+            p90=np.full(15, 66.0 + i),
+        )
+
+    # One high-risk outlier member that tends to isolate as a singleton cluster.
+    member_poss["clyfar099"] = _build_poss_df(
+        index,
+        background=np.full(15, 0.10),
+        elevated=np.full(15, 0.55),
+        extreme=np.full(15, 0.25),
+    )
+    member_pct["clyfar099"] = _build_pct_df(
+        index,
+        p50=np.full(15, 92.0),
+        p90=np.full(15, 118.0),
+    )
+
+    summary = build_clustering_summary(
+        norm_init="20260101_0000Z",
+        member_poss=member_poss,
+        member_percentiles=member_pct,
+        weather_data={},
+    )
+
+    stage2 = summary["method"]["stage_2"]
+    assert stage2["fallback_used"] is True
+    assert stage2["min_size_guard_relaxed"] is True
+    assert stage2["selected_k"] >= 2

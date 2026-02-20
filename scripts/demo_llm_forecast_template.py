@@ -161,6 +161,43 @@ def select_relevant_biases(entries: List[Dict], metrics: Dict[str, float]) -> Li
     return relevant
 
 
+def format_clustering_diagnostics(summary: Dict) -> List[str]:
+    """Return compact diagnostic bullets for prompt conditioning."""
+    stage1 = summary.get("method", {}).get("stage_1", {}) if isinstance(summary, dict) else {}
+    stage2 = summary.get("method", {}).get("stage_2", {}) if isinstance(summary, dict) else {}
+    quality = summary.get("quality_flags", {}) if isinstance(summary, dict) else {}
+    active_window = stage1.get("active_window", {}) if isinstance(stage1, dict) else {}
+    distance = stage2.get("distance_diagnostics", {}) if isinstance(stage2, dict) else {}
+    combined = distance.get("combined", {}) if isinstance(distance, dict) else {}
+    nearest = distance.get("nearest_neighbor", {}) if isinstance(distance, dict) else {}
+
+    lines: List[str] = []
+    lines.append(
+        f"- Active non-background days: {active_window.get('active_days', 'n/a')}/"
+        f"{active_window.get('total_days', 'n/a')}"
+    )
+    lines.append(
+        f"- Strict null members: {quality.get('strict_null_members', 'n/a')} | "
+        f"Non-null members: {quality.get('non_null_members', 'n/a')}"
+    )
+    lines.append(
+        f"- Stage-2 selected k: {stage2.get('selected_k', 'n/a')} | "
+        f"Fallback used: {stage2.get('fallback_used', 'n/a')} | "
+        f"Min-size guard relaxed: {stage2.get('min_size_guard_relaxed', 'n/a')}"
+    )
+    lines.append(
+        "- Combined distance spread "
+        f"(min/p25/median/p75/max): {combined.get('min', 'n/a')}/"
+        f"{combined.get('p25', 'n/a')}/{combined.get('median', 'n/a')}/"
+        f"{combined.get('p75', 'n/a')}/{combined.get('max', 'n/a')}"
+    )
+    lines.append(
+        f"- Nearest-neighbor distance (median/p75/max): "
+        f"{nearest.get('median', 'n/a')}/{nearest.get('p75', 'n/a')}/{nearest.get('max', 'n/a')}"
+    )
+    return lines
+
+
 def gather_previous_outlooks(
     data_root: Path,
     norm_init: str,
@@ -430,6 +467,11 @@ def main() -> None:
     lines.append("")
     if clustering_file.exists() and clustering_summary:
         lines.append("> Cluster assignments showing GEFS weather → Clyfar ozone linkage.")
+        lines.append("> Use the diagnostics snapshot to calibrate confidence language.")
+        lines.append("")
+        lines.append("### Clustering Diagnostics Snapshot")
+        for diag_line in format_clustering_diagnostics(clustering_summary):
+            lines.append(diag_line)
         lines.append("")
         lines.append("```json")
         lines.append(json.dumps(clustering_summary, indent=2))
