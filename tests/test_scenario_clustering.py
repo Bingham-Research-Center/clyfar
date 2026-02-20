@@ -52,9 +52,11 @@ def test_build_clustering_summary_null_first_behavior():
         weather_data={},
     )
 
-    assert summary["schema_version"] == "1.2"
+    assert summary["schema_version"] == "1.3"
     assert summary["n_members"] == 5
     assert set(summary["member_assignment"].keys()) == set(member_poss.keys())
+    assert summary["method"]["stage_1"]["missing_data_policy"] == "ignore_missing_days"
+    assert summary["method"]["stage_2"]["singleton_policy"] == "evidence_gated_lenient"
 
     cluster_by_id = {c["id"]: c for c in summary["clusters"]}
     assert 0 in cluster_by_id
@@ -186,3 +188,91 @@ def test_build_clustering_summary_relaxes_min_size_guard_for_outlier_tail():
     assert stage2["fallback_used"] is True
     assert stage2["min_size_guard_relaxed"] is True
     assert stage2["selected_k"] >= 2
+    # High-risk singleton tail should pass evidence gate.
+    singleton = [c for c in summary["clusters"] if len(c["members"]) == 1][0]
+    assert singleton["evidence"]["singleton_evidence_passed"] is True
+    assert singleton["display"]["status"] == "primary"
+
+
+def test_build_clustering_summary_ignores_missing_days_for_strict_null():
+    index = pd.date_range("2026-01-01", periods=15, freq="D")
+    member_poss = {
+        "clyfar000": _build_poss_df(index, background=np.ones(15), elevated=np.zeros(15), extreme=np.zeros(15)),
+        "clyfar001": _build_poss_df(index, background=np.ones(15), elevated=np.zeros(15), extreme=np.zeros(15)),
+        "clyfar010": _build_poss_df(index, background=np.full(15, 0.60), elevated=np.full(15, 0.10), extreme=np.zeros(15)),
+    }
+    member_pct = {
+        "clyfar000": _build_pct_df(index, p50=np.full(15, 35.0), p90=np.full(15, 45.0)),
+        "clyfar001": _build_pct_df(index, p50=np.full(15, 36.0), p90=np.full(15, 46.0)),
+        "clyfar010": _build_pct_df(index, p50=np.full(15, 58.0), p90=np.full(15, 72.0)),
+    }
+    member_missing_masks = {m: np.zeros(15, dtype=bool) for m in member_poss}
+
+    # First day missing for otherwise strict-null members.
+    for m in ("clyfar000", "clyfar001"):
+        member_missing_masks[m][0] = True
+        member_poss[m].iloc[0, :] = np.nan
+        member_pct[m].iloc[0, :] = np.nan
+
+    summary = build_clustering_summary(
+        norm_init="20260101_0000Z",
+        member_poss=member_poss,
+        member_percentiles=member_pct,
+        weather_data={},
+        member_missing_masks=member_missing_masks,
+    )
+
+    assert summary["quality_flags"]["strict_null_members"] == 2
+    cluster0 = {c["id"]: c for c in summary["clusters"]}[0]
+    assert set(cluster0["members"]) == {"clyfar000", "clyfar001"}
+
+
+def test_build_clustering_summary_flags_weak_singleton_tail_for_display():
+    index = pd.date_range("2026-01-01", periods=15, freq="D")
+
+    member_poss = {}
+    member_pct = {}
+    for i in range(5):
+        member = f"clyfar0{i:02d}"
+        member_poss[member] = _build_poss_df(
+            index,
+            background=np.full(15, 0.90),
+            elevated=np.zeros(15),
+            extreme=np.zeros(15),
+        )
+        member_poss[member]["moderate"] = 0.10
+        member_pct[member] = _build_pct_df(
+            index,
+            p50=np.full(15, 60.0 + (0.3 * i)),
+            p90=np.full(15, 70.0 + (0.3 * i)),
+        )
+
+    # Singleton with timing-shifted moderate possibility but little risk lift.
+    member_poss["clyfar099"] = _build_poss_df(
+        index,
+        background=np.ones(15),
+        elevated=np.zeros(15),
+        extreme=np.zeros(15),
+    )
+    member_poss["clyfar099"]["moderate"] = 0.0
+    member_poss["clyfar099"].loc[index[::2], "moderate"] = 0.20
+    member_poss["clyfar099"]["background"] = 1.0 - member_poss["clyfar099"]["moderate"]
+    member_pct["clyfar099"] = _build_pct_df(
+        index,
+        p50=np.full(15, 61.0),
+        p90=np.full(15, 71.0),
+    )
+
+    summary = build_clustering_summary(
+        norm_init="20260101_0000Z",
+        member_poss=member_poss,
+        member_percentiles=member_pct,
+        weather_data={},
+    )
+
+    singleton = [c for c in summary["clusters"] if len(c["members"]) == 1][0]
+    assert singleton["members"] == ["clyfar099"]
+    assert singleton["evidence"]["singleton_evidence_passed"] is False
+    assert singleton["display"]["status"] == "deemphasized"
+    assert singleton["display"]["warning_code"] == "weak_singleton_evidence"
+    assert summary["quality_flags"]["weak_singleton_clusters"] == 1

@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Sequence
 
+import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +94,7 @@ def load_case_inputs(case_root: Path, norm_init: str) -> tuple[
     Dict[str, pd.DataFrame],
     Dict[str, pd.DataFrame],
     Dict[str, Dict[str, Sequence[float]]],
+    Dict[str, np.ndarray],
 ]:
     """Load possibility, percentile, and weather data from a CASE directory."""
     poss_root = case_root / "possibilities"
@@ -107,11 +109,13 @@ def load_case_inputs(case_root: Path, norm_init: str) -> tuple[
     plotter = ForecastPlotter()
 
     member_poss: Dict[str, pd.DataFrame] = {}
+    member_missing_masks: Dict[str, np.ndarray] = {}
     for path in sorted(poss_root.glob(f"forecast_possibility_heatmap_*_{norm_init}.json")):
         parts = path.stem.split("_")
         member = parts[3]  # clyfar000
-        df, _ = plotter.load_possibility(path)
+        df, missing_mask = plotter.load_possibility(path)
         member_poss[member] = df[["background", "moderate", "elevated", "extreme"]]
+        member_missing_masks[member] = np.asarray(missing_mask, dtype=bool)
 
     if not member_poss:
         raise SystemExit(f"No possibility_heatmap files found for {norm_init}")
@@ -145,7 +149,7 @@ def load_case_inputs(case_root: Path, norm_init: str) -> tuple[
                 # Weather characterization is best-effort only.
                 continue
 
-    return member_poss, member_percentiles, weather_data
+    return member_poss, member_percentiles, weather_data, member_missing_masks
 
 
 def main() -> None:
@@ -179,12 +183,16 @@ def main() -> None:
 
     print(f"Generating clustering summary for: {norm_init}")
 
-    member_poss, member_percentiles, weather_data = load_case_inputs(case_root, norm_init)
+    member_poss, member_percentiles, weather_data, member_missing_masks = load_case_inputs(
+        case_root,
+        norm_init,
+    )
     summary = build_clustering_summary(
         norm_init=norm_init,
         member_poss=member_poss,
         member_percentiles=member_percentiles,
         weather_data=weather_data,
+        member_missing_masks=member_missing_masks,
     )
 
     out_path = case_root / f"forecast_clustering_summary_{norm_init}.json"
