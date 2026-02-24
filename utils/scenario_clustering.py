@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import fcluster, linkage
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import squareform
 
 
 BLOCK_NAMES = ("days_1_5", "days_6_10", "days_11_15")
@@ -90,16 +90,6 @@ def _weighted_from_block_means(block_means: Dict[str, float]) -> float:
     return float(np.dot(np.array(valid_vals, dtype=float), w))
 
 
-def _daily_weights(n_steps: int) -> np.ndarray:
-    """Return per-day weights so each 5-day block contributes by design weight."""
-    out = np.zeros(n_steps, dtype=float)
-    for _, start, stop, weight in _block_ranges(n_steps):
-        block_len = stop - start
-        # sqrt() so Euclidean distance contributes roughly as configured block weight
-        out[start:stop] = np.sqrt(weight / block_len)
-    return out
-
-
 def _zscore_columns(X: np.ndarray, valid_mask: np.ndarray | None = None) -> np.ndarray:
     """Column-wise z-score with epsilon stabilization, preserving missing entries."""
     out = X.astype(float).copy()
@@ -119,30 +109,6 @@ def _zscore_columns(X: np.ndarray, valid_mask: np.ndarray | None = None) -> np.n
         out[idx, j] = (col - mu) / sigma
         out[~idx, j] = np.nan
     return out
-
-
-def _fill_nan_with_col_median(X: np.ndarray) -> np.ndarray:
-    """Replace NaNs with per-column median (or 0 if fully missing)."""
-    out = X.copy()
-    for j in range(out.shape[1]):
-        col = out[:, j]
-        if np.isnan(col).all():
-            out[:, j] = 0.0
-            continue
-        if np.isnan(col).any():
-            med = np.nanmedian(col)
-            col[np.isnan(col)] = med
-            out[:, j] = col
-    return out
-
-
-def _pairwise_euclidean(X: np.ndarray) -> np.ndarray:
-    """Return square pairwise Euclidean distance matrix."""
-    if len(X) == 0:
-        return np.zeros((0, 0), dtype=float)
-    if len(X) == 1:
-        return np.zeros((1, 1), dtype=float)
-    return squareform(pdist(X, metric="euclidean"))
 
 
 def _pairwise_euclidean_masked(X: np.ndarray, valid_mask: np.ndarray) -> np.ndarray:
@@ -622,18 +588,6 @@ def _active_window_mask(
         ) & valid.astype(bool)
         active |= member_active
     return active
-
-
-def _all_members_background(
-    member_poss: Dict[str, pd.DataFrame],
-    members: List[str],
-    index: pd.Index,
-) -> bool:
-    """Return True if every member is strict-background across all lead days."""
-    for m in members:
-        if not _is_strict_background_member(member_poss[m].reindex(index)):
-            return False
-    return True
 
 
 def _build_feature_matrices(
