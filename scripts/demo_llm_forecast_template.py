@@ -220,6 +220,7 @@ def gather_previous_outlooks(
     """
     current_dt = datetime.strptime(norm_init, "%Y%m%d_%H%MZ")
     previous_outlooks = []
+    parse_failures: List[Path] = []
 
     # Iterate through recent cases in reverse order (newest first), excluding current
     for prev_init in reversed(recent_cases):
@@ -250,6 +251,11 @@ def gather_previous_outlooks(
                 })
                 if len(previous_outlooks) >= max_outlooks:
                     break
+            else:
+                parse_failures.append(outlook_path)
+
+    for failed_path in parse_failures:
+        print(f"Warning: could not parse previous outlook summary: {failed_path}")
 
     return previous_outlooks
 
@@ -440,14 +446,24 @@ def main() -> None:
     if previous_outlooks:
         lines.append("> Use these summaries to compare your current assessment against prior outlooks.")
         lines.append("> Explicitly note how your AlertLevel/Confidence differs from the previous run(s).")
-        lines.append("> Format: AlertLevel is the ozone category (BACKGROUND/MODERATE/ELEVATED/EXTREME);")
-        lines.append("> Confidence reflects ensemble spread, Clyfar reliability, and expert-identified biases.")
+        lines.append("> Prefer block-level comparisons (Days 1–5, 6–10, 11–15) when available.")
         lines.append("")
         for po in previous_outlooks:
             summary = po["summary"]
             lines.append(f"### Previous: {po['init']} ({po['age_hours']}h ago)")
-            lines.append(f"- **Alert Level:** {summary.get('alert_level', 'N/A')}")
-            lines.append(f"- **Confidence:** {summary.get('confidence', 'N/A')}")
+            if summary.get("alert_confidence_days_1_5"):
+                lines.append(
+                    f"- **Days 1-5 Alert/Confidence:** {summary.get('alert_confidence_days_1_5', 'N/A')}"
+                )
+                lines.append(
+                    f"- **Days 6-10 Alert/Confidence:** {summary.get('alert_confidence_days_6_10', 'N/A')}"
+                )
+                lines.append(
+                    f"- **Days 11-15 Alert/Confidence:** {summary.get('alert_confidence_days_11_15', 'N/A')}"
+                )
+            else:
+                lines.append(f"- **Alert Level:** {summary.get('alert_level', 'N/A')}")
+                lines.append(f"- **Confidence:** {summary.get('confidence', 'N/A')}")
             if summary.get("days_1_5_expert"):
                 lines.append(f"- **Days 1-5 (expert):** {summary['days_1_5_expert']}")
             if summary.get("days_6_10_expert"):
