@@ -1,6 +1,6 @@
 # LLM Forecast SOP
 
-Ffion version: v1.1 (tag: ffion-v1.1).
+Ffion workstream target: v1.1 (current tag: ffion-v1.0).
 
 ## Known issues
 - Q&A outputs can be verbose if prompt conditioning drifts from the default path.
@@ -31,6 +31,23 @@ unset LLM_CLI_COMMAND LLM_CLI_BIN LLM_CLI_ARGS
 ./LLM-GENERATE.sh 2026010406
 # → data/json_tests/CASE_*/llm_text/LLM-OUTLOOK-*.md + .pdf
 ```
+
+## Preferred Dev Test Path (Cron-Parity)
+
+Use this for repeatable Ffion testing that mirrors the production post-forecast path in `scripts/submit_clyfar.sh`:
+
+```bash
+# Single init (sync CASE + cron-parity env + local LLM-GENERATE)
+./scripts/run_llm_outlook.sh 2026022400 --force
+
+# Serial 6-hourly window (chronological, for previous-outlook continuity tests)
+./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force
+```
+
+Notes:
+- Default is test-safe (`LLM_SKIP_UPLOAD=1`). Add `--upload` only when you intentionally want website uploads.
+- Default retries match cron parity (`LLM_MAX_RETRIES=3`).
+- Script unsets `LLM_CLI_COMMAND/LLM_CLI_BIN/LLM_CLI_ARGS` by default to match production behavior.
 
 **If CASE data missing**, sync from export:
 ```bash

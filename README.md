@@ -132,6 +132,20 @@ https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.
 # Uploads PDF to BasinWx if DATA_UPLOAD_API_KEY is set
 ```
 
+**Preferred development test path (cron parity, repeatable):**
+```bash
+# Prerequisite check only (no generation)
+./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --check
+
+# Single init regeneration
+./scripts/run_llm_outlook.sh 2026022400 --force
+
+# Serial 6-hourly regeneration window
+./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force
+```
+- This mirrors the production post-forecast Ffion flow in `scripts/submit_clyfar.sh`.
+- Default is test-safe (`LLM_SKIP_UPLOAD=1`); add `--upload` only when intentional.
+
 **Local path (CHPC):**
 ```
 ~/gits/clyfar/data/json_tests/CASE_YYYYMMDD_HHMMZ/llm_text/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf

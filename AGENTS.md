@@ -18,6 +18,10 @@
   - Runs minimal parallel workflow, writes parquet + plots to dated subfolders.
 - Full run example:
   - `python run_gefs_clyfar.py -i 2024010100 -n 8 -m 10 -d ./data -f ./figures`
+- Preferred Ffion dev test (cron parity, repeatable):
+  - Single init: `./scripts/run_llm_outlook.sh 2026022400 --force`
+  - Serial 6-hourly window: `./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force`
+  - Use `--check` for prerequisites only; default is upload-disabled (`LLM_SKIP_UPLOAD=1`).
 
 ## Coding Style & Naming Conventions
 - Follow PEP 8, 4-space indentation, type hints where practical.
@@ -51,3 +55,4 @@
 - Keep the Clyfar code and the LaTeX technical report synchronized at release boundaries
 - Production uploads are enabled; unset `DATA_UPLOAD_API_KEY` or use `-t` flag to disable
 - Run smoke test before committing: `python run_gefs_clyfar.py -i 2025010100 -n 2 -m 2 -t`
+- For Ffion parity testing, prefer `scripts/run_llm_outlook.sh` over direct `LLM-GENERATE.sh`.
