@@ -30,9 +30,9 @@ The forecast init is {{INIT}} and the CASE directory on disk is {{CASE_ROOT}}.
 **OUTPUT SKELETON (copy exactly, fill placeholders):**
 
 ---
-> **EXPERIMENTAL AI-GENERATED FORECAST**
-> AI Forecaster: Ffion (ffion@jrl.ac)
-> This outlook was generated automatically using Clyfar v0.9 ozone predictions and GEFS weather ensemble data. Prompts and data pipelines developed by Lawson (human). This forecast may be automatic, not proof-read, or outdated. Use caution and verify with official sources.
+> - **EXPERIMENTAL AI-GENERATED FORECAST**
+> - Forecaster: **Ffion v1.1** (ffion@jrl.ac), using **Clyfar v0.9.8** and GEFS ensemble inputs.
+> - Automated output may be unreviewed or outdated; verify with official sources.
 ---
 
 # Clyfar Ozone Outlook

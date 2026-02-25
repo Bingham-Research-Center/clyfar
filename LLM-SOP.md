@@ -1,6 +1,7 @@
 # LLM Forecast SOP
 
-Ffion workstream target: v1.1 (current tag: ffion-v1.0).
+Ffion workstream target: v1.1 (current tag: ffion-v1.1).
+Clyfar current milestone: v0.9.8.
 
 ## Known issues
 - Q&A outputs can be verbose if prompt conditioning drifts from the default path.
