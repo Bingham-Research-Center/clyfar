@@ -958,7 +958,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             export_dir = os.path.join(clyfar_data_root, "basinwx_export")
             utils.try_create(export_dir)
 
-            # Export JSON products (63 ozone + 32 weather = 95 files)
+            # Export JSON products (63 ozone + 1 clustering + 32 weather = 96 files)
             results = export_all_products(
                 dailymax_df_dict=dailymax_df_dict,
                 init_dt=init_dt_dict['naive'],

@@ -229,11 +229,12 @@ def main() -> None:
         )
         total = sum(len(v) for v in results.values())
         logger.info(
-            "Created %d JSON files (%d possibility, %d percentiles, %d exceedance)",
+            "Created %d JSON files (%d possibility, %d percentiles, %d exceedance, %d clustering)",
             total,
             len(results.get("possibility", [])),
             len(results.get("percentiles", [])),
             len(results.get("exceedance", [])),
+            len(results.get("clustering", [])),
         )
 
         if args.sync_case:
@@ -252,6 +253,7 @@ def main() -> None:
             _copy_many(results.get("possibility", []), case_dir / "possibilities")
             _copy_many(results.get("percentiles", []), case_dir / "percentiles")
             _copy_many(results.get("exceedance", []), case_dir / "probs")
+            _copy_many(results.get("clustering", []), case_dir)
             logger.info("Synced JSON outputs into %s", case_dir)
     else:
         logger.info("Skipping JSON regeneration per --skip-json flag")

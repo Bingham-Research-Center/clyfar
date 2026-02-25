@@ -7,6 +7,7 @@ instead of downloading over HTTP. For each requested init it copies:
  - forecast_possibility_heatmap_*_{init}.json  -> CASE_.../possibilities/
  - forecast_percentile_scenarios_*_{init}.json -> CASE_.../percentiles/
  - forecast_exceedance_probabilities_*_{init}.json -> CASE_.../probs/
+ - forecast_clustering_summary_{init}.json      -> CASE_.../
 
 Usage (from repo root):
     python scripts/sync_case_from_local.py --init 2025121518 \
@@ -48,7 +49,7 @@ def case_root_for_init(base: Path, norm_init: str) -> Path:
 def gather_matches(source: Path, init_str: str) -> Dict[str, List[Path]]:
     """Collect local JSON files for a given init."""
     groups: Dict[str, List[Path]] = {
-        "possibilities": [], "percentiles": [], "probs": [], "weather": []
+        "possibilities": [], "percentiles": [], "probs": [], "weather": [], "clustering": []
     }
     for path in source.glob(f"*{init_str}.json"):
         name = path.name
@@ -60,6 +61,8 @@ def gather_matches(source: Path, init_str: str) -> Dict[str, List[Path]]:
             groups["probs"].append(path)
         elif name.startswith("forecast_gefs_weather_"):
             groups["weather"].append(path)
+        elif name.startswith("forecast_clustering_summary_"):
+            groups["clustering"].append(path)
     return groups
 
 
@@ -139,7 +142,11 @@ def main() -> None:
             if not files:
                 print(f"    - {group_name}: no files found locally")
                 continue
-            new_files = copy_group(files, case_root / group_name, init_str, group_name)
+            if group_name == "clustering":
+                dest_dir = case_root
+            else:
+                dest_dir = case_root / group_name
+            new_files = copy_group(files, dest_dir, init_str, group_name)
             print(
                 f"    - {group_name}: ensured {len(files)} file(s) "
                 f"(copied {new_files}, skipped {len(files) - new_files})"

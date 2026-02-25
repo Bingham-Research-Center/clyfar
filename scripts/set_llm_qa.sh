@@ -5,8 +5,8 @@
 #   source scripts/set_llm_qa.sh        # Enable Q&A with content below
 #   source scripts/set_llm_qa.sh off    # Disable Q&A
 #
-# Edit the QA_CONTENT section below to change the discussion points.
-# These warnings will appear in EVERY outlook section until disabled.
+# Edit the QA_CONTENT section below to change operator notes.
+# Notes are now applied only where relevant in the outlook.
 
 # ============================================================================
 # EDIT THIS SECTION - Your Q&A content for the LLM

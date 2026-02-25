@@ -221,7 +221,7 @@ echo "================================================================"
 echo "Clyfar forecast complete!"
 echo "================================================================"
 
-# Export to BasinWx website (3 data products, 63 JSON files)
+# Export to BasinWx website (6 data products, up to 96 JSON files)
 echo "Exporting forecast data to BasinWx..."
 
 python3 - <<EOF
@@ -246,7 +246,7 @@ if not data_root.exists():
     print(f"ERROR: Daily max data not found at {data_root}")
     sys.exit(1)
 
-# Load all member dataframes
+# Load daily-max member tables
 dailymax_df_dict = {}
 for parquet_file in data_root.glob("clyfar*_dailymax.parquet"):
     member_name = parquet_file.stem.replace('_dailymax', '')
@@ -259,19 +259,34 @@ if not dailymax_df_dict:
 
 print(f"Loaded {len(dailymax_df_dict)} ensemble members")
 
+# Load full-resolution member tables (for weather exports + richer clustering metadata)
+clyfar_df_dict = {}
+for parquet_file in Path("$DATA_ROOT").glob("clyfar*_df.parquet"):
+    member_name = parquet_file.stem.replace('_df', '')
+    df = pd.read_parquet(parquet_file)
+    clyfar_df_dict[member_name] = df
+
+if not clyfar_df_dict:
+    print("WARNING: No full-resolution member tables found; weather exports may be skipped")
+    clyfar_df_dict = None
+
 # Export all products (upload=True to send to website)
 results = export_all_products(
     dailymax_df_dict=dailymax_df_dict,
     init_dt=init_dt,
     output_dir="$EXPORT_DIR",
+    clyfar_df_dict=clyfar_df_dict,
     upload=True  # Set to False for testing
 )
 
-total_files = len(results['possibility']) + len(results['exceedance']) + len(results['percentiles'])
+total_files = sum(len(v) for v in results.values())
 print(f"Successfully exported {total_files} forecast files")
 print(f"  Possibility heatmaps: {len(results['possibility'])}")
 print(f"  Exceedance probabilities: {len(results['exceedance'])}")
 print(f"  Percentile scenarios: {len(results['percentiles'])}")
+print(f"  Clustering summaries: {len(results['clustering'])}")
+print(f"  Weather members: {len(results.get('weather_members', []))}")
+print(f"  Weather percentiles: {len(results.get('weather_percentiles', []))}")
 
 # Export PNG figures and PDF outlooks to BasinWx
 print("Exporting PNG figures and PDF outlooks to BasinWx...")
@@ -310,12 +325,7 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
         echo "WARNING: CASE sync failed, LLM may have incomplete context"
     }
 
-    # Step 2: Enable Q&A context (solar bias warning)
-    if [ -f "$CLYFAR_DIR/scripts/set_llm_qa.sh" ]; then
-        source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
-    fi
-
-    # Step 2.5: Add texlive to PATH for PDF generation
+    # Step 2: Add texlive to PATH for PDF generation
     # Note: CHPC module system has broken libreadline.so.6 dependency after restart,
     # so we add texlive bin directory directly to PATH.
     # Pandoc 3.8+ is installed via conda in clyfar-nov2025 environment.

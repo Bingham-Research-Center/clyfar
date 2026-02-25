@@ -32,26 +32,21 @@ OUTPUT_BASENAME="${LLM_OUTPUT_BASENAME:-LLM-OUTLOOK}"
 CLI_COMMAND="${LLM_CLI_COMMAND:-}"
 CLI_BIN="${LLM_CLI_BIN:-claude}"
 CLI_ARGS="${LLM_CLI_ARGS:-}"
+SKIP_BASHRC="${LLM_SKIP_BASHRC:-0}"
+SKIP_UPLOAD="${LLM_SKIP_UPLOAD:-0}"
 PYTHON_BIN="${PYTHON:-python}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Auto-source ~/.bashrc_basinwx for API key if not already set (ad-hoc runs)
-if [[ -z "${DATA_UPLOAD_API_KEY:-}" && -f ~/.bashrc_basinwx ]]; then
+if [[ "$SKIP_BASHRC" != "1" && -z "${DATA_UPLOAD_API_KEY:-}" && -f ~/.bashrc_basinwx ]]; then
   echo "Sourcing ~/.bashrc_basinwx for API credentials..."
   source ~/.bashrc_basinwx
 fi
 
 # Ensure ~/.local/bin is in PATH (claude CLI location)
 export PATH="$HOME/.local/bin:$PATH"
-
-# Auto-detect Q&A file if not set via environment variable
-DEFAULT_QA_FILE="$SCRIPT_DIR/data/llm_qa_context.md"
-if [[ -z "$QA_FILE" && -f "$DEFAULT_QA_FILE" ]]; then
-  QA_FILE="$DEFAULT_QA_FILE"
-  echo "Auto-detected Q&A context file: $QA_FILE"
-fi
 
 normalise_init() {
   local raw="$1"
@@ -87,36 +82,18 @@ fi
 if [[ -n "$QA_FILE" ]]; then
   echo ""
   echo ">>> Q&A CONTEXT ACTIVE: $QA_FILE"
-  echo ">>> Warnings from this file will appear in the LLM output."
-  echo ">>> To disable: source scripts/set_llm_qa.sh off"
+  echo ">>> Notes from this file will be used only where relevant."
   echo ""
 fi
 
 # Generate clustering summary if not present (for ensemble structure context)
 CLUSTERING_FILE="$CASE_DIR/forecast_clustering_summary_${NORM_INIT}.json"
-CLUSTERING_LEGACY="$CASE_DIR/clustering_summary.json"
-if [[ ! -f "$CLUSTERING_FILE" && ! -f "$CLUSTERING_LEGACY" ]]; then
+if [[ ! -f "$CLUSTERING_FILE" ]]; then
   echo "Generating clustering summary for $NORM_INIT..."
   if "$PYTHON_BIN" scripts/generate_clustering_summary.py "$NORM_INIT" 2>/dev/null; then
     echo "  Created: $CLUSTERING_FILE"
   else
     echo "  Warning: Could not generate clustering summary (non-fatal)"
-  fi
-fi
-# Resolve actual path (new name preferred, fall back to legacy)
-if [[ ! -f "$CLUSTERING_FILE" && -f "$CLUSTERING_LEGACY" ]]; then
-  CLUSTERING_FILE="$CLUSTERING_LEGACY"
-fi
-
-# Upload clustering summary to BasinWx (with forecast data)
-if [[ -f "$CLUSTERING_FILE" && -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
-  if "$PYTHON_BIN" -c "
-from export.to_basinwx import upload_json_to_basinwx
-exit(0 if upload_json_to_basinwx('$CLUSTERING_FILE', 'forecasts') else 1)
-" 2>/dev/null; then
-    echo "Clustering summary uploaded to BasinWx"
-  else
-    echo "Warning: Clustering summary upload failed (non-fatal)" >&2
   fi
 fi
 
@@ -165,8 +142,29 @@ validate_llm_output() {
   lines=$(wc -l < "$file")
   [[ "$lines" -lt 50 ]] && errors+=("Too short: $lines lines (expected 50+)")
 
-  grep -q "^AlertLevel:" "$file" || errors+=("Missing AlertLevel:")
-  grep -q "^Confidence:" "$file" || errors+=("Missing Confidence:")
+  local block_alerts=0
+  for key in AlertLevel_D1_5 AlertLevel_D6_10 AlertLevel_D11_15; do
+    if grep -q "^${key}:" "$file"; then
+      block_alerts=$((block_alerts + 1))
+    fi
+  done
+  if [[ "$block_alerts" -eq 0 ]]; then
+    grep -q "^AlertLevel:" "$file" || errors+=("Missing AlertLevel:")
+  elif [[ "$block_alerts" -ne 3 ]]; then
+    errors+=("Missing block AlertLevel(s)")
+  fi
+
+  local block_conf=0
+  for key in Confidence_D1_5 Confidence_D6_10 Confidence_D11_15; do
+    if grep -q "^${key}:" "$file"; then
+      block_conf=$((block_conf + 1))
+    fi
+  done
+  if [[ "$block_conf" -eq 0 ]]; then
+    grep -q "^Confidence:" "$file" || errors+=("Missing Confidence:")
+  elif [[ "$block_conf" -ne 3 ]]; then
+    errors+=("Missing block Confidence(s)")
+  fi
   grep -q "## Days 1" "$file" || errors+=("Missing 'Days 1-5' section")
 
   # Meta-response detection
@@ -282,7 +280,9 @@ if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
   if "$SCRIPT_DIR/scripts/outlook_to_pdf.sh" "$OUTPUT_PATH" "$PDF_PATH"; then
     echo "PDF generated: $PDF_PATH"
     # Upload PDF and markdown to BasinWx API
-    if [[ -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
+    if [[ "$SKIP_UPLOAD" == "1" ]]; then
+      echo "Skipping outlook upload (LLM_SKIP_UPLOAD=1)"
+    elif [[ -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
       if "$PYTHON_BIN" -c "from export.to_basinwx import upload_outlook_to_basinwx; exit(0 if upload_outlook_to_basinwx('$PDF_PATH') else 1)"; then
         echo "PDF uploaded to BasinWx"
       else

@@ -35,6 +35,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from viz.forecast_plots import ForecastPlotter
+from utils.scenario_clustering import build_clustering_summary
 
 
 def find_available_inits(root: Path) -> List[str]:
@@ -153,15 +154,23 @@ def main() -> None:
         _, suffix = parse_init_or_suffix(full_init)
 
     # Prefer CASE layout when full init is provided
+    percentiles_root = None
     if full_init is not None:
         case_root = case_root_for_init(data_root, full_init)
         case_poss = case_root / "possibilities"
+        case_pct = case_root / "percentiles"
         if not case_poss.exists():
             raise SystemExit(
                 f"Possibility JSONs not found for {full_init} under {case_poss}.\n"
                 "Fetch the CASE via scripts/fetch_case_from_api.py or set LLM_FROM_API=1 when running the pipeline."
             )
+        if not case_pct.exists():
+            raise SystemExit(
+                f"Percentile JSONs not found for {full_init} under {case_pct}.\n"
+                "Fetch the CASE via scripts/fetch_case_from_api.py or set LLM_FROM_API=1 when running the pipeline."
+            )
         poss_root = case_poss
+        percentiles_root = case_pct
         out_dir = case_root / "figs" / "scenarios_possibility"
     else:
         poss_root = data_root
@@ -192,33 +201,68 @@ def main() -> None:
 
     index = dates
 
-    # Build feature matrix and cluster
-    X, members = build_features(member_poss, index)
-    X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
-    k = 3
-    labels = cluster_members(X, k)
-    medoids = find_medoids(X, labels)
+    # Scenario summary (prefer production clustering summary path when CASE data is complete)
+    cluster_members_map: Dict[int, List[str]] = {}
+    medoid_members: Dict[int, str] = {}
+    total_members = len(member_poss)
 
-    # Scenario summary
-    cluster_members_map: Dict[int, List[str]] = defaultdict(list)
-    for m, label in zip(members, labels):
-        cluster_members_map[label].append(m)
+    if full_init is not None and percentiles_root is not None:
+        member_percentiles: Dict[str, "np.ndarray"] = {}
+        for path in sorted(percentiles_root.glob(f"forecast_percentile_scenarios_*_{label_init}.json")):
+            member = path.stem.split("_")[3]
+            df = plotter.load_percentiles(path)
+            member_percentiles[member] = df[["p50", "p90"]]
 
-    print("Scenario clusters (possibility-based):")
-    for cid in sorted(cluster_members_map):
-        members_c = cluster_members_map[cid]
-        frac = len(members_c) / float(len(members))
-        medoid_idx = medoids[cid]
-        medoid_member = members[medoid_idx]
-        print(
-            f"  Scenario {cid}: {len(members_c)}/{len(members)} members "
-            f"({frac:.0%}), medoid={medoid_member}"
+        summary = build_clustering_summary(
+            norm_init=label_init,
+            member_poss={
+                k: v[["background", "moderate", "elevated", "extreme"]]
+                for k, v in member_poss.items()
+            },
+            member_percentiles=member_percentiles,
+            weather_data={},
         )
+        clusters = sorted(summary.get("clusters", []), key=lambda c: int(c["id"]))
+        total_members = int(summary.get("n_members", total_members))
+        print("Scenario clusters (production summary assignments):")
+        for cluster in clusters:
+            cid = int(cluster["id"])
+            members_c = [m for m in cluster.get("members", []) if m in member_poss]
+            cluster_members_map[cid] = members_c
+            medoid_member = str(cluster.get("medoid", members_c[0] if members_c else ""))
+            medoid_members[cid] = medoid_member
+            frac = (len(members_c) / float(total_members)) if total_members else 0.0
+            print(
+                f"  Scenario {cid}: {len(members_c)}/{total_members} members "
+                f"({frac:.0%}), medoid={medoid_member}"
+            )
+    else:
+        X, members = build_features(member_poss, index)
+        X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
+        k = 3
+        labels = cluster_members(X, k)
+        medoids = find_medoids(X, labels)
+        cluster_members_map = defaultdict(list)
+        print("Scenario clusters (possibility-based):")
+        for m, label in zip(members, labels):
+            cluster_members_map[label].append(m)
+        for cid in sorted(cluster_members_map):
+            members_c = cluster_members_map[cid]
+            frac = len(members_c) / float(len(members))
+            medoid_idx = medoids[cid]
+            medoid_member = members[medoid_idx]
+            medoid_members[cid] = medoid_member
+            print(
+                f"  Scenario {cid}: {len(members_c)}/{len(members)} members "
+                f"({frac:.0%}), medoid={medoid_member}"
+            )
 
     # Plot cluster-level heatmaps and high-risk fractions
     for cid in sorted(cluster_members_map):
         members_c = cluster_members_map[cid]
         subset = {m: member_poss[m] for m in members_c}
+        if not subset:
+            continue
 
         fig, ax = plotter.plot_cluster_mean_possibility_heatmap(
             subset,
@@ -239,7 +283,7 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(6, 3))
     cids = sorted(cluster_members_map)
     counts = [len(cluster_members_map[cid]) for cid in cids]
-    frac = [c / float(len(members)) for c in counts]
+    frac = [c / float(total_members) if total_members else 0.0 for c in counts]
     ax.bar([str(cid) for cid in cids], frac, color="#4b8bbe")
     ax.set_ylim(0, 1.05)
     ax.set_ylabel("Fraction of members")

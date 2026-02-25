@@ -1,11 +1,12 @@
 """Export Clyfar forecast data to BasinWx website.
 
-Generates 5 data products (up to 95 JSON files per forecast run):
+Generates 6 data products (up to 96 JSON files per forecast run):
 1. Possibility heatmaps (31 files): Per-member 4×N grids of category possibilities
 2. Exceedance probabilities (1 file): Ensemble consensus for threshold exceedance
 3. Percentile scenarios (31 files): Defuzzified ppb values per member
 4. GEFS weather members (31 files): Per-member weather time series (snow, mslp, wind, solar, temp)
 5. GEFS weather percentiles (1 file): Ensemble p10/p50/p90 for weather variables
+6. Scenario clustering summary (1 file): Null-first scenario structure for Ffion/LLM context
 
 Environment variables required:
 - DATA_UPLOAD_API_KEY: API key for BasinWx upload endpoint
@@ -26,6 +27,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import numpy as np
 import math
+
+from utils.scenario_clustering import build_clustering_summary
 
 # Import from brc-tools (installed as editable package)
 try:
@@ -568,6 +571,85 @@ def export_gefs_weather_percentiles(
     return filepath
 
 
+def export_clustering_summary(
+    dailymax_df_dict: Dict[str, pd.DataFrame],
+    init_dt: datetime,
+    output_dir: str,
+    clyfar_df_dict: Optional[Dict[str, pd.DataFrame]] = None,
+) -> str:
+    """Export a null-first scenario clustering summary JSON.
+
+    This is produced from the same member-level dailymax data used by ozone exports
+    so it can be uploaded as a first-class forecast product.
+
+    Args:
+        dailymax_df_dict: Dictionary mapping member names to daily-max DataFrames
+        init_dt: Forecast initialization datetime (naive UTC)
+        output_dir: Directory to save JSON file
+        clyfar_df_dict: Optional full-resolution member DataFrames for weather context
+
+    Returns:
+        File path created
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    init_str = init_dt.strftime('%Y%m%d_%H%MZ')
+
+    member_poss: Dict[str, pd.DataFrame] = {}
+    member_percentiles: Dict[str, pd.DataFrame] = {}
+
+    for member_name, df in dailymax_df_dict.items():
+        needed_poss = {"background", "moderate", "elevated", "extreme"}
+        if not needed_poss.issubset(df.columns):
+            logger.warning(
+                "Skipping %s in clustering summary due to missing possibility columns",
+                member_name,
+            )
+            continue
+
+        p50_col = "ozone_50pc" if "ozone_50pc" in df.columns else "p50"
+        p90_col = "ozone_90pc" if "ozone_90pc" in df.columns else "p90"
+        if p50_col not in df.columns or p90_col not in df.columns:
+            logger.warning(
+                "Skipping %s in clustering summary due to missing percentile columns",
+                member_name,
+            )
+            continue
+
+        member_poss[member_name] = df[["background", "moderate", "elevated", "extreme"]].astype(float)
+        member_percentiles[member_name] = pd.DataFrame(
+            {"p50": df[p50_col].astype(float), "p90": df[p90_col].astype(float)},
+            index=df.index,
+        )
+
+    if not member_poss:
+        raise ValueError("No valid member possibility data available for clustering summary export")
+    if not member_percentiles:
+        raise ValueError("No valid member percentile data available for clustering summary export")
+
+    weather_data: Dict[str, Dict[str, List[float]]] = {}
+    if clyfar_df_dict is not None:
+        for member_name, df in clyfar_df_dict.items():
+            weather_data[member_name] = {
+                "snow": [float(v) if pd.notna(v) else None for v in df.get("snow", pd.Series(dtype=float)).tolist()],
+                "wind": [float(v) if pd.notna(v) else None for v in df.get("wind", pd.Series(dtype=float)).tolist()],
+            }
+
+    summary = build_clustering_summary(
+        norm_init=init_str,
+        member_poss=member_poss,
+        member_percentiles=member_percentiles,
+        weather_data=weather_data,
+    )
+
+    filename = f"forecast_clustering_summary_{init_str}.json"
+    filepath = os.path.join(output_dir, filename)
+    with open(filepath, 'w') as f:
+        json.dump(summary, f, indent=2, default=_sanitize_for_json)
+
+    logger.info(f"Created {filename}")
+    return filepath
+
+
 def export_all_products(
     dailymax_df_dict: Dict[str, pd.DataFrame],
     init_dt: datetime,
@@ -576,13 +658,14 @@ def export_all_products(
     upload: bool = True,
     max_workers: int = 8
 ) -> Dict[str, List[str]]:
-    """Export all forecast data products (63-95 JSON files total).
+    """Export all forecast data products (64-96 JSON files total).
 
     Convenience function to generate all forecast products in one call.
     Files are created first, then uploaded in parallel for better performance.
 
     Products:
     - Ozone (63 files): possibility heatmaps (31), exceedance (1), percentiles (31)
+    - Clustering (1 file): null-first scenario clustering summary
     - Weather (32 files, optional): GEFS weather members (31), percentiles (1)
 
     Args:
@@ -596,6 +679,7 @@ def export_all_products(
     Returns:
         Dictionary with keys mapping to file lists:
         - 'possibility', 'exceedance', 'percentiles' (always)
+        - 'clustering' (always)
         - 'weather_members', 'weather_percentiles' (if clyfar_df_dict provided)
     """
     logger.info(f"Exporting all Clyfar forecast products for {init_dt}")
@@ -604,7 +688,15 @@ def export_all_products(
     results = {
         "possibility": export_possibility_heatmaps(dailymax_df_dict, init_dt, output_dir),
         "exceedance": [export_exceedance_probabilities(dailymax_df_dict, init_dt, output_dir)],
-        "percentiles": export_percentile_scenarios(dailymax_df_dict, init_dt, output_dir)
+        "percentiles": export_percentile_scenarios(dailymax_df_dict, init_dt, output_dir),
+        "clustering": [
+            export_clustering_summary(
+                dailymax_df_dict=dailymax_df_dict,
+                init_dt=init_dt,
+                output_dir=output_dir,
+                clyfar_df_dict=clyfar_df_dict,
+            )
+        ],
     }
 
     # Step 2: Create weather JSON files if full-resolution data provided
@@ -899,7 +991,6 @@ def export_figures_to_basinwx(
 
     # Collect LLM outlook files (PDFs + markdown) from json_tests directory
     all_outlook_files = []
-    all_clustering_jsons = []
     if json_tests_root:
         init_str = init_dt.strftime('%Y%m%d_%H%MZ')
         case_dir = os.path.join(json_tests_root, f"CASE_{init_str}")
@@ -912,14 +1003,6 @@ def export_figures_to_basinwx(
                     all_outlook_files.append(fpath)
             if all_outlook_files:
                 logger.info(f"Found {len(all_outlook_files)} outlook files in {llm_text_dir}")
-
-        # Collect clustering summary JSON (uploaded with forecast data)
-        # Try dated filename first, fall back to legacy name
-        clustering_path = os.path.join(case_dir, f"forecast_clustering_summary_{init_str}.json")
-        if not os.path.isfile(clustering_path):
-            clustering_path = os.path.join(case_dir, "clustering_summary.json")
-        if os.path.isfile(clustering_path):
-            all_clustering_jsons.append(clustering_path)
 
     # Parallel upload with shared session for proper connection cleanup
     if upload and all_pngs:
@@ -962,14 +1045,6 @@ def export_figures_to_basinwx(
             if upload_outlook_to_basinwx(fpath):
                 outlook_success += 1
         logger.info(f"Uploaded {outlook_success}/{len(all_outlook_files)} outlook files")
-
-    # Upload clustering JSON with forecast data
-    if upload and all_clustering_jsons:
-        clust_success = 0
-        for fpath in all_clustering_jsons:
-            if _upload_to_basinwx(fpath, "forecasts"):
-                clust_success += 1
-        logger.info(f"Uploaded {clust_success}/{len(all_clustering_jsons)} clustering JSONs")
 
     return results
 

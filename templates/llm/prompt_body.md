@@ -41,14 +41,11 @@ The forecast init is {{INIT}} and the CASE directory on disk is {{CASE_ROOT}}.
 
 **Comparison with Previous Outlooks:**
 If a "Previous Outlook Summaries" section appears above, you MUST:
-1. Compare your current AlertLevel and Confidence to the previous outlook's values
-2. Explicitly state whether your assessment represents a strengthening, weakening, or consistent signal
-3. Use language like: "Since the previous outlook issued 6 hours ago, the elevated-ozone signal for January 11-12 has strengthened from MODERATE/LOW to MODERATE/MEDIUM confidence."
-4. If the previous outlook identified a key concern that has now resolved (or emerged), note this change
+1. Compare current block-specific AlertLevel/Confidence (Days 1–5, 6–10, 11–15) to previous values.
+2. State whether each block signal is strengthening, weakening, or consistent.
+3. Note if a previously flagged concern has resolved, or a new concern has emerged.
 
-The alert format `CATEGORY/CONFIDENCE` means:
-- First value (e.g., MODERATE) = Ozone category matching Clyfar possibility levels
-- Second value (e.g., LOW) = Confidence in that forecast based on ensemble spread, Clyfar reliability, and expert biases
+The format `CATEGORY/CONFIDENCE` means ozone category + confidence.
 
 If no previous outlook is available, note: "This is the first outlook in this sequence; no prior outlook available for comparison."
 
@@ -60,25 +57,30 @@ If no previous outlook is available, note: "This is the first outlook in this se
 
 Prioritize possibility categories over ppb values. Use wide ranges (e.g., "35-55 ppb").
 
-If a Q&A block was provided, repeat its warnings in every section.
+If short-term bias notes are provided above, apply them only where relevant to the affected lead windows/scenarios and weave them naturally into the forecast.
+
+If a "Clustering Diagnostics Snapshot" appears above, use it explicitly when assigning confidence:
+- High spread (large combined-distance median/p75) or `min_size_guard_relaxed: true` => lower confidence by one tier unless other evidence strongly offsets it.
+- Large strict-null fraction with weak non-null tail => avoid over-weighting isolated high-risk scenarios.
+- Small spread plus consistent previous-outlook signal => confidence can be maintained or raised.
 
 ### Task 1 – Three 5-day summaries at three complexity levels
 
 For each block (Days 1–5, Days 6–10, Days 11–15), write:
 
-a) **Public Summary** (3 sentences for field workers, residents):
+a) **Public Summary** (3 sentences):
    - Plain language, no jargon
    - Focus on what it means for outdoor activities and health
    - Use qualitative terms: "good", "moderate", "poor", "unhealthy"
 
-b) **Stakeholder Summary** (3 sentences for policy makers, environmental managers, industry):
+b) **Stakeholder Summary** (3 sentences):
    - Use technical terms but explain them in context
    - Include category names (background, moderate, elevated) and percentage-based probabilities
    - Use aggregate ensemble language ("roughly 25% of scenarios", "most ensemble members")
    - Do NOT reference specific scenarios by name (e.g., "clyfar015") — save that for expert summary
    - Avoid raw possibility decimals (0.7) — use percentages or qualitative language instead
 
-c) **Expert Summary** (3 sentences for forecasters, ozone specialists):
+c) **Expert Summary** (3 sentences):
    - Full technical detail: possibility memberships (decimals), specific scenario references
    - May reference specific scenarios by name (e.g., "scenario clyfar015 shows...")
    - Brief mention of run-to-run consistency when notable (e.g., "third consecutive run showing...")
@@ -90,7 +92,7 @@ Guidance for all levels:
 - Remember: GEFS provides weather, Clyfar provides ozone—don't conflate them.
 
 ### Verboten Word List
-For all issued discussion instead of this terminology, prefer another format:
+Replace these with the preferred forms:
 - "p10" --> 10th percentile (and similar)
 - "100%" --> "near-certain" or "very high likelihood" (cap at 98%)
 - "0%" --> "very unlikely" or "minimal chance" (floor at 2%)
@@ -107,7 +109,7 @@ Write a cohesive outlook (~1 printed page) that includes:
 - Uses WIDE ozone ranges (e.g., "35–55 ppb") not precise values.
 
 **B. Run-to-run consistency (dRisk/dt) — MAIN ANALYSIS HERE:**
-Analyse run-to-run consistency SEPARATELY for GEFS weather and Clyfar ozone:
+Analyse run-to-run consistency SEPARATELY for GEFS weather and Clyfar ozone. For Clyfar, describe changes by block (Days 1–5, 6–10, 11–15); for GEFS, discuss continuous shifts (e.g., snowfall spread, wind mixing changes) across the full horizon and call out which blocks are most affected.
 
 1) **GEFS dRisk/dt** (weather precursors): Are successive GEFS runs trending toward snowier/calmer conditions, or toward snow-free/windier conditions? Is there a consistent directional shift?
 
@@ -131,9 +133,9 @@ Do NOT assume every run shows the same trend—if runs are inconsistent, say so 
 **E. Monitoring guidance:**
 - Ends with what to monitor in subsequent runs and when the next update arrives.
 
-### Task 3 – Alert level for the website
+### Task 3 – Alert level for the website (block-specific worst-case)
 
-Using all evidence above, assign a single alert level for the full forecast period that fits the Clyfar outlook synthesised with uncertainty identified in Clyfar and GEFS data:
+Using all evidence above, assign a reasonable worst-case alert level for EACH block (Days 1–5, 6–10, 11–15). The worst-case should reflect the plausible high-ozone tail scenario(s) while acknowledging that the background/null scenario is always the fallback. Do not output a single all-period alert.
 
 #### Magnitude, matching Clyfar fuzzy categories sets
 - BACKGROUND – low ozone, no meaningful high-ozone risk expected.
@@ -146,11 +148,15 @@ Using all evidence above, assign a single alert level for the full forecast peri
 - MEDIUM: Moderate ensemble agreement, typical uncertainty for lead time
 - HIGH: Strong run-to-run consistency (dRisk/dt) and ensemble agreement
 
-Output this final two lines in a machine-readable form *at the very end* of your response:
+Output these final lines in a machine-readable code block in the **Alert Level** section:
 
 ```
-AlertLevel: BACKGROUND | MODERATE | ELEVATED | EXTREME
-Confidence: LOW | MEDIUM | HIGH
+AlertLevel_D1_5: BACKGROUND | MODERATE | ELEVATED | EXTREME
+Confidence_D1_5: LOW | MEDIUM | HIGH
+AlertLevel_D6_10: BACKGROUND | MODERATE | ELEVATED | EXTREME
+Confidence_D6_10: LOW | MEDIUM | HIGH
+AlertLevel_D11_15: BACKGROUND | MODERATE | ELEVATED | EXTREME
+Confidence_D11_15: LOW | MEDIUM | HIGH
 ```
 
 ### Output formatting
@@ -162,7 +168,7 @@ Confidence: LOW | MEDIUM | HIGH
 4) Days 6–10 (Public, Stakeholder, Expert summaries)
 5) Days 11–15 (Public, Stakeholder, Expert summaries)
 6) Full Outlook (~1 page, includes dRisk/dt analysis)
-7) Alert Level section with machine-readable code block
+7) Alert Level section with block-specific machine-readable code block
 8) Frequently Asked Questions (3-5 Q&A pairs)
 9) Data Logger (files read)
 
@@ -172,10 +178,6 @@ Generate 3-5 Q&A pairs anticipating questions from Public/Stakeholder audiences:
 - Brief "quoted user question" about the outlook or its implications
 - Concise, pedagogical answer (plain language, high info density)
 - Focus on gaps not covered elsewhere, or most relevant context
-
-Example format:
-> **"Why is the forecast uncertain beyond Day 7?"**
-> Dynamic weather models lose skill at longer lead times. Snow and pressure patterns become harder to predict, which propagates uncertainty into Clyfar's ozone estimates.
 
 ```
 
@@ -205,4 +207,3 @@ Output the forecast document DIRECTLY. Your response must START with:
 
 Any response that begins with explanatory text is INVALID and will be rejected.
 ----
-

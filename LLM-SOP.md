@@ -1,6 +1,6 @@
 # LLM Forecast SOP
 
-Ffion version: v1.0 (tag: ffion-v1.0).
+Ffion workstream target: v1.1 (current tag: ffion-v1.0).
 
 ## Known issues
 - Q&A outputs can be verbose if prompt conditioning drifts from the default path.
@@ -10,6 +10,11 @@ Ffion version: v1.0 (tag: ffion-v1.0).
 - Clyfar tags (`v0.9.x`, `v1.0`, ...) track scientific/output logic changes (FIS, clustering, preprocessing, exports).
 - Ffion tags (`ffion-v1.x`) track prompt/workflow/LLM pipeline changes and can advance independently.
 - Record both tags in release notes or session logs when they move in tandem.
+
+## v1.1 branch scope
+- Integration branch: `hotfix/ffion-1.1-clustering` (merged with latest `main`).
+- Reviewed as context only (not merged for v1.1): `feature/case-aware-demo-scripts`, `bugfix/cfgrib-load-fallback`, `michael_branch`.
+- v1.1 focus: unified clustering logic across summary/demo surfaces, stronger clustering diagnostics, confidence-aware prompt conditioning, and more robust markdown→PDF rendering defaults.
 
 ## Quick Start (Ad-hoc)
 
@@ -26,6 +31,23 @@ unset LLM_CLI_COMMAND LLM_CLI_BIN LLM_CLI_ARGS
 ./LLM-GENERATE.sh 2026010406
 # → data/json_tests/CASE_*/llm_text/LLM-OUTLOOK-*.md + .pdf
 ```
+
+## Preferred Dev Test Path (Cron-Parity)
+
+Use this for repeatable Ffion testing that mirrors the production post-forecast path in `scripts/submit_clyfar.sh`:
+
+```bash
+# Single init (sync CASE + cron-parity env + local LLM-GENERATE)
+./scripts/run_llm_outlook.sh 2026022400 --force
+
+# Serial 6-hourly window (chronological, for previous-outlook continuity tests)
+./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force
+```
+
+Notes:
+- Default is test-safe (`LLM_SKIP_UPLOAD=1`). Add `--upload` only when you intentionally want website uploads.
+- Default retries match cron parity (`LLM_MAX_RETRIES=3`).
+- Script unsets `LLM_CLI_COMMAND/LLM_CLI_BIN/LLM_CLI_ARGS` by default to match production behavior.
 
 **If CASE data missing**, sync from export:
 ```bash
@@ -57,14 +79,18 @@ python scripts/sync_case_from_local.py --init YYYYMMDDHH \
 
 ## Q&A Context
 
-Inject warnings into outlook:
+Inject optional operator notes into outlook:
 ```bash
 source scripts/set_llm_qa.sh        # enable (edit QA_CONTENT first)
 ./LLM-GENERATE.sh INIT
 source scripts/set_llm_qa.sh off    # disable
 ```
 
-Or manually: `export LLM_QA_FILE=/path/to/warnings.md`
+Or manually: `export LLM_QA_FILE=/path/to/notes.md`
+
+Notes are applied only where relevant to affected lead windows/scenarios.
+
+Default short-term bias definitions are loaded from `templates/llm/short_term_biases.json`.
 
 ---
 
@@ -84,7 +110,7 @@ No manual intervention needed. Check logs at `~/logs/basinwx/clyfar_*.out`.
 
 ```
 CASE_YYYYMMDD_HHMMZ/
-├── clustering_summary.json     # Auto-generated ensemble structure
+├── forecast_clustering_summary_YYYYMMDD_HHMMZ.json  # Auto-generated ensemble structure
 ├── possibilities/              # 31 ozone category heatmaps
 ├── percentiles/                # 31 ozone percentile scenarios
 ├── probs/                      # 1 exceedance probability file

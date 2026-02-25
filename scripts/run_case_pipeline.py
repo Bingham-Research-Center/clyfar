@@ -66,6 +66,9 @@ def check_case_complete(norm_init: str) -> bool:
         folder = case_root / subdir
         if not folder.exists() or not any(folder.glob(pattern)):
             return False
+    clustering_file = case_root / f"forecast_clustering_summary_{norm_init}.json"
+    if not clustering_file.exists():
+        return False
     return True
 
 
@@ -96,6 +99,13 @@ def ensure_case_present(norm_init: str) -> None:
         raise SystemExit(
             f"CASE {case_root} is incomplete: {details}.\n"
             "Refetch the init or verify the JSON placement before rerunning."
+        )
+
+    clustering_file = case_root / f"forecast_clustering_summary_{norm_init}.json"
+    if not clustering_file.exists():
+        print(
+            "Warning: clustering summary not found in CASE payload; "
+            "it will be regenerated locally before LLM prompt rendering."
         )
 
 def main() -> None:

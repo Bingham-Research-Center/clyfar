@@ -5,7 +5,8 @@ Generate an LLM-ready forecast report template for a Clyfar CASE directory.
 For a given init time, this script:
 - Locates data/json_tests/CASE_YYYYMMDD_HHMMZ/
 - Notes which JSON + figs subfolders exist
-- Optionally inlines a Q&A file for extra context
+- Optionally inlines operator notes
+- Optionally includes relevance-gated short-term bias notes
 - Writes a markdown template in CASE_.../llm_text/ with:
   * 3×5-day summaries (Days 1–5, 6–10, 11–15) at three complexity levels
   * Instructions for a full (~1 page) outlook
@@ -17,12 +18,14 @@ Usage (from repo root):
     MPLCONFIGDIR=.mplconfig python scripts/demo_llm_forecast_template.py 20251204_1200Z
 
 Optional:
-    --qa-file path/to/qa_notes.md   # additional context to paste into the prompt
+    --qa-file path/to/qa_notes.md     # optional operator notes
+    --bias-file path/to/biases.json   # optional short-term bias entries
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from datetime import datetime
@@ -36,7 +39,7 @@ if str(REPO_ROOT) not in sys.path:
 from scripts.extract_outlook_summary import extract_outlook_summary
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
-DEFAULT_QA_FILE = REPO_ROOT / "data" / "llm_qa_context.md"
+DEFAULT_BIAS_FILE = REPO_ROOT / "templates" / "llm" / "short_term_biases.json"
 
 # Previous outlook configuration
 MAX_PREVIOUS_OUTLOOKS = 2
@@ -93,6 +96,108 @@ def render_prompt_template(path: Path, replacements: Dict[str, str]) -> str:
     return text.rstrip()
 
 
+def load_bias_entries(path: Path) -> List[Dict]:
+    """Load short-term bias entries from JSON file."""
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text())
+    if isinstance(data, dict):
+        entries = data.get("biases", [])
+    elif isinstance(data, list):
+        entries = data
+    else:
+        entries = []
+    if not isinstance(entries, list):
+        return []
+    return [e for e in entries if isinstance(e, dict)]
+
+
+def extract_cluster_metrics(summary: Dict) -> Dict[str, float]:
+    """Extract compact metrics used to gate short-term bias notes."""
+    clusters = summary.get("clusters", []) if isinstance(summary, dict) else []
+    if not isinstance(clusters, list):
+        clusters = []
+
+    null_fraction = 0.0
+    max_non_null_high = 0.0
+    non_null_fraction = 0.0
+    for c in clusters:
+        if not isinstance(c, dict):
+            continue
+        frac = float(c.get("fraction", 0.0) or 0.0)
+        kind = str(c.get("kind", ""))
+        if kind == "null" or int(c.get("id", -1)) == 0:
+            null_fraction += frac
+            continue
+        non_null_fraction += frac
+        risk_profile = c.get("risk_profile", {})
+        if isinstance(risk_profile, dict):
+            max_non_null_high = max(
+                max_non_null_high,
+                float(risk_profile.get("weighted_high", 0.0) or 0.0),
+            )
+    return {
+        "null_fraction": float(null_fraction),
+        "non_null_fraction": float(non_null_fraction),
+        "max_non_null_high": float(max_non_null_high),
+    }
+
+
+def select_relevant_biases(entries: List[Dict], metrics: Dict[str, float]) -> List[Dict]:
+    """Return bias entries that pass optional relevance thresholds."""
+    relevant: List[Dict] = []
+    for entry in entries:
+        min_non_null = entry.get("min_non_null_fraction")
+        max_null = entry.get("max_null_fraction")
+        min_high = entry.get("min_max_non_null_high")
+
+        if min_non_null is not None and metrics["non_null_fraction"] < float(min_non_null):
+            continue
+        if max_null is not None and metrics["null_fraction"] > float(max_null):
+            continue
+        if min_high is not None and metrics["max_non_null_high"] < float(min_high):
+            continue
+        relevant.append(entry)
+    return relevant
+
+
+def format_clustering_diagnostics(summary: Dict) -> List[str]:
+    """Return compact diagnostic bullets for prompt conditioning."""
+    stage1 = summary.get("method", {}).get("stage_1", {}) if isinstance(summary, dict) else {}
+    stage2 = summary.get("method", {}).get("stage_2", {}) if isinstance(summary, dict) else {}
+    quality = summary.get("quality_flags", {}) if isinstance(summary, dict) else {}
+    active_window = stage1.get("active_window", {}) if isinstance(stage1, dict) else {}
+    distance = stage2.get("distance_diagnostics", {}) if isinstance(stage2, dict) else {}
+    combined = distance.get("combined", {}) if isinstance(distance, dict) else {}
+    nearest = distance.get("nearest_neighbor", {}) if isinstance(distance, dict) else {}
+
+    lines: List[str] = []
+    lines.append(
+        f"- Active non-background days: {active_window.get('active_days', 'n/a')}/"
+        f"{active_window.get('total_days', 'n/a')}"
+    )
+    lines.append(
+        f"- Strict null members: {quality.get('strict_null_members', 'n/a')} | "
+        f"Non-null members: {quality.get('non_null_members', 'n/a')}"
+    )
+    lines.append(
+        f"- Stage-2 selected k: {stage2.get('selected_k', 'n/a')} | "
+        f"Fallback used: {stage2.get('fallback_used', 'n/a')} | "
+        f"Min-size guard relaxed: {stage2.get('min_size_guard_relaxed', 'n/a')}"
+    )
+    lines.append(
+        "- Combined distance spread "
+        f"(min/p25/median/p75/max): {combined.get('min', 'n/a')}/"
+        f"{combined.get('p25', 'n/a')}/{combined.get('median', 'n/a')}/"
+        f"{combined.get('p75', 'n/a')}/{combined.get('max', 'n/a')}"
+    )
+    lines.append(
+        f"- Nearest-neighbor distance (median/p75/max): "
+        f"{nearest.get('median', 'n/a')}/{nearest.get('p75', 'n/a')}/{nearest.get('max', 'n/a')}"
+    )
+    return lines
+
+
 def gather_previous_outlooks(
     data_root: Path,
     norm_init: str,
@@ -115,6 +220,7 @@ def gather_previous_outlooks(
     """
     current_dt = datetime.strptime(norm_init, "%Y%m%d_%H%MZ")
     previous_outlooks = []
+    parse_failures: List[Path] = []
 
     # Iterate through recent cases in reverse order (newest first), excluding current
     for prev_init in reversed(recent_cases):
@@ -145,6 +251,11 @@ def gather_previous_outlooks(
                 })
                 if len(previous_outlooks) >= max_outlooks:
                     break
+            else:
+                parse_failures.append(outlook_path)
+
+    for failed_path in parse_failures:
+        print(f"Warning: could not parse previous outlook summary: {failed_path}")
 
     return previous_outlooks
 
@@ -161,7 +272,13 @@ def main() -> None:
         "--qa-file",
         type=str,
         default=None,
-        help="Optional path to a Q&A markdown/text file with case-specific notes.",
+        help="Optional path to freeform operator notes for the LLM context.",
+    )
+    parser.add_argument(
+        "--bias-file",
+        type=str,
+        default=os.environ.get("LLM_BIAS_FILE", str(DEFAULT_BIAS_FILE)),
+        help="Path to short-term bias JSON used for relevance-gated caution notes.",
     )
     parser.add_argument(
         "--prompt-template",
@@ -171,11 +288,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Auto-detect Q&A file if not explicitly provided
-    if args.qa_file is None and DEFAULT_QA_FILE.exists():
-        args.qa_file = str(DEFAULT_QA_FILE)
-        print(f"Auto-detected Q&A context file: {DEFAULT_QA_FILE}")
-    elif args.qa_file:
+    if args.qa_file:
         print(f"Using Q&A context file: {args.qa_file}")
     else:
         print("No Q&A context file found or specified.")
@@ -211,6 +324,29 @@ def main() -> None:
         qa_path = Path(args.qa_file).expanduser()
         if qa_path.exists():
             qa_text = qa_path.read_text()
+        else:
+            print(f"Warning: Q&A file not found: {qa_path}")
+
+    bias_entries: List[Dict] = []
+    if args.bias_file:
+        bias_path = Path(args.bias_file).expanduser()
+        if bias_path.exists():
+            bias_entries = load_bias_entries(bias_path)
+        else:
+            print(f"Warning: bias file not found: {bias_path}")
+
+    clustering_file = case_root / f"forecast_clustering_summary_{norm_init}.json"
+    clustering_summary: Dict = {}
+    if clustering_file.exists():
+        try:
+            clustering_summary = json.loads(clustering_file.read_text())
+        except Exception:
+            clustering_summary = {}
+
+    relevant_biases: List[Dict] = []
+    if bias_entries:
+        metrics = extract_cluster_metrics(clustering_summary)
+        relevant_biases = select_relevant_biases(bias_entries, metrics)
 
     recent_cases = list_recent_cases(data_root, limit=8)
 
@@ -269,17 +405,39 @@ def main() -> None:
     else:
         lines.append("- (no other CASE_ directories found)")
 
+    if bias_entries:
+        lines.append("")
+        lines.append("## Short-Term Bias Context (for LLM only)")
+        lines.append("")
+        lines.append("> Integrate only where relevant to affected lead windows or scenarios.")
+        lines.append("> Do not repeat unchanged cautions in every section.")
+        lines.append("")
+        if relevant_biases:
+            for entry in relevant_biases:
+                bias_id = str(entry.get("bias_id", "bias"))
+                summary = str(entry.get("summary", "")).strip()
+                lead_start = entry.get("lead_day_start")
+                lead_end = entry.get("lead_day_end")
+                if lead_start is not None and lead_end is not None:
+                    window = f"Days {int(lead_start)}-{int(lead_end)}"
+                else:
+                    window = "Lead window: unspecified"
+                lines.append(f"- `{bias_id}` ({window}): {summary}")
+                confidence_impact = str(entry.get("confidence_impact", "")).strip()
+                if confidence_impact:
+                    lines.append(f"  Confidence guidance: {confidence_impact}")
+        else:
+            lines.append("- No short-term bias entries met relevance criteria for this run.")
+
     if qa_text:
         lines.append("")
-        lines.append("## Q&A context (for LLM only)")
+        lines.append("## Operator Notes (optional, for LLM only)")
         lines.append("")
-        lines.append("> The following notes come from forecaster Q&A or diagnostics.")
-        lines.append("> You may use them to refine the discussion, but do not echo them verbatim.")
+        lines.append("> Use only when relevant to the specific day window/scenario being discussed.")
+        lines.append("> Do not echo notes verbatim.")
         lines.append("")
         for line in qa_text.splitlines():
             lines.append(f"> {line}")
-        lines.append("")
-        lines.append("**Directive:** If the Q&A mentions data quality issues or cautions, restate that warning in every section (public, stakeholder, expert, and full outlook).")
 
     # Add previous outlook summaries section
     lines.append("")
@@ -288,14 +446,24 @@ def main() -> None:
     if previous_outlooks:
         lines.append("> Use these summaries to compare your current assessment against prior outlooks.")
         lines.append("> Explicitly note how your AlertLevel/Confidence differs from the previous run(s).")
-        lines.append("> Format: AlertLevel is the ozone category (BACKGROUND/MODERATE/ELEVATED/EXTREME);")
-        lines.append("> Confidence reflects ensemble spread, Clyfar reliability, and expert-identified biases.")
+        lines.append("> Prefer block-level comparisons (Days 1–5, 6–10, 11–15) when available.")
         lines.append("")
         for po in previous_outlooks:
             summary = po["summary"]
             lines.append(f"### Previous: {po['init']} ({po['age_hours']}h ago)")
-            lines.append(f"- **Alert Level:** {summary.get('alert_level', 'N/A')}")
-            lines.append(f"- **Confidence:** {summary.get('confidence', 'N/A')}")
+            if summary.get("alert_confidence_days_1_5"):
+                lines.append(
+                    f"- **Days 1-5 Alert/Confidence:** {summary.get('alert_confidence_days_1_5', 'N/A')}"
+                )
+                lines.append(
+                    f"- **Days 6-10 Alert/Confidence:** {summary.get('alert_confidence_days_6_10', 'N/A')}"
+                )
+                lines.append(
+                    f"- **Days 11-15 Alert/Confidence:** {summary.get('alert_confidence_days_11_15', 'N/A')}"
+                )
+            else:
+                lines.append(f"- **Alert Level:** {summary.get('alert_level', 'N/A')}")
+                lines.append(f"- **Confidence:** {summary.get('confidence', 'N/A')}")
             if summary.get("days_1_5_expert"):
                 lines.append(f"- **Days 1-5 (expert):** {summary['days_1_5_expert']}")
             if summary.get("days_6_10_expert"):
@@ -311,20 +479,24 @@ def main() -> None:
         lines.append("")
 
     # Embed clustering summary if available (small, critical context for Claude)
-    # Try dated filename first, fall back to legacy name
-    clustering_file = case_root / f"forecast_clustering_summary_{norm_init}.json"
-    if not clustering_file.exists():
-        clustering_file = case_root / "clustering_summary.json"
     lines.append("## Ensemble Clustering Summary")
     lines.append("")
-    if clustering_file.exists():
+    if clustering_file.exists() and clustering_summary:
         lines.append("> Cluster assignments showing GEFS weather → Clyfar ozone linkage.")
+        lines.append("> Use the diagnostics snapshot to calibrate confidence language.")
+        lines.append("")
+        lines.append("### Clustering Diagnostics Snapshot")
+        for diag_line in format_clustering_diagnostics(clustering_summary):
+            lines.append(diag_line)
         lines.append("")
         lines.append("```json")
-        lines.append(clustering_file.read_text())
+        lines.append(json.dumps(clustering_summary, indent=2))
         lines.append("```")
     else:
-        lines.append("> No clustering summary found. Read `possibilities/*.json` directly to understand ensemble spread.")
+        lines.append(
+            "> No clustering summary found. Run "
+            "`scripts/generate_clustering_summary.py` before prompting the LLM."
+        )
     lines.append("")
 
     template_path = Path(args.prompt_template).expanduser()
