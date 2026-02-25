@@ -19,6 +19,72 @@ from utils.lookups import Lookup, snow_stids
 from preprocessing.representative_obs import do_repval_snow, \
     get_representative_obs
 
+LOCAL_SOLAR_TIMEZONE = "America/Denver"
+SOLAR_PERSISTENCE_CUTOFF_H = 240
+
+
+def _to_utc_index(index_like) -> pd.DatetimeIndex:
+    """Return a UTC-aware DatetimeIndex from naive/aware input timestamps."""
+    idx = pd.DatetimeIndex(pd.to_datetime(index_like))
+    if idx.tz is None:
+        return idx.tz_localize("UTC")
+    return idx.tz_convert("UTC")
+
+
+def _fill_late_solar_with_persistence(
+    solar_df: pd.DataFrame,
+    init_dt_naive: datetime.datetime,
+    delta_h: int,
+    max_h: int,
+    value_col: str = "sdswrf",
+    cutoff_h: int = SOLAR_PERSISTENCE_CUTOFF_H,
+    local_tz: str = LOCAL_SOLAR_TIMEZONE,
+) -> pd.DataFrame:
+    """Fill/overwrite >cutoff solar values using deterministic local-hour persistence.
+
+    The lookup is built only from valid values at or before ``cutoff_h``, then
+    applied to each forecast hour beyond cutoff. Local-hour matching is performed
+    in ``local_tz`` so MST/MDT transitions are handled by timezone conversion.
+    """
+    if value_col not in solar_df.columns:
+        raise KeyError(f"Missing required solar column '{value_col}'.")
+
+    out = solar_df.copy()
+    out.index = pd.to_datetime(out.index)
+
+    idx_utc = _to_utc_index(out.index)
+    init_utc = pd.Timestamp(init_dt_naive, tz="UTC")
+    fxx = np.round((idx_utc - init_utc).total_seconds() / 3600.0).astype(int)
+    out["fxx"] = fxx
+
+    anchor_mask = (out["fxx"] <= int(cutoff_h)) & out[value_col].notna()
+    anchor = out.loc[anchor_mask, value_col]
+    if anchor.empty:
+        # Preserve deterministic behavior if early data is unexpectedly absent.
+        fallback_value = 0.0
+        hour_lookup = {}
+    else:
+        anchor_idx_utc = idx_utc[anchor_mask]
+        anchor_hours = pd.Series(
+            anchor_idx_utc.tz_convert(local_tz).hour,
+            index=anchor.index,
+            dtype=int,
+        )
+        grouped = anchor.groupby(anchor_hours).median()
+        hour_lookup = {int(hour): float(val) for hour, val in grouped.items()}
+        fallback_value = float(anchor.median())
+
+    for h in np.arange(cutoff_h + int(delta_h), int(max_h) + 1, int(delta_h), dtype=int):
+        ts_utc = init_utc + pd.Timedelta(hours=int(h))
+        local_hour = int(ts_utc.tz_convert(local_tz).hour)
+        approx_val = hour_lookup.get(local_hour, fallback_value)
+        out.loc[ts_utc.tz_localize(None), value_col] = float(approx_val)
+        out.loc[ts_utc.tz_localize(None), "fxx"] = int(h)
+
+    out = out.sort_index()
+    out["fxx"] = out["fxx"].astype(int)
+    return out
+
 
 def create_forecast_dataframe(variable_ts, variable_name,
                                 init_time=None, add_h_init_time=0):
@@ -361,13 +427,11 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
     towards the maximum but there is a lot of uncertainty in solar radiation
     and the signal of time of year may be better as a replacement variable.
 
-    The variable "approximate_0p5" is used to skip the coarser
-    0.5 deg resolution GEFS forecasts (only every 6 hours; misses solar max)
-    forecasts and instead use a high (?) percentile over all 0.25 degree
-    forecast. (This will be separate from the issues not catching the max
-    during each day, but we just want a signal). At this range, cloud cover
-    is meaningless at the local scale, so let's hedge a good number using
-    the previous measurements to approximate the solar insolation.
+    If ``approximate_0p5`` is True, all forecast hours beyond +240 are replaced
+    by deterministic local-hour persistence built from the <=240h segment.
+    This maintains a stable hourly signal when coarse 0.5deg data lacks 3-hour
+    detail and avoids timezone leakage by matching on local (America/Denver)
+    hour through explicit UTC -> local conversion.
 
     TODO: manually set nighttime as zero, but we want daily max anyway.
 
@@ -394,37 +458,18 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
         if max_h <= 240:
             return solar_ts
 
-        datetime_arr = pd.to_datetime(solar_ts.time.values).to_pydatetime()
-        # Now create a dataframe from these datetimes and the solar values
+        # Convert to dataframe and fill late range using deterministic
+        # local-hour persistence anchored to <=240h values.
         solar_df = solar_ts.to_dataframe()
-        solar_df.index = datetime_arr
-
-        # I'm not sure why the dtype arguemnts doesn't work for me
-        for h in np.arange(240+delta_h, max_h, delta_h, dtype=int):
-            # Compute the representative solar value for this time
-            # Subset all solar values for the first ~9 days at this hour of day
-            timestamp = init_dt_naive + datetime.timedelta(hours=int(h))
-            hour = timestamp.hour
-
-            pass
-
-            subset_df = solar_df[solar_df.index.hour == hour]
-
-            # Take quantile over the 9 or so days - seems to be too high?
-            # Make dynamic e.g., maximum possible, factored by cloud cover
-            approx_solar = subset_df['sdswrf'].quantile(0.5)
-
-            # This timestamp may or may not exist
-            # If it does, we want to overwrite the existing value with new one
-            # If it doesn't, we want to add it to the dataframe.
-
-            # Hard-coded snow string for now, pragmatic
-            pass
-            solar_df.loc[timestamp, 'sdswrf'] = approx_solar
-            # solar_df = solar_df.reindex(sorted(solar_df.index))
-
-        # Sort in chronological order (index, datetime)
-        solar_ts = solar_df.sort_index()
+        solar_ts = _fill_late_solar_with_persistence(
+            solar_df=solar_df,
+            init_dt_naive=init_dt_naive,
+            delta_h=delta_h,
+            max_h=max_h,
+            value_col="sdswrf",
+            cutoff_h=SOLAR_PERSISTENCE_CUTOFF_H,
+            local_tz=LOCAL_SOLAR_TIMEZONE,
+        )
 
     return solar_ts
 
