@@ -1,5 +1,5 @@
 """
-Version 0.9.0 of Clyfar configuration file.
+Clyfar FIS configuration file (v0p9 module).
 
 This class encapsulates the configuration for the Clyfar fuzzy inference system.
 It organizes configuration details, membership functions, and rules, and provides
@@ -110,10 +110,10 @@ temp_cats = {}
 
 class Clyfar(FIS):
     def __init__(self):
-        """ Version 0.9.0 of the Clyfar configuration file.
+        """Clyfar FIS configuration (v0p9 module).
 
         First creates generic FIS object via inheritance, then adds specific
-        configuration details for this version.
+        configuration details.
 
         I don't think I need temperature if i just want to plot the GEFS data
         """
