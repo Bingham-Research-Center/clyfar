@@ -34,3 +34,5 @@ This checklist is the blocking definition of done for the v1.0 label.
 - Solar DST/persistence tests and notes.
 - Short risk register (what changed, why safe, what is deferred).
 - Final checklist update in this file (`Done`/`Deferred` with rationale).
+
+See also: `docs/v1_0_risk_register.md`.
