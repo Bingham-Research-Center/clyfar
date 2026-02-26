@@ -17,12 +17,15 @@ import datetime as dt
 import json
 from pathlib import Path
 import sys
+import os
+import subprocess
 from typing import Dict, Iterable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pytz
+import requests
 
 # Allow running the script directly from repo root without editable install.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -97,18 +100,114 @@ def _build_forecast_representative(
     return rep
 
 
+def _read_env_file_token(env_path: Path, key: str) -> Optional[str]:
+    if not env_path.exists():
+        return None
+    for raw in env_path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        if k.strip() == key:
+            token = v.strip().strip("'").strip('"')
+            return token or None
+    return None
+
+
+def _get_synoptic_token() -> Optional[str]:
+    token = os.environ.get("SYNOPTIC_API_TOKEN")
+    if token:
+        return token
+    return _read_env_file_token(REPO_ROOT / ".env", "SYNOPTIC_API_TOKEN")
+
+
+def _download_synoptic_snow_obs(
+    start_utc: pd.Timestamp,
+    end_utc: pd.Timestamp,
+    stids: Iterable[str],
+    token: str,
+) -> pd.DataFrame:
+    """Fetch raw snow observations directly from Synoptic API."""
+    url = "https://api.synopticdata.com/v2/stations/timeseries"
+    params = {
+        "token": token,
+        "stid": ",".join(stids),
+        "vars": "snow_depth",
+        "start": start_utc.tz_convert("UTC").strftime("%Y%m%d%H%M"),
+        "end": end_utc.tz_convert("UTC").strftime("%Y%m%d%H%M"),
+        "obtimezone": "utc",
+        "output": "json",
+    }
+    resp = requests.get(url, params=params, timeout=60)
+    resp.raise_for_status()
+    payload = resp.json()
+
+    stations = payload.get("STATION", [])
+    rows = []
+    for stn in stations:
+        stid = stn.get("STID")
+        obs = stn.get("OBSERVATIONS", {})
+        times = obs.get("date_time", [])
+        snow_key = None
+        for key in obs.keys():
+            if key.startswith("snow_depth"):
+                snow_key = key
+                break
+        if snow_key is None:
+            continue
+        values = obs.get(snow_key, [])
+        for t, v in zip(times, values):
+            if v in (None, "", "null"):
+                continue
+            try:
+                val = float(v)
+            except (TypeError, ValueError):
+                continue
+            rows.append(
+                {
+                    "time": pd.Timestamp(t),
+                    "stid": stid,
+                    "snow_depth": val,
+                }
+            )
+
+    if not rows:
+        return pd.DataFrame(columns=["stid", "snow_depth"], index=pd.DatetimeIndex([], name="time"))
+
+    df = pd.DataFrame(rows)
+    df["time"] = pd.to_datetime(df["time"], utc=True)
+    df = df.set_index("time").sort_index()
+    return df
+
+
 def _fetch_obs_representative(
     start_utc: pd.Timestamp, end_utc: pd.Timestamp, tz_name: str
-) -> pd.Series:
+) -> tuple[pd.Series, pd.DataFrame, str]:
     local_tz = pytz.timezone(tz_name)
     start_local = start_utc.tz_convert(local_tz).to_pydatetime()
     end_local = end_utc.tz_convert(local_tz).to_pydatetime()
-    obs = ObsData(start_local, end_local, "snow", stids=snow_stids, qc="all")
-    rep_df = do_repval_snow(obs.df, snow_stids)
-    rep = rep_df["snow_depth"].copy()
-    rep.index = pd.to_datetime(rep.index)
-    rep = rep.sort_index()
-    return rep
+    try:
+        obs = ObsData(start_local, end_local, "snow", stids=snow_stids, qc="all")
+        raw_df = obs.df.copy()
+        rep_df = do_repval_snow(raw_df, snow_stids)
+        rep = rep_df["snow_depth"].copy()
+        rep.index = pd.to_datetime(rep.index)
+        rep = rep.sort_index()
+        return rep, raw_df, "synoptic_obsdata"
+    except Exception:
+        token = _get_synoptic_token()
+        if not token:
+            raise RuntimeError(
+                "ObsData retrieval failed and no SYNOPTIC_API_TOKEN was found in environment or .env."
+            )
+        raw_df = _download_synoptic_snow_obs(start_utc=start_utc, end_utc=end_utc, stids=snow_stids, token=token)
+        if raw_df.empty:
+            raise RuntimeError("Synoptic API fallback returned no snow observations.")
+        rep_df = do_repval_snow(raw_df, snow_stids)
+        rep = rep_df["snow_depth"].copy()
+        rep.index = pd.to_datetime(rep.index)
+        rep = rep.sort_index()
+        return rep, raw_df, "synoptic_http_api"
 
 
 def _load_obs_representative_from_file(path: Path) -> pd.Series:
@@ -250,6 +349,11 @@ def main() -> None:
         help="Directory for figure and metrics outputs.",
     )
     parser.add_argument(
+        "--fig-root",
+        default="figures",
+        help="Figure root for optional forecast generation if missing.",
+    )
+    parser.add_argument(
         "--members",
         default="",
         help="Optional comma-separated member list (e.g., p01,p02). Default uses all discovered members.",
@@ -264,6 +368,27 @@ def main() -> None:
         action="store_true",
         help="Allow forecast-only output if observation retrieval fails.",
     )
+    parser.add_argument(
+        "--generate-forecast-if-missing",
+        action="store_true",
+        help="If run folder is missing, execute run_gefs_clyfar.py to generate forecast files.",
+    )
+    parser.add_argument(
+        "--forecast-ncpus",
+        type=int,
+        default=8,
+        help="CPUs for optional forecast generation.",
+    )
+    parser.add_argument(
+        "--forecast-members",
+        default="all",
+        help="Member count for optional forecast generation (e.g., 2, 10, all).",
+    )
+    parser.add_argument(
+        "--forecast-testing",
+        action="store_true",
+        help="Use --testing for optional forecast generation.",
+    )
     parser.add_argument("--timezone", default=LOCAL_TZ, help="Local timezone name (default America/Denver).")
     args = parser.parse_args()
 
@@ -274,10 +399,31 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     if not run_dir.exists():
-        raise FileNotFoundError(
-            f"Run directory not found: {run_dir}. "
-            f"Generate data first for init {args.init} (e.g., run_gefs_clyfar.py ...)."
-        )
+        if args.generate_forecast_if_missing:
+            cmd = [
+                sys.executable,
+                str(REPO_ROOT / "run_gefs_clyfar.py"),
+                "-i",
+                args.init,
+                "-n",
+                str(args.forecast_ncpus),
+                "-m",
+                str(args.forecast_members),
+                "-d",
+                args.data_root,
+                "-f",
+                args.fig_root,
+            ]
+            if args.forecast_testing:
+                cmd.append("--testing")
+            print(f"[INFO] Run folder missing, generating forecast: {' '.join(cmd)}")
+            subprocess.run(cmd, check=True)
+            run_dir = Path(args.data_root) / run_label
+        if not run_dir.exists():
+            raise FileNotFoundError(
+                f"Run directory not found: {run_dir}. "
+                f"Generate data first for init {args.init} (e.g., run_gefs_clyfar.py ...)."
+            )
 
     member_files = _discover_snow_member_files(run_dir, run_label)
     if not member_files:
@@ -294,18 +440,18 @@ def main() -> None:
     fcst_start_utc = pd.Timestamp(min(s.index.min() for s in member_series.values()), tz="UTC")
     fcst_end_utc = pd.Timestamp(max(s.index.max() for s in member_series.values()), tz="UTC")
     rep_obs = pd.Series(dtype=float)
+    obs_raw_df = pd.DataFrame()
     obs_source = "none"
     try:
         if args.obs_file:
             rep_obs = _load_obs_representative_from_file(Path(args.obs_file))
             obs_source = f"file:{args.obs_file}"
         else:
-            rep_obs = _fetch_obs_representative(
+            rep_obs, obs_raw_df, obs_source = _fetch_obs_representative(
                 fcst_start_utc - pd.Timedelta(days=1),
                 fcst_end_utc + pd.Timedelta(days=1),
                 tz_name=args.timezone,
             )
-            obs_source = "synoptic_api"
     except Exception as exc:
         if not args.allow_no_obs:
             raise RuntimeError(
@@ -329,6 +475,8 @@ def main() -> None:
     rep_fcst.to_csv(out_dir / "forecast_representative_daily.csv", index_label="date")
     if len(rep_obs):
         rep_obs.to_frame("obs_representative").to_csv(out_dir / "obs_representative_daily.csv", index_label="date")
+    if not obs_raw_df.empty:
+        obs_raw_df.to_csv(out_dir / "obs_raw_snow.csv", index_label="time")
     merged.to_csv(out_dir / "comparison_daily.csv", index_label="date")
     by_lead.to_csv(out_dir / "metrics_by_lead_day.csv", index=False)
 
