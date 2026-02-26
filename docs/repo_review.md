@@ -19,9 +19,9 @@
   - Justify variable selection with references on wintertime ozone formation in basins (stagnation, snow albedo, insolation) and map each to a fuzzy antecedent.
   - Summarize membership function shapes and breakpoints; show how linguistic labels (e.g., calm/breezy) map to physical ranges used in analysis.
   - Detail the defuzzification approach that yields 10/50/90 “percentiles” from possibility distributions and clarify interpretation in the text.
-- Snow, wind, and temperature series come from masked quantiles across low-elevation grid cells (0.75, 0.5, 0.5 respectively); solar uses a 0.9 quantile with a heuristic persistence fill beyond 240 h; MSLP is sampled at a single point (`Ouray`).
+- Snow, wind, and temperature series come from masked quantiles across low-elevation grid cells (0.75, 0.5, 0.5 respectively); solar uses a 0.9 quantile with deterministic local-hour persistence beyond 240 h (median by `America/Denver` local hour from `<=240h` anchors); MSLP is sampled at a single point (`Ouray`).
   - Discuss trade-offs of spatial quantiles (robust to outliers vs potential loss of spatial gradients) and propose alternatives for ablation studies.
-  - Explain the persistence-fill beyond 240 h, quantify expected error growth, and suggest climatology- or model-based extrapolation as comparators.
+  - Explain the local-hour persistence method beyond 240 h, quantify expected error growth, and suggest climatology- or model-based extrapolation as comparators.
   - Motivate the point-sampled MSLP choice, and flag how a basin-mean pressure might alter rule activation frequencies.
 - Elevation smoothing (`weighted_average`) attempts to broaden the lowland mask before refiltering at 1850 m, biasing the analysis toward inversion-prone basin cells.
   - Specify the kernel and boundary handling; provide before/after mask diagnostics to show intended inclusion of basin fringes.
@@ -41,7 +41,7 @@
   - Replace a hard snow‑depth threshold with a coverage fraction (e.g., ≥X% of mask above Y mm) to reduce sensitivity to outliers.
   - Validate snow‑depth thresholds against station observations; if SWE is referenced for comparison, treat it as optional context and document any conversion assumptions separately.
   - Analyze how snow‑depth regime classification correlates with observed ozone exceedances across years.
-- The 0.9 solar quantile fill beyond 240 h (`preprocessing/representative_nwp_values.py:274`) reuses historical hourly samples without regard to synoptic evolution, so late-horizon ozone guidance will largely decouple from the actual forecast.
+- The 0.9 solar quantile extension beyond 240 h (`preprocessing/representative_nwp_values.py`) uses deterministic local-hour persistence from the `<=240h` anchor window; despite DST-safe behavior, late-horizon ozone guidance can still decouple from evolving synoptics.
   - Benchmark persistence vs a diurnal climatology conditioned on day-of-year and cloud cover proxies for 240–384 h leads.
   - Surface uncertainty by tapering confidence/opacity in plots at extended leads; note limitations explicitly in narrative.
   - Consider truncating published guidance at a lead where verification skill remains defensible.

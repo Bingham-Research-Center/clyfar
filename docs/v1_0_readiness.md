@@ -19,9 +19,9 @@ This checklist is the blocking definition of done for the v1.0 label.
 ## Gate 2: Solar Time/Physics Safety for v1.0
 - Status: In progress
 - Requirement:
-  - Timezone handling is correct and deterministic for US Mountain local-time logic.
+  - Timezone handling is correct and deterministic for `America/Denver` local-time logic.
   - DST transition handling explicitly validated for Sunday March 8, 2026.
-  - Forecast hours beyond 240 use a documented deterministic persistence rule.
+  - Forecast hours beyond +240 use deterministic local-hour persistence anchored to valid `<=240h` values.
   - Behavior is covered by tests.
 
 ## Operational Safety (non-blocking unless regressed)

@@ -7,7 +7,7 @@ This register tracks pre-v1.0 risks discovered during `release/v1.0-prep`.
 | ID | Risk | Evidence | Status | Action |
 |---|---|---|---|---|
 | R1 | Snow science gate not yet closed | Canonical deep-dive case (`2025012500`) data not found locally during this pass; script/tooling now exists but case evidence still pending. | Open | Run `scripts/analyze_snow_edge_case.py --init 2025012500` once case artifacts exist; review visual + MAE/bias outputs before v1.0 label. |
-| R2 | Solar late-horizon behavior previously under-specified | Prior logic used naive-hour persistence with ambiguous TODOs after +240h. | Mitigated | Deterministic local-hour persistence implemented in `preprocessing/representative_nwp_values.py`; DST-aware checks added in `tests/test_solar_time_logic.py`. |
+| R2 | Solar late-horizon behavior previously under-specified | Prior logic/notes left >+240h behavior ambiguous and easy to misread as naive-hour or daily-max persistence. | Mitigated | Deterministic local-hour persistence implemented in `preprocessing/representative_nwp_values.py` (median by `America/Denver` local hour from valid `<=240h` anchors, with anchor-median fallback); DST-aware checks added in `tests/test_solar_time_logic.py`. |
 
 ## Medium
 | ID | Risk | Evidence | Status | Action |
