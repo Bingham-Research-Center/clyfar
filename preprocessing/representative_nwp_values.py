@@ -42,9 +42,12 @@ def _fill_late_solar_with_persistence(
 ) -> pd.DataFrame:
     """Fill/overwrite >cutoff solar values using deterministic local-hour persistence.
 
-    The lookup is built only from valid values at or before ``cutoff_h``, then
-    applied to each forecast hour beyond cutoff. Local-hour matching is performed
-    in ``local_tz`` so MST/MDT transitions are handled by timezone conversion.
+    Build an anchor lookup from valid values at or before ``cutoff_h`` by taking
+    the median for each local clock hour in ``local_tz`` (America/Denver by
+    default). Each forecast timestamp beyond cutoff is then assigned the anchor
+    median for its matching local hour. If a local-hour bin is unavailable in the
+    anchor window, use the anchor-wide median fallback (or 0.0 if anchor is
+    empty). UTC->local conversion keeps behavior deterministic across MST/MDT.
     """
     if value_col not in solar_df.columns:
         raise KeyError(f"Missing required solar column '{value_col}'.")
@@ -418,29 +421,13 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
                     ) -> xr.DataArray:
     """Compute a representative forecast value for solar radiation.
 
-    This one uses weighted average from the 6 hours around solar noon
-    (3 either side). This is to optimally capture three forecast points,
-    where we can do a weighted mean for "near-noon radiation" to mirror
-    "near-zenith mean" in representative observations for solar.
-
-    We use the hazen technique with low percentile value to capture something
-    towards the maximum but there is a lot of uncertainty in solar radiation
-    and the signal of time of year may be better as a replacement variable.
+    Base values use a basin-mask 0.9 quantile at each forecast timestamp.
 
     If ``approximate_0p5`` is True, all forecast hours beyond +240 are replaced
-    by deterministic local-hour persistence built from the <=240h segment.
-    This maintains a stable hourly signal when coarse 0.5deg data lacks 3-hour
-    detail and avoids timezone leakage by matching on local (America/Denver)
-    hour through explicit UTC -> local conversion.
-
-    TODO: manually set nighttime as zero, but we want daily max anyway.
-
-    TODO:
-    * After fxx=240, we don't have 3-h insolation so we should think about
-    persistence or another function. Predictability is so low at that stage
-    (uncertainty of sunrise/sunset way lower than cloud cover at 10-16
-    days!) we could use persistence with a factor relating to humidity/cloud?
-
+    by deterministic local-hour persistence built from the <=240h segment:
+    per local clock hour (America/Denver), apply the anchor median from the
+    early range. This preserves seasonal/diurnal structure while retaining a
+    recent optical-depth regime proxy at extended leads.
     """
     solar_ts = process_nwp_timeseries(
                         init_dt_naive, start_h, max_h, masks,
@@ -450,9 +437,8 @@ def do_nwpval_solar(init_dt_naive: datetime.datetime,
                         )
 
     if approximate_0p5:
-        # Use 0.9 percentile from each timestamp's collection of solar stids
-        # at the given time of day to form an approximate value for hours
-        # where we don't have 3-h data from 0p25 GEFS.
+        # Keep <=240h quantile values as anchors and overwrite >240h with
+        # deterministic local-hour persistence from that anchor window.
 
         # Start time
         if max_h <= 240:

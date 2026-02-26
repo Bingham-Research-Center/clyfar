@@ -1,9 +1,13 @@
 import datetime as dt
 
+import numpy as np
 import pandas as pd
 import pytz
 
-from preprocessing.representative_nwp_values import _fill_late_solar_with_persistence
+from preprocessing.representative_nwp_values import (
+    LOCAL_SOLAR_TIMEZONE,
+    _fill_late_solar_with_persistence,
+)
 from preprocessing.representative_obs import MOUNTAIN_TIMEZONE, get_solar_noon
 
 
@@ -36,6 +40,67 @@ def test_fill_late_solar_uses_local_hour_lookup_across_dst():
 
     assert target_ts in filled.index
     assert float(filled.loc[target_ts, "sdswrf"]) == expected_value
+    assert int(filled.loc[target_ts, "fxx"]) == 249
+
+
+def test_fill_late_solar_uses_anchor_median_per_local_hour():
+    init_dt = dt.datetime(2026, 2, 27, 0, 0)
+    base = _synthetic_solar_df(init_dt, max_h=240, delta_h=3)
+
+    # Distort one sample so expected post-240h value must still be the local-hour
+    # median, not simply a copied terminal value.
+    first_idx = base.index[0]
+    base.loc[first_idx, "sdswrf"] = -999.0
+
+    target_ts = pd.Timestamp(init_dt) + pd.Timedelta(hours=255)
+    target_local_hour = target_ts.tz_localize("UTC").tz_convert(LOCAL_SOLAR_TIMEZONE).hour
+
+    idx_utc = pd.DatetimeIndex(base.index).tz_localize("UTC")
+    fxx = np.round(
+        (idx_utc - pd.Timestamp(init_dt, tz="UTC")).total_seconds() / 3600.0
+    ).astype(int)
+    anchor = base.loc[fxx <= 240, "sdswrf"]
+    anchor_hours = idx_utc[fxx <= 240].tz_convert(LOCAL_SOLAR_TIMEZONE).hour
+    expected_value = float(anchor.groupby(anchor_hours).median().loc[target_local_hour])
+
+    filled = _fill_late_solar_with_persistence(
+        solar_df=base,
+        init_dt_naive=init_dt,
+        delta_h=3,
+        max_h=264,
+        local_tz=LOCAL_SOLAR_TIMEZONE,
+    )
+
+    assert float(filled.loc[target_ts, "sdswrf"]) == expected_value
+
+
+def test_fill_late_solar_uses_anchor_median_fallback_when_hour_missing():
+    init_dt = dt.datetime(2026, 2, 27, 0, 0)
+    base = _synthetic_solar_df(init_dt, max_h=240, delta_h=3)
+    target_ts = pd.Timestamp(init_dt) + pd.Timedelta(hours=249)
+    target_local_hour = target_ts.tz_localize("UTC").tz_convert(LOCAL_SOLAR_TIMEZONE).hour
+
+    idx_utc = pd.DatetimeIndex(base.index).tz_localize("UTC")
+    fxx = np.round(
+        (idx_utc - pd.Timestamp(init_dt, tz="UTC")).total_seconds() / 3600.0
+    ).astype(int)
+    target_hour_mask = (fxx <= 240) & (
+        idx_utc.tz_convert(LOCAL_SOLAR_TIMEZONE).hour == target_local_hour
+    )
+
+    sparse = base.copy()
+    sparse.loc[sparse.index[target_hour_mask], "sdswrf"] = np.nan
+    fallback_value = float(sparse.loc[(fxx <= 240), "sdswrf"].dropna().median())
+
+    filled = _fill_late_solar_with_persistence(
+        solar_df=sparse,
+        init_dt_naive=init_dt,
+        delta_h=3,
+        max_h=264,
+        local_tz=LOCAL_SOLAR_TIMEZONE,
+    )
+
+    assert float(filled.loc[target_ts, "sdswrf"]) == fallback_value
     assert int(filled.loc[target_ts, "fxx"]) == 249
 
 

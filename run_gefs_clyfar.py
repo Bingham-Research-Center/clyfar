@@ -627,7 +627,8 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
         except (KeyError, IndexError):
             mslp_val = np.nan
         wind_val = safe_loc(all_vrbl_dfs["wind"], wind_, dt)  # already in m/s?
-        solar_val = safe_loc(all_vrbl_dfs["solar"], solar_, dt)  # already w/m2 TODO Crap after 240h
+        # >240h solar values are already handled upstream via local-hour persistence.
+        solar_val = safe_loc(all_vrbl_dfs["solar"], solar_, dt)  # already w/m2
         temp_val = safe_loc(all_vrbl_dfs["temp"], temp_, dt)  # already in C
 
         # UOD guard: warn/clip when inputs fall outside FIS domains
