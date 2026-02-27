@@ -12,6 +12,9 @@ from astral.sun import sun
 
 from obs.download_winters import download_most_recent
 
+MOUNTAIN_TIMEZONE = "America/Denver"
+
+
 def prepare_df(df, stids, vrbl_col, stid_col):
     """Prepare dataframe with proper timezone and subset columns.
 
@@ -43,7 +46,7 @@ def convert_to_local_date(df):
         DataFrame with Mountain Time index and date column
     """
     df_local = df.copy()
-    df_local.index = df.index.tz_convert("US/Mountain")
+    df_local.index = df.index.tz_convert(MOUNTAIN_TIMEZONE)
     df_local['date'] = df_local.index.date + pd.Timedelta(days=1)  # Align all functions to next day
     return df_local
 
@@ -157,23 +160,16 @@ def get_solar_noon(date, tz):
     Returns:
         datetime: timezone-aware solar noon time
     """
-    # Ensure we're working with timezone-aware datetime
-    if isinstance(date, datetime.date):
-        date = datetime.datetime.combine(date, datetime.time(12, 0))
-    if date.tzinfo is None:
-        date = tz.localize(date)
+    if isinstance(date, datetime.datetime):
+        day = date.date()
+    elif isinstance(date, datetime.date):
+        day = date
+    else:
+        raise TypeError("date must be datetime.date or datetime.datetime")
 
-    # Convert civil noon (12:00) to local time
-    local_noon = datetime.datetime.combine(date.date(), datetime.time(12, 0))
-    local_noon = tz.localize(local_noon)
-
-    # TODO JRL do we need to do this?! I don't get it. Claude is to blame.
-    # Apply longitude correction (4 minutes per degree from 105°W)
-    # Roosevelt is at ~110°W, so we're about 5 degrees west of the Mountain Time meridian
-    lng_correction = (109.9889 - 105.0) * 4 * 60  # seconds
-    solar_noon = local_noon + datetime.timedelta(seconds=lng_correction)
-
-    return solar_noon
+    roosevelt = LocationInfo("Roosevelt", "Utah", MOUNTAIN_TIMEZONE, 40.2994, -109.9889)
+    solar_times = sun(roosevelt.observer, date=day, tzinfo=tz)
+    return solar_times["noon"]
 
 def compute_nearzenithmean(df, solar_stids, vrbl_col="solar_radiation",
                            stid_col="stid", window_hrs=2):
@@ -190,15 +186,12 @@ def compute_nearzenithmean(df, solar_stids, vrbl_col="solar_radiation",
     Returns:
         df_daily_solar_nzm (pd.DataFrame): The near-zenith mean insolation data
     """
-    # Define Roosevelt, UT location
-    roosevelt = LocationInfo('Roosevelt', 'Utah', 'US/Mountain',
-                             40.2994, -109.9889)
-    mountain_tz = pytz.timezone('US/Mountain')
+    mountain_tz = pytz.timezone(MOUNTAIN_TIMEZONE)
 
     # Ensure input data is timezone-aware and in Mountain Time
     if df.index.tz is None:
         df.index = pd.to_datetime(df.index, utc=True)
-    if df.index.tz != mountain_tz:
+    if str(df.index.tz) != mountain_tz.zone:
         df.index = df.index.tz_convert(mountain_tz)
 
     daily_solar_nzm = dict()
@@ -331,7 +324,7 @@ def do_repval_ozone(df, stids, vrbl_col="ozone_concentration", stid_col="stid"):
 
     # Convert to local time zone from UTC (US/Mountain)
     df_local = df.copy()
-    df_local.index = df.index.tz_convert("US/Mountain")
+    df_local.index = df.index.tz_convert(MOUNTAIN_TIMEZONE)
 
     # Add a column for "next day" date
     df_local['date'] = df_local.index.date + pd.Timedelta(days=1)
@@ -352,7 +345,7 @@ def do_repval_ozone(df, stids, vrbl_col="ozone_concentration", stid_col="stid"):
 
     return repr_df
 
-def get_representative_obs(vrbl, n_days, stids, timezone="US/Mountain"):
+def get_representative_obs(vrbl, n_days, stids, timezone=MOUNTAIN_TIMEZONE):
     """Helper function to download and process obs in one function.
     """
     repr_funcs = {

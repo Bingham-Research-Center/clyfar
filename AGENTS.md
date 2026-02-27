@@ -1,58 +1,61 @@
 # Repository Guidelines
+Date updated: 2026-02-25
 
-## Project Structure & Module Organization
-- Core script: `run_gefs_clyfar.py` orchestrates downloads, processing, and visualization.
-- Modules:
-- `fis/` fuzzy inference system (e.g., `v0p9.py`), Clyfar logic.
-  - `nwp/` data acquisition/parsing for GEFS/HRRR (e.g., `download_funcs.py`).
-  - `preprocessing/` feature engineering (e.g., `representative_nwp_values.py`).
-  - `viz/` plotting utilities; `utils/` shared helpers; `verif/` evaluation tools.
-  - `obs/` observation handling; `notebooks/` exploratory work.
-  - Outputs: `data/` and `figures*/` are local artifacts, not source.
+This is the canonical top-level guidance file for contributors and AI coding agents.
 
-## Build, Test, and Development Commands
-- Create env (Python 3.11): `conda create -n clyfar python=3.11.9 && conda activate clyfar`
+## Project Structure
+- Entry point: `run_gefs_clyfar.py` orchestrates GEFS ingest, preprocessing, FIS inference, plots, and exports.
+- Core modules:
+  - `fis/` fuzzy inference logic (`v0p9.py` is operational baseline).
+  - `nwp/` GEFS/HRRR data acquisition and parsing.
+  - `preprocessing/` representative-value feature engineering.
+  - `obs/` observation download/processing.
+  - `viz/` plotting and figure utilities.
+  - `utils/` shared helpers.
+  - `export/` BasinWx product export/upload.
+- Local artifacts (not source): `data/`, `figures/`, `figures_parallel/`.
+
+## Build and Run
+- Environment: `conda create -n clyfar python=3.11.9 && conda activate clyfar`
 - Install deps: `pip install -r requirements.txt`
-- Quick smoke test (reduced workload):
+- Canonical smoke command:
   - `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing`
-  - Runs minimal parallel workflow, writes parquet + plots to dated subfolders.
 - Full run example:
   - `python run_gefs_clyfar.py -i 2024010100 -n 8 -m 10 -d ./data -f ./figures`
-- Preferred Ffion dev test (cron parity, repeatable):
-  - Single init: `./scripts/run_llm_outlook.sh 2026022400 --force`
-  - Serial 6-hourly window: `./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force`
-  - Use `--check` for prerequisites only; default is upload-disabled (`LLM_SKIP_UPLOAD=1`).
 
-## Coding Style & Naming Conventions
-- Follow PEP 8, 4-space indentation, type hints where practical.
-- Names: modules `snake_case.py`; classes `CamelCase`; functions/vars `snake_case`.
-- Keep public functions documented with concise docstrings; prefer pure functions in `utils/`.
-- Versioned modules use `vXrY` pattern (e.g., `v0p9.py`); keep API-compatible shims if refactoring.
+## Ffion / LLM Outlook
+- Preferred dev path (cron-parity):
+  - `./scripts/run_llm_outlook.sh 2026022400 --force`
+  - `./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force`
+- Use `--check` for prerequisite checks.
+- Default is upload-safe (`LLM_SKIP_UPLOAD=1`); opt in intentionally for upload.
 
-## Testing Guidelines
-- No formal test suite yet. Use the CLI `--testing` flag and small `-m`/`-n` values to validate changes quickly.
-- Prefer deterministic paths: write outputs under a temporary dated folder via `-d` and `-f`.
-- Example smoke: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing` (mirrors [`README.md` → Environment setup](README.md#environment-setup) and [`docs/README.md` → Quick start](docs/README.md#quick-start)).
-- When adding tests, place them under `tests/` and use `pytest`; name files `test_*.py`.
+## Coding Standards
+- Follow PEP 8; 4-space indentation; type hints where practical.
+- Naming: modules/functions/variables `snake_case`; classes `CamelCase`.
+- Keep public functions documented with concise docstrings.
+- Versioned modules use `vXrY` pattern and keep compatibility shims when refactoring.
 
-## Commit & Pull Request Guidelines
-- Commits: short, descriptive subjects in present tense (seen in history, e.g., 'Fix', 'Add', 'Move'). Include rationale in body when non-trivial.
-- PRs: include scope, motivation, CLI example used for validation, and before/after artifacts (paths in `figures*/` helpful). Link related issues.
-- Touch only relevant modules; keep changes minimal; update inline docs where behavior changes.
+## Testing and Validation
+- Put tests in `tests/` as `test_*.py`.
+- Prefer fast deterministic validation:
+  - Smoke run with `--testing` and reduced members/CPUs.
+  - Focused unit tests for changed logic.
+- Before committing major changes, run:
+  - `python run_gefs_clyfar.py -i 2025010100 -n 2 -m 2 -t`
 
-## Security & Configuration Tips
-- I/O is parallelized; default start method is `spawn`. Avoid global state; guard CLI entry under `if __name__ == "__main__":`.
-- External data downloads occur in `nwp/`; be mindful of locking/cache changes and long-running operations.
+## Commit / PR Expectations
+- Keep commits small and logical; present-tense subjects.
+- Include rationale when behavior changes are non-trivial.
+- PRs should include scope, motivation, validation command(s), and key artifact paths.
 
-## External Repositories & Knowledge Base
-- Technical report (LaTeX): `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
+## Operational Safety Notes
+- Multiprocessing uses `spawn`; avoid unsafe global state.
+- Guard entry points with `if __name__ == "__main__":`.
+- External download behavior lives in `nwp/`; treat cache/locking edits carefully.
+- Production uploads are enabled when credentials are present; unset `DATA_UPLOAD_API_KEY` or use testing mode to avoid accidental uploads.
+
+## External Repositories
+- Technical report: `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
 - Knowledge base: `/Users/johnlawson/Documents/GitHub/brc-knowledge`
-- Operational tools (sibling repo): `../brc-tools`
-
-## Guidance for Claude Code
-- Read `CLAUDE.md` first for high-density project context
-- Discover paths on demand; read/write only when the task explicitly requires it
-- Keep the Clyfar code and the LaTeX technical report synchronized at release boundaries
-- Production uploads are enabled; unset `DATA_UPLOAD_API_KEY` or use `-t` flag to disable
-- Run smoke test before committing: `python run_gefs_clyfar.py -i 2025010100 -n 2 -m 2 -t`
-- For Ffion parity testing, prefer `scripts/run_llm_outlook.sh` over direct `LLM-GENERATE.sh`.
+- Operational sibling tools: `../brc-tools`

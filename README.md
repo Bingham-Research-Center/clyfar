@@ -1,7 +1,7 @@
 # clyfar
 Bingham Research Center's (Utah State University) Ozone Prediction Model Clyfar
 
-> **AI-Assisted Development:** See `CLAUDE.md` for Claude Code context. This repo uses clean package boundaries across clyfar, brc-tools, and ubair-website.
+> **AI-Assisted Development:** See `AGENTS.md` for canonical contributor/agent workflow guidance. This repo uses clean package boundaries across clyfar, brc-tools, and ubair-website.
 
 Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements information should be updated in `requirements.txt`.
 
