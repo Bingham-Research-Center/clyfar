@@ -217,7 +217,7 @@ def export_possibility_heatmaps(
                 "categories": categories,
                 "num_days": len(df),
                 "num_missing": len(missing_dates),
-                "data_source": "Clyfar v0.9.5",
+                "data_source": "Clyfar v1.0.1",
                 "units": "possibility (0-1)"
             },
             "forecast_dates": forecast_dates,
@@ -317,7 +317,7 @@ def export_exceedance_probabilities(
             "num_days": len(forecast_dates),
             "thresholds_ppb": thresholds,
             "percentile_used": percentile_col,
-            "data_source": "Clyfar v0.9.5",
+            "data_source": "Clyfar v1.0.1",
             "units": "probability (0-1)"
         },
         "forecast_dates": forecast_dates,
@@ -388,7 +388,7 @@ def export_percentile_scenarios(
                 "product_type": "percentile_scenarios",
                 "percentiles": percentiles,
                 "num_days": len(df),
-                "data_source": "Clyfar v0.9.5",
+                "data_source": "Clyfar v1.0.1",
                 "units": "ppb (ozone concentration)"
             },
             "forecast_dates": forecast_dates,
@@ -457,7 +457,7 @@ def export_gefs_weather_members(
                 "product_type": "gefs_weather",
                 "variables": {var: WEATHER_VARIABLES[var] for var in weather_vars},
                 "num_timesteps": len(df),
-                "data_source": "GEFS via Clyfar v0.9.5"
+                "data_source": "GEFS via Clyfar v1.0.1"
             },
             "forecast_times": forecast_times,
             "weather": weather_data
@@ -555,7 +555,7 @@ def export_gefs_weather_percentiles(
             "num_timesteps": len(forecast_times),
             "percentiles": percentiles,
             "variables": {var: WEATHER_VARIABLES[var] for var in weather_vars},
-            "data_source": "GEFS via Clyfar v0.9.5"
+            "data_source": "GEFS via Clyfar v1.0.1"
         },
         "forecast_times": forecast_times,
         "weather_percentiles": percentile_data
