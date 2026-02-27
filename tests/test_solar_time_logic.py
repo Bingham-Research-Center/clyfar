@@ -74,7 +74,7 @@ def test_fill_late_solar_uses_anchor_median_per_local_hour():
     assert float(filled.loc[target_ts, "sdswrf"]) == expected_value
 
 
-def test_fill_late_solar_uses_anchor_median_fallback_when_hour_missing():
+def test_fill_late_solar_uses_nearest_hour_when_target_hour_missing():
     init_dt = dt.datetime(2026, 2, 27, 0, 0)
     base = _synthetic_solar_df(init_dt, max_h=240, delta_h=3)
     target_ts = pd.Timestamp(init_dt) + pd.Timedelta(hours=249)
@@ -90,7 +90,15 @@ def test_fill_late_solar_uses_anchor_median_fallback_when_hour_missing():
 
     sparse = base.copy()
     sparse.loc[sparse.index[target_hour_mask], "sdswrf"] = np.nan
-    fallback_value = float(sparse.loc[(fxx <= 240), "sdswrf"].dropna().median())
+    anchor_df = sparse.loc[(fxx <= 240), ["sdswrf"]].copy()
+    anchor_df["hour"] = idx_utc[fxx <= 240].tz_convert(LOCAL_SOLAR_TIMEZONE).hour
+    grouped = anchor_df.dropna(subset=["sdswrf"]).groupby("hour")["sdswrf"].median()
+    available_hours = sorted(int(h) for h in grouped.index.tolist())
+    nearest_hour = min(
+        available_hours,
+        key=lambda h: min((h - target_local_hour) % 24, (target_local_hour - h) % 24),
+    )
+    expected_value = float(grouped.loc[nearest_hour])
 
     filled = _fill_late_solar_with_persistence(
         solar_df=sparse,
@@ -100,8 +108,31 @@ def test_fill_late_solar_uses_anchor_median_fallback_when_hour_missing():
         local_tz=LOCAL_SOLAR_TIMEZONE,
     )
 
-    assert float(filled.loc[target_ts, "sdswrf"]) == fallback_value
+    assert float(filled.loc[target_ts, "sdswrf"]) == expected_value
     assert int(filled.loc[target_ts, "fxx"]) == 249
+
+
+def test_fill_late_solar_dst_transition_does_not_collapse_to_single_value():
+    init_dt = dt.datetime(2026, 2, 25, 18, 0)
+    base = _synthetic_solar_df(init_dt, max_h=240, delta_h=3)
+
+    filled = _fill_late_solar_with_persistence(
+        solar_df=base,
+        init_dt_naive=init_dt,
+        delta_h=3,
+        max_h=384,
+        local_tz=LOCAL_SOLAR_TIMEZONE,
+    )
+
+    # After DST starts (2026-03-08), long-lead samples are 6-hourly.
+    # They should map to nearest local-hour anchors, not collapse to one
+    # anchor-wide median value.
+    sample_hours = [258, 264, 270, 276]
+    sample_values = [
+        float(filled.loc[pd.Timestamp(init_dt) + pd.Timedelta(hours=h), "sdswrf"])
+        for h in sample_hours
+    ]
+    assert len(set(sample_values)) > 1
 
 
 def test_get_solar_noon_is_timezone_aware_and_dst_sensitive():

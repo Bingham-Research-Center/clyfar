@@ -321,7 +321,8 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     python3 scripts/sync_case_from_local.py \
         --init "$INIT_TIME" \
         --source "$EXPORT_DIR" \
-        --history 5 || {
+        --history 5 \
+        --overwrite || {
         echo "WARNING: CASE sync failed, LLM may have incomplete context"
     }
 

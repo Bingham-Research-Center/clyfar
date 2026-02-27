@@ -45,9 +45,10 @@ def _fill_late_solar_with_persistence(
     Build an anchor lookup from valid values at or before ``cutoff_h`` by taking
     the median for each local clock hour in ``local_tz`` (America/Denver by
     default). Each forecast timestamp beyond cutoff is then assigned the anchor
-    median for its matching local hour. If a local-hour bin is unavailable in the
-    anchor window, use the anchor-wide median fallback (or 0.0 if anchor is
-    empty). UTC->local conversion keeps behavior deterministic across MST/MDT.
+    median for its matching local hour. If a local-hour bin is unavailable in
+    the anchor window, use the nearest available local-hour bin (cyclic over
+    24h), then fall back to the anchor-wide median (or 0.0 if anchor is empty).
+    UTC->local conversion keeps behavior deterministic across MST/MDT.
     """
     if value_col not in solar_df.columns:
         raise KeyError(f"Missing required solar column '{value_col}'.")
@@ -77,10 +78,23 @@ def _fill_late_solar_with_persistence(
         hour_lookup = {int(hour): float(val) for hour, val in grouped.items()}
         fallback_value = float(anchor.median())
 
+    available_hours = sorted(hour_lookup.keys())
+
+    def _lookup_local_hour(local_hour: int) -> float:
+        if local_hour in hour_lookup:
+            return float(hour_lookup[local_hour])
+        if available_hours:
+            nearest_hour = min(
+                available_hours,
+                key=lambda h: min((h - local_hour) % 24, (local_hour - h) % 24),
+            )
+            return float(hour_lookup[nearest_hour])
+        return float(fallback_value)
+
     for h in np.arange(cutoff_h + int(delta_h), int(max_h) + 1, int(delta_h), dtype=int):
         ts_utc = init_utc + pd.Timedelta(hours=int(h))
         local_hour = int(ts_utc.tz_convert(local_tz).hour)
-        approx_val = hour_lookup.get(local_hour, fallback_value)
+        approx_val = _lookup_local_hour(local_hour)
         out.loc[ts_utc.tz_localize(None), value_col] = float(approx_val)
         out.loc[ts_utc.tz_localize(None), "fxx"] = int(h)
 

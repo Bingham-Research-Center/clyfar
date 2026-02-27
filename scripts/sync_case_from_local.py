@@ -66,7 +66,13 @@ def gather_matches(source: Path, init_str: str) -> Dict[str, List[Path]]:
     return groups
 
 
-def copy_group(files: List[Path], dest_dir: Path, init_str: str, group: str) -> int:
+def copy_group(
+    files: List[Path],
+    dest_dir: Path,
+    init_str: str,
+    group: str,
+    overwrite: bool = False,
+) -> int:
     dest_dir.mkdir(parents=True, exist_ok=True)
     created = 0
     for src in files:
@@ -77,7 +83,7 @@ def copy_group(files: List[Path], dest_dir: Path, init_str: str, group: str) -> 
             if canonical.exists():
                 continue
         dest = dest_dir / src.name
-        if dest.exists():
+        if dest.exists() and not overwrite:
             continue
         shutil.copy2(src, dest)
         created += 1
@@ -104,6 +110,11 @@ def main() -> None:
         required=True,
         type=str,
         help="Local directory containing forecast JSON files (flat).",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing CASE files with source versions.",
     )
     args = parser.parse_args()
 
@@ -146,7 +157,13 @@ def main() -> None:
                 dest_dir = case_root
             else:
                 dest_dir = case_root / group_name
-            new_files = copy_group(files, dest_dir, init_str, group_name)
+            new_files = copy_group(
+                files,
+                dest_dir,
+                init_str,
+                group_name,
+                overwrite=args.overwrite,
+            )
             print(
                 f"    - {group_name}: ensured {len(files)} file(s) "
                 f"(copied {new_files}, skipped {len(files) - new_files})"

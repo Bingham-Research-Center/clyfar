@@ -162,7 +162,8 @@ process_init() {
     python3 scripts/sync_case_from_local.py \
         --init "$init_time" \
         --source "$EXPORT_DIR" \
-        --history "$history"
+        --history "$history" \
+        --overwrite
 
     echo "CASE layout:"
     verify_case_layout "$case_dir"
