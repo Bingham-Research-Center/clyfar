@@ -31,7 +31,7 @@ The forecast init is {{INIT}} and the CASE directory on disk is {{CASE_ROOT}}.
 
 ---
 > - **EXPERIMENTAL AI-GENERATED FORECAST**
-> - Forecaster: **Ffion v1.1** (ffion@jrl.ac), using **Clyfar v0.9.8** and GEFS ensemble inputs.
+> - Forecaster: **Ffion v1.1** (ffion@jrl.ac), using **Clyfar v{{CLYFAR_VERSION}}** and GEFS ensemble inputs.
 > - Automated output may be unreviewed or outdated; verify with official sources.
 ---
 

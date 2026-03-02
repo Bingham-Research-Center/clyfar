@@ -7,6 +7,10 @@ Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements
 
 Lawson, Lyman, Davies, 2024 
 
+> **Current stable clyfar tag:** `v1.0.1`  
+> **Package version source:** [`__init__.__version__`](__init__.py) (kept in sync with stable tag)  
+> **Current Ffion tag:** `ffion-v1.1`
+
 ## Environment setup
 1. Install/initialize Miniforge or Conda (see [docs/setup_conda.md](docs/setup_conda.md) for platform specifics).
 2. Create the env: `conda create -n clyfar python=3.11.9 -y` then `conda activate clyfar`.
@@ -114,6 +118,8 @@ Notes
 > **Status:** Operational, January 2026
 
 Clyfar generates AI-assisted ozone outlooks using the "Ffion" forecaster (Claude LLM). Each outlook is available as a professionally formatted PDF.
+
+The LLM prompt banner includes Clyfar version metadata injected at generation time from `__init__.__version__`.
 
 **Public access URL:**
 ```

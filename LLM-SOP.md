@@ -1,14 +1,14 @@
 # LLM Forecast SOP
 
 Ffion workstream target: v1.1 (current tag: ffion-v1.1).
-Clyfar current milestone: v0.9.8.
+Clyfar current stable tag: v1.0.1.
 
 ## Known issues
 - Q&A outputs can be verbose if prompt conditioning drifts from the default path.
 - Clustering logic still needs review; treat summaries as provisional.
 
 ## Versioning policy
-- Clyfar tags (`v0.9.x`, `v1.0`, ...) track scientific/output logic changes (FIS, clustering, preprocessing, exports).
+- Clyfar tags (`v1.x` current; historical `v0.9.x`) track scientific/output logic changes (FIS, clustering, preprocessing, exports).
 - Ffion tags (`ffion-v1.x`) track prompt/workflow/LLM pipeline changes and can advance independently.
 - Record both tags in release notes or session logs when they move in tandem.
 

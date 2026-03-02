@@ -1,8 +1,9 @@
 # Clyfar Refactor & Versioning Plan
-Date updated: 2026-01-09
+Date updated: 2026-03-02
 
-> **Current version:** v0.9.4 (LLM outlook pipeline operational)
-> **Session notes:** See `docs/SESSION_2026-01-09.md` for latest changes.
+> **Status note (historical planning doc):** This file contains pre-v1 planning context.  
+> **Current stable clyfar tag:** `v1.0.1`  
+> **Active prioritized TODOs:** see `docs/TODO_PRIORITIZED.md`.
 
 ## Mission Snapshot
 - Keep v0.9 frozen and traceable while paving the path to the v1.x family.

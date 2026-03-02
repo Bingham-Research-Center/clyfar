@@ -37,9 +37,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.extract_outlook_summary import extract_outlook_summary
+from utils.versioning import get_clyfar_version
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
 DEFAULT_BIAS_FILE = REPO_ROOT / "templates" / "llm" / "short_term_biases.json"
+CLYFAR_VERSION = get_clyfar_version(default="1.0.1")
 
 # Previous outlook configuration
 MAX_PREVIOUS_OUTLOOKS = 2
@@ -506,6 +508,7 @@ def main() -> None:
         "INIT": norm_init,
         "CASE_ROOT": str(case_root),
         "RECENT_CASE_COUNT": str(len(recent_cases)),
+        "CLYFAR_VERSION": CLYFAR_VERSION,
     }
     lines.append("")
     lines.append(render_prompt_template(template_path, replacements))

@@ -1,14 +1,17 @@
 # Documentation Hub
-Date updated: 2025-10-09
+Date updated: 2026-03-02
 
 Use this page as the jumping-off point for orientation, planning, and deeper research. Follow the "Quick start" list first, then dive into the topical docs as needed.
+
+Historical planning docs may reference pre-v1 tags (for provenance). Treat `README.md`, `AGENTS.md`, and `docs/TODO_PRIORITIZED.md` as the active operational truth set.
 
 ## Quick start
 - [`README.md`](../README.md#environment-setup) — Project summary, prerequisites, and the canonical smoke test (mirrored in [`AGENTS.md`](../AGENTS.md#testing-guidelines)).
 - [`AGENTS.md`](../AGENTS.md#testing-guidelines) — Collaboration guardrails, coding conventions, day-to-day workflows, and the same smoke command under Testing Guidelines (points back to the README entry above for consistency).
 - `docs/archive/AI_AGENT_ONBOARDING.md` — **AI agents start here:** efficient protocol to minimize token usage and respect team conventions.
 - `docs/project_overview.md` — Narrative tour of the architecture and possibility-theory framing.
-- `docs/roadmap.md` — Current refactor milestones, microtasks, and execution plan.
+- `docs/TODO_PRIORITIZED.md` — Active TODO list ranked by likelihood and effort.
+- `docs/roadmap.md` — Historical refactor roadmap context (pre-v1 planning archive).
 
 ## Topical references
 - `docs/setup_conda.md` — Step-by-step Miniforge/Conda environment setup.

@@ -16,7 +16,7 @@
 # Clyfar Ozone Forecast - CHPC Slurm Submission Script
 #####################################################################
 #
-# Purpose: Run Clyfar v0.9.5 ozone forecasts on CHPC compute nodes
+# Purpose: Run Clyfar ozone forecasts on CHPC compute nodes
 #          instead of login nodes to avoid resource constraints
 #
 # Schedule: Run 4× daily at 04:30, 10:30, 16:30, 22:30 UTC
@@ -38,7 +38,7 @@
 #   - SYNOPTIC_API_TOKEN (if used)
 #
 # Created by: John Lawson & Claude
-# Last updated: 2025-11-23
+# Last updated: 2026-03-02
 #####################################################################
 
 set -euo pipefail  # Exit on error, undefined variables, pipe failures

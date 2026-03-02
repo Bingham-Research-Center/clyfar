@@ -1,5 +1,8 @@
 # Pre-v1 Roadmap (60-Hour Sprint Plan)
-Date updated: 2025-11-11
+Date updated: 2026-03-02
+
+> **Status note (historical planning doc):** This roadmap targeted the pre-v1 freeze period and is retained for provenance only.
+> For the active TODO list, see `docs/TODO_PRIORITIZED.md`.
 
 Context: stabilize v0.9.x, run targeted experiments (solar → Random Forest, MF tuning), and align with the LaTeX technical report before declaring v1.0 ready for operational winter 2025/2026 use. The LaTeX repo lives at `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9` (see `docs/EXTERNAL_RESOURCES.md`). Keep code and report synchronized at release boundaries.
 
