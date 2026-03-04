@@ -1,7 +1,7 @@
 # Clyfar Prioritized TODOs
 Date updated: 2026-03-02
 
-This is the active, operations-focused TODO list for the current clyfar line (`v1.0.1`).
+This is the active, operations-focused TODO list for the current clyfar line (`v1.0.2`).
 
 Ordering combines:
 1. Likelihood the work will be done in the near term.

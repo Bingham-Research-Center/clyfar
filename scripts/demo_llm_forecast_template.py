@@ -37,11 +37,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.extract_outlook_summary import extract_outlook_summary
-from utils.versioning import get_clyfar_version
+from utils.versioning import get_clyfar_version, get_ffion_version
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
 DEFAULT_BIAS_FILE = REPO_ROOT / "templates" / "llm" / "short_term_biases.json"
-CLYFAR_VERSION = get_clyfar_version(default="1.0.1")
+CLYFAR_VERSION = get_clyfar_version(default="1.0.2")
+FFION_VERSION = get_ffion_version(default="1.1.1")
 
 # Previous outlook configuration
 MAX_PREVIOUS_OUTLOOKS = 2
@@ -206,7 +207,7 @@ def gather_previous_outlooks(
     recent_cases: List[str],
     max_outlooks: int = MAX_PREVIOUS_OUTLOOKS,
     max_age_hours: float = MAX_OUTLOOK_AGE_HOURS,
-) -> List[Dict]:
+) -> Tuple[List[Dict], List[Path], List[Path]]:
     """
     Gather summaries from previous LLM outlooks within the age window.
 
@@ -218,11 +219,15 @@ def gather_previous_outlooks(
         max_age_hours: Skip outlooks older than this (hours)
 
     Returns:
-        List of dicts with 'init', 'age_hours', and 'summary' keys
+        Tuple of:
+        1) parsed outlook summaries,
+        2) paths successfully used for comparison,
+        3) paths that existed but failed parsing.
     """
     current_dt = datetime.strptime(norm_init, "%Y%m%d_%H%MZ")
     previous_outlooks = []
     parse_failures: List[Path] = []
+    used_paths: List[Path] = []
 
     # Iterate through recent cases in reverse order (newest first), excluding current
     for prev_init in reversed(recent_cases):
@@ -251,6 +256,7 @@ def gather_previous_outlooks(
                     "age_hours": int(age_hours),
                     "summary": summary,
                 })
+                used_paths.append(outlook_path)
                 if len(previous_outlooks) >= max_outlooks:
                     break
             else:
@@ -259,7 +265,7 @@ def gather_previous_outlooks(
     for failed_path in parse_failures:
         print(f"Warning: could not parse previous outlook summary: {failed_path}")
 
-    return previous_outlooks
+    return previous_outlooks, used_paths, parse_failures
 
 
 def main() -> None:
@@ -353,7 +359,9 @@ def main() -> None:
     recent_cases = list_recent_cases(data_root, limit=8)
 
     # Gather previous outlook summaries for comparison
-    previous_outlooks = gather_previous_outlooks(data_root, norm_init, recent_cases)
+    previous_outlooks, previous_used_paths, previous_parse_failures = gather_previous_outlooks(
+        data_root, norm_init, recent_cases
+    )
 
     llm_dir = case_root / "llm_text"
     llm_dir.mkdir(parents=True, exist_ok=True)
@@ -366,6 +374,8 @@ def main() -> None:
     lines.append("")
     lines.append(f"- Init time: `{norm_init}`")
     lines.append(f"- Case root: `{case_root}`")
+    lines.append(f"- Clyfar version: `{CLYFAR_VERSION}`")
+    lines.append(f"- Ffion version: `{FFION_VERSION}`")
 
     # List JSON files (Claude reads them via file access, no embedding)
     for name, path in json_subdirs.items():
@@ -406,6 +416,27 @@ def main() -> None:
                 lines.append(f"| `{c}`{marker} | (not present locally) |")
     else:
         lines.append("- (no other CASE_ directories found)")
+
+    lines.append("")
+    lines.append("## Local File Index")
+    lines.append("")
+    lines.append("> Canonical local paths for this run context. Reference these in Data Logger output.")
+    lines.append(f"- Current CASE root: `{case_root}`")
+    if clustering_file.exists():
+        lines.append(f"- Clustering summary: `{clustering_file}`")
+    else:
+        lines.append("- Clustering summary: (missing)")
+    for name, path in json_subdirs.items():
+        if path.exists():
+            lines.append(f"- JSON dir ({name}): `{path}`")
+    if previous_used_paths:
+        for prev_path in previous_used_paths:
+            lines.append(f"- Previous outlook used for comparison: `{prev_path}`")
+    else:
+        lines.append("- Previous outlook used for comparison: (none)")
+    if previous_parse_failures:
+        for failed_path in previous_parse_failures:
+            lines.append(f"- Previous outlook parse failed: `{failed_path}`")
 
     if bias_entries:
         lines.append("")
@@ -476,8 +507,12 @@ def main() -> None:
                 lines.append(f"- **dRisk/dt trend:** {summary['key_drisk_statement']}")
             lines.append("")
     else:
-        lines.append("> No previous outlook files found within the last 18 hours for comparison.")
-        lines.append("> Note in your outlook: \"This is the first outlook in this sequence.\"")
+        if previous_parse_failures:
+            lines.append("> Previous outlook files exist but could not be parsed into structured summaries.")
+            lines.append("> Mention this limitation explicitly in the final outlook.")
+        else:
+            lines.append("> No previous outlook files found within the last 18 hours for comparison.")
+            lines.append("> Note in your outlook: \"This is the first outlook in this sequence.\"")
         lines.append("")
 
     # Embed clustering summary if available (small, critical context for Claude)
@@ -509,6 +544,7 @@ def main() -> None:
         "CASE_ROOT": str(case_root),
         "RECENT_CASE_COUNT": str(len(recent_cases)),
         "CLYFAR_VERSION": CLYFAR_VERSION,
+        "FFION_VERSION": FFION_VERSION,
     }
     lines.append("")
     lines.append(render_prompt_template(template_path, replacements))

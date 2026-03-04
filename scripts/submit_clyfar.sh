@@ -374,10 +374,24 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
         OUTLOOK_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.md"
         if [ -f "$OUTLOOK_FILE" ]; then
             echo "LLM outlook generated: $OUTLOOK_FILE"
-            # Extract and display AlertLevel
-            grep -E "^AlertLevel:|^Confidence:" "$OUTLOOK_FILE" | head -2 || true
+            VALIDATOR="$CLYFAR_DIR/scripts/validate_llm_outlook.py"
+            if [ -f "$VALIDATOR" ]; then
+                echo "Validating outlook content integrity..."
+                if ! python3 "$VALIDATOR" "$OUTLOOK_FILE"; then
+                    echo "WARNING: Outlook validation failed; skipping upload."
+                    LLM_SUCCESS=false
+                fi
+            else
+                echo "WARNING: Outlook validator not found at $VALIDATOR"
+                LLM_SUCCESS=false
+            fi
+        else
+            echo "WARNING: LLM outlook file missing after generation: $OUTLOOK_FILE"
+            LLM_SUCCESS=false
         fi
+    fi
 
+    if [ "$LLM_SUCCESS" = true ]; then
         # Upload PDF to BasinWx (after LLM generation creates it)
         PDF_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.pdf"
         if [ -f "$PDF_FILE" ] && [ -n "$DATA_UPLOAD_API_KEY" ]; then
