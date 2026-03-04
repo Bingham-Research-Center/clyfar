@@ -43,7 +43,7 @@ This is the canonical top-level guidance file for contributors and AI coding age
   - For isolated reruns, point to a separate repo clone via `CLYFAR_DIR` and separate export root via `EXPORT_DIR` when running `run_llm_outlook.sh`.
   - For full `submit_clyfar.sh` isolation, override roots:
     - `CLYFAR_DIR`, `DATA_ROOT`, `FIG_ROOT`, `EXPORT_DIR`, `LOG_DIR`
-    - Set `CLYFAR_ENABLE_UPLOAD=0` for local-only runs (no BasinWx upload side effects).
+    - Set `CLYFAR_ENABLE_UPLOAD=0` for local-only runs (propagates through `run_gefs_clyfar.py`, export stage, and LLM upload stage).
 
 ## Coding Standards
 - Follow PEP 8; 4-space indentation; type hints where practical.

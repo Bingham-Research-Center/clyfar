@@ -955,7 +955,9 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
     if save and not no_clyfar and dailymax_df_dict:
         try:
             from export.to_basinwx import export_all_products, export_figures_to_basinwx
+            upload_enabled = os.getenv("CLYFAR_ENABLE_UPLOAD", "1") == "1"
             print("Exporting forecast products to BasinWx...")
+            print(f"Upload mode (run_gefs_clyfar): {'ENABLED' if upload_enabled else 'DISABLED'}")
             export_dir = os.path.join(clyfar_data_root, "basinwx_export")
             utils.try_create(export_dir)
 
@@ -965,7 +967,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                 init_dt=init_dt_dict['naive'],
                 output_dir=export_dir,
                 clyfar_df_dict=clyfar_df_dict,  # Full-resolution for weather export
-                upload=True  # Uploads if DATA_UPLOAD_API_KEY is set
+                upload=upload_enabled
             )
             total = sum(len(v) for v in results.values())
             print(f"Exported {total} JSON files to {export_dir}")
@@ -975,7 +977,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                 fig_results = export_figures_to_basinwx(
                     fig_root=clyfar_fig_root,
                     init_dt=init_dt_dict['naive'],
-                    upload=True,
+                    upload=upload_enabled,
                     json_tests_root=os.path.join(clyfar_data_root, "json_tests")
                 )
                 print(f"Exported {len(fig_results.get('heatmaps', []))} heatmaps, "
