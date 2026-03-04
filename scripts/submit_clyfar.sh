@@ -84,6 +84,12 @@ LOG_DIR="${LOG_DIR:-$HOME/logs/basinwx}"
 #   0           -> local-only run (no BasinWx uploads)
 CLYFAR_ENABLE_UPLOAD="${CLYFAR_ENABLE_UPLOAD:-1}"
 
+# Internal export control:
+#   1 (default here) -> run_gefs_clyfar skips its own export block, and this
+#                       script performs the single upload/export pass.
+#   0                -> run_gefs_clyfar may also export/upload (can duplicate uploads).
+CLYFAR_SKIP_INTERNAL_EXPORT="${CLYFAR_SKIP_INTERNAL_EXPORT:-1}"
+
 # Create directories if needed
 mkdir -p "$DATA_ROOT" "$FIG_ROOT" "$EXPORT_DIR" "$LOG_DIR"
 
@@ -164,6 +170,11 @@ echo "DEBUG: RETRY_COUNT=$RETRY_COUNT, MAX_RETRIES=$MAX_RETRIES, RETRY_CODES=${E
 echo "================================================================"
 echo "Running Clyfar forecast for init time: $INIT_TIME"
 echo "================================================================"
+if [ "$CLYFAR_SKIP_INTERNAL_EXPORT" = "1" ]; then
+    echo "Internal run_gefs export: DISABLED (submit script owns export/upload)"
+else
+    echo "Internal run_gefs export: ENABLED (may duplicate export/upload)"
+fi
 
 # Disable pipefail temporarily so we can capture exit code
 set +e

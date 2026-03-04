@@ -951,43 +951,52 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                         logger.error(f"Failed to create daily-max heatmap for {clyfar_member}: {e}")
                 print(f"Saved {dailymax_count} daily-max heatmaps of O3 categories to {subdir}")
 
-    # Export to BasinWx website
+    # Export to BasinWx website.
+    # submit_clyfar.sh can disable this internal pass and run one central export stage
+    # to avoid duplicate API uploads from both layers.
     if save and not no_clyfar and dailymax_df_dict:
-        try:
-            from export.to_basinwx import export_all_products, export_figures_to_basinwx
-            upload_enabled = os.getenv("CLYFAR_ENABLE_UPLOAD", "1") == "1"
-            print("Exporting forecast products to BasinWx...")
-            print(f"Upload mode (run_gefs_clyfar): {'ENABLED' if upload_enabled else 'DISABLED'}")
-            export_dir = os.path.join(clyfar_data_root, "basinwx_export")
-            utils.try_create(export_dir)
-
-            # Export JSON products (63 ozone + 1 clustering + 32 weather = 96 files)
-            results = export_all_products(
-                dailymax_df_dict=dailymax_df_dict,
-                init_dt=init_dt_dict['naive'],
-                output_dir=export_dir,
-                clyfar_df_dict=clyfar_df_dict,  # Full-resolution for weather export
-                upload=upload_enabled
+        skip_internal_export = os.getenv("CLYFAR_SKIP_INTERNAL_EXPORT", "0") == "1"
+        if skip_internal_export:
+            print(
+                "Skipping internal BasinWx export in run_gefs_clyfar "
+                "(CLYFAR_SKIP_INTERNAL_EXPORT=1)"
             )
-            total = sum(len(v) for v in results.values())
-            print(f"Exported {total} JSON files to {export_dir}")
+        else:
+            try:
+                from export.to_basinwx import export_all_products, export_figures_to_basinwx
+                upload_enabled = os.getenv("CLYFAR_ENABLE_UPLOAD", "1") == "1"
+                print("Exporting forecast products to BasinWx...")
+                print(f"Upload mode (run_gefs_clyfar): {'ENABLED' if upload_enabled else 'DISABLED'}")
+                export_dir = os.path.join(clyfar_data_root, "basinwx_export")
+                utils.try_create(export_dir)
 
-            # Export PNG figures (heatmaps + meteograms) and PDF outlooks
-            if visualise:
-                fig_results = export_figures_to_basinwx(
-                    fig_root=clyfar_fig_root,
+                # Export JSON products (63 ozone + 1 clustering + 32 weather = 96 files)
+                results = export_all_products(
+                    dailymax_df_dict=dailymax_df_dict,
                     init_dt=init_dt_dict['naive'],
-                    upload=upload_enabled,
-                    json_tests_root=os.path.join(clyfar_data_root, "json_tests")
+                    output_dir=export_dir,
+                    clyfar_df_dict=clyfar_df_dict,  # Full-resolution for weather export
+                    upload=upload_enabled
                 )
-                print(f"Exported {len(fig_results.get('heatmaps', []))} heatmaps, "
-                      f"{len(fig_results.get('meteograms', []))} meteograms, "
-                      f"{len(fig_results.get('outlooks', []))} outlook PDFs")
+                total = sum(len(v) for v in results.values())
+                print(f"Exported {total} JSON files to {export_dir}")
 
-        except ImportError as e:
-            logger.warning("Could not import export module: %s", e)
-        except Exception as e:
-            logger.error("Export to BasinWx failed: %s", e)
+                # Export PNG figures (heatmaps + meteograms) and PDF outlooks
+                if visualise:
+                    fig_results = export_figures_to_basinwx(
+                        fig_root=clyfar_fig_root,
+                        init_dt=init_dt_dict['naive'],
+                        upload=upload_enabled,
+                        json_tests_root=os.path.join(clyfar_data_root, "json_tests")
+                    )
+                    print(f"Exported {len(fig_results.get('heatmaps', []))} heatmaps, "
+                          f"{len(fig_results.get('meteograms', []))} meteograms, "
+                          f"{len(fig_results.get('outlooks', []))} outlook PDFs")
+
+            except ImportError as e:
+                logger.warning("Could not import export module: %s", e)
+            except Exception as e:
+                logger.error("Export to BasinWx failed: %s", e)
 
     print("Forecast workflow complete for", init_dt_dict['naive'])
     return
