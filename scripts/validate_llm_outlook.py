@@ -117,12 +117,17 @@ def _path_exists(raw: str, outlook_path: Path) -> bool:
     if path.is_absolute():
         return path.exists()
 
-    # Relative paths are resolved against outlook dir first, then repo root.
-    in_outlook_dir = (outlook_path.parent / path).resolve()
-    if in_outlook_dir.exists():
-        return True
-    in_repo = (REPO_ROOT / path).resolve()
-    return in_repo.exists()
+    # Relative paths are resolved against common report contexts.
+    outlook_dir = outlook_path.parent
+    case_root = outlook_dir.parent
+    json_tests_root = case_root.parent
+    candidates = (
+        (outlook_dir / path).resolve(),
+        (case_root / path).resolve(),
+        (json_tests_root / path).resolve(),
+        (REPO_ROOT / path).resolve(),
+    )
+    return any(candidate.exists() for candidate in candidates)
 
 
 def validate_outlook(

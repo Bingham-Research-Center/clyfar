@@ -76,3 +76,20 @@ def test_validate_outlook_fails_on_missing_data_logger_path(tmp_path):
     ok, errors = validate_outlook(outlook, expected_clyfar="1.0.2", expected_ffion="1.1.1")
     assert not ok
     assert any("Data Logger path does not exist" in err for err in errors)
+
+
+def test_validate_outlook_accepts_case_relative_data_logger_paths(tmp_path):
+    case_root = tmp_path / "CASE_20260101_0000Z"
+    llm_dir = case_root / "llm_text"
+    llm_dir.mkdir(parents=True)
+
+    rel_file = case_root / "probs" / "forecast_exceedance_probabilities_20260101_0000Z.json"
+    rel_file.parent.mkdir(parents=True)
+    rel_file.write_text("{}", encoding="utf-8")
+
+    body = _valid_outlook_body(Path("probs/forecast_exceedance_probabilities_20260101_0000Z.json"))
+    outlook = _write_outlook(llm_dir / "LLM-OUTLOOK-20260101_0000Z.md", body)
+
+    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.2", expected_ffion="1.1.1")
+    assert ok
+    assert errors == []
