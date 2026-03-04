@@ -72,12 +72,17 @@ conda activate clyfar-nov2025 || {
     exit 1
 }
 
-# Set paths
-CLYFAR_DIR=~/gits/clyfar
-DATA_ROOT=~/basinwx-data/clyfar
-FIG_ROOT=~/basinwx-data/clyfar/figures
-EXPORT_DIR=~/basinwx-data/clyfar/basinwx_export
-LOG_DIR=~/logs/basinwx
+# Set paths (overridable for isolated test runs)
+CLYFAR_DIR="${CLYFAR_DIR:-$HOME/gits/clyfar}"
+DATA_ROOT="${DATA_ROOT:-$HOME/basinwx-data/clyfar}"
+FIG_ROOT="${FIG_ROOT:-$DATA_ROOT/figures}"
+EXPORT_DIR="${EXPORT_DIR:-$DATA_ROOT/basinwx_export}"
+LOG_DIR="${LOG_DIR:-$HOME/logs/basinwx}"
+
+# Upload control:
+#   1 (default) -> normal operational uploads
+#   0           -> local-only run (no BasinWx uploads)
+CLYFAR_ENABLE_UPLOAD="${CLYFAR_ENABLE_UPLOAD:-1}"
 
 # Create directories if needed
 mkdir -p "$DATA_ROOT" "$FIG_ROOT" "$EXPORT_DIR" "$LOG_DIR"
@@ -223,6 +228,11 @@ echo "================================================================"
 
 # Export to BasinWx website (6 data products, up to 96 JSON files)
 echo "Exporting forecast data to BasinWx..."
+if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ]; then
+    echo "Upload mode: ENABLED"
+else
+    echo "Upload mode: DISABLED (CLYFAR_ENABLE_UPLOAD=$CLYFAR_ENABLE_UPLOAD)"
+fi
 
 python3 - <<EOF
 import os
@@ -235,6 +245,9 @@ sys.path.insert(0, "$CLYFAR_DIR")
 
 from export.to_basinwx import export_all_products, export_figures_to_basinwx
 import pandas as pd
+
+# Upload control from shell env
+upload_enabled = "${CLYFAR_ENABLE_UPLOAD}" == "1"
 
 # Parse init time
 init_str = "$INIT_TIME"
@@ -276,7 +289,7 @@ results = export_all_products(
     init_dt=init_dt,
     output_dir="$EXPORT_DIR",
     clyfar_df_dict=clyfar_df_dict,
-    upload=True  # Set to False for testing
+    upload=upload_enabled
 )
 
 total_files = sum(len(v) for v in results.values())
@@ -293,7 +306,7 @@ print("Exporting PNG figures and PDF outlooks to BasinWx...")
 fig_results = export_figures_to_basinwx(
     fig_root="$FIG_ROOT",
     init_dt=init_dt,
-    upload=True,
+    upload=upload_enabled,
     json_tests_root="$DATA_ROOT/json_tests"
 )
 print(f"  Heatmap PNGs: {len(fig_results['heatmaps'])}")
@@ -349,6 +362,12 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     # ~/.bashrc_basinwx doesn't include this, so SLURM jobs miss it
     export PATH="$HOME/.local/bin:$PATH"
 
+    if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ]; then
+        unset LLM_SKIP_UPLOAD 2>/dev/null || true
+    else
+        export LLM_SKIP_UPLOAD=1
+    fi
+
     # Enable retry for meta-response resilience in batch jobs
     export LLM_MAX_RETRIES=3
 
@@ -394,7 +413,7 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     if [ "$LLM_SUCCESS" = true ]; then
         # Upload PDF to BasinWx (after LLM generation creates it)
         PDF_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.pdf"
-        if [ -f "$PDF_FILE" ] && [ -n "$DATA_UPLOAD_API_KEY" ]; then
+        if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ] && [ -f "$PDF_FILE" ] && [ -n "$DATA_UPLOAD_API_KEY" ]; then
             echo "Uploading LLM outlook PDF to BasinWx..."
             python3 -c "
 from export.to_basinwx import upload_pdf_to_basinwx

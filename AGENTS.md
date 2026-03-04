@@ -1,5 +1,5 @@
 # Repository Guidelines
-Date updated: 2026-02-25
+Date updated: 2026-03-04
 
 This is the canonical top-level guidance file for contributors and AI coding agents.
 
@@ -29,6 +29,21 @@ This is the canonical top-level guidance file for contributors and AI coding age
   - `./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force`
 - Use `--check` for prerequisite checks.
 - Default is upload-safe (`LLM_SKIP_UPLOAD=1`); opt in intentionally for upload.
+- Canonical runtime versions:
+  - Clyfar: repo-root `__init__.__version__`
+  - Ffion: `utils/versioning.py` (`FFION_VERSION` + `get_ffion_version()`)
+- Post-generation validation:
+  - `scripts/validate_llm_outlook.py` validates banner versions, required alert markers, and Data Logger local file links.
+  - `LLM-GENERATE.sh` writes attempt output to temp files and only promotes to canonical `LLM-OUTLOOK-*.md` after validation.
+- Language convention for outlook text:
+  - Use `Uinta` for geographic/topographic/meteorological context.
+  - Use `Uintah` only for civic/political/human entities (e.g., Uintah County).
+- Non-overwrite test workflow:
+  - For dry checks: `./scripts/run_llm_outlook.sh <INIT> --check`.
+  - For isolated reruns, point to a separate repo clone via `CLYFAR_DIR` and separate export root via `EXPORT_DIR` when running `run_llm_outlook.sh`.
+  - For full `submit_clyfar.sh` isolation, override roots:
+    - `CLYFAR_DIR`, `DATA_ROOT`, `FIG_ROOT`, `EXPORT_DIR`, `LOG_DIR`
+    - Set `CLYFAR_ENABLE_UPLOAD=0` for local-only runs (no BasinWx upload side effects).
 
 ## Coding Standards
 - Follow PEP 8; 4-space indentation; type hints where practical.
