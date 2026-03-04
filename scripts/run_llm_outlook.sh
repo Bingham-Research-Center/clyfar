@@ -144,6 +144,7 @@ process_init() {
     norm_init="$(normalise_init "$init_time")"
     local case_dir="$DATA_ROOT/CASE_$norm_init"
     local outlook_file="$case_dir/llm_text/LLM-OUTLOOK-$norm_init.md"
+    local validator="$CLYFAR_DIR/scripts/validate_llm_outlook.py"
 
     echo ""
     echo "================================================================"
@@ -200,9 +201,16 @@ process_init() {
         return 1
     fi
 
-    local marker_count
-    marker_count=$(rg -n "^AlertLevel_D1_5:|^Confidence_D1_5:|^AlertLevel_D6_10:|^Confidence_D6_10:|^AlertLevel_D11_15:|^Confidence_D11_15:" "$outlook_file" | wc -l || true)
-    echo "Output markers found: $marker_count"
+    if [[ ! -f "$validator" ]]; then
+        echo -e "${RED}ERROR:${NC} Validator not found: $validator"
+        return 1
+    fi
+
+    echo "Validating outlook content integrity..."
+    if ! python3 "$validator" "$outlook_file"; then
+        echo -e "${RED}ERROR:${NC} Outlook validation failed: $outlook_file"
+        return 1
+    fi
     return 0
 }
 

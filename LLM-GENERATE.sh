@@ -115,7 +115,10 @@ if [[ ! -f "$PROMPT_PATH" ]]; then
 fi
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
-echo "Writing LLM output to: $OUTPUT_PATH"
+ARCHIVE_DIR="$(dirname "$OUTPUT_PATH")/archive"
+mkdir -p "$ARCHIVE_DIR"
+echo "Canonical LLM output path: $OUTPUT_PATH"
+echo "Using temp attempt files; canonical file is replaced only after validation passes."
 
 # Retry configuration (override with LLM_MAX_RETRIES env var)
 # Default 1 (no retry) to keep SLURM jobs predictable; set higher for ad-hoc runs
@@ -184,17 +187,33 @@ validate_llm_output() {
   return 0
 }
 
+archive_attempt_output() {
+  local src="$1"
+  local reason="$2"
+  [[ ! -f "$src" ]] && return 0
+
+  local ts
+  ts="$(date +%s)"
+  local base
+  base="$(basename "$OUTPUT_PATH" .md)"
+  local dst="$ARCHIVE_DIR/${base}_${reason}_${ts}.md"
+  cp "$src" "$dst"
+  echo "Archived failed output to: $dst"
+}
+
 # Retry loop: invoke LLM, post-process, validate
 LLM_SUCCEEDED=false
 for attempt in $(seq 1 "$MAX_RETRIES"); do
   echo ""
   echo "=== LLM attempt $attempt of $MAX_RETRIES ==="
+  ATTEMPT_OUTPUT="$ARCHIVE_DIR/.$(basename "$OUTPUT_PATH").attempt${attempt}.tmp"
+  rm -f "$ATTEMPT_OUTPUT"
 
   # Invoke LLM CLI
   CLI_OK=true
   if [[ -n "$CLI_COMMAND" ]]; then
     echo "Running custom CLI command: $CLI_COMMAND"
-    if ! bash -lc "cd '$JSON_TESTS_ROOT' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
+    if ! bash -lc "cd '$JSON_TESTS_ROOT' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$ATTEMPT_OUTPUT"; then
       echo "LLM CLI command failed (attempt $attempt)." >&2
       CLI_OK=false
     fi
@@ -208,13 +227,17 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
         --allowedTools "Read,Glob,Grep" \
         --permission-mode default \
         --add-dir "$JSON_TESTS_ROOT" \
-        "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$OUTPUT_PATH"; then
+        "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$ATTEMPT_OUTPUT"; then
       echo "LLM CLI invocation failed (attempt $attempt)." >&2
       CLI_OK=false
     fi
   fi
 
   if [[ "$CLI_OK" == false ]]; then
+    if [[ -s "$ATTEMPT_OUTPUT" ]]; then
+      archive_attempt_output "$ATTEMPT_OUTPUT" "cli_failed"
+    fi
+    rm -f "$ATTEMPT_OUTPUT"
     if [[ $attempt -lt $MAX_RETRIES ]]; then
       echo "Retrying in ${RETRY_DELAY}s..."
       sleep "$RETRY_DELAY"
@@ -225,31 +248,31 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
   fi
 
   # Post-process: ensure output starts with "---" (strip any LLM preamble)
-  if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
-    first_line=$(head -1 "$OUTPUT_PATH")
+  if [[ -f "$ATTEMPT_OUTPUT" && -s "$ATTEMPT_OUTPUT" ]]; then
+    first_line=$(head -1 "$ATTEMPT_OUTPUT")
     if [[ "$first_line" != "---" ]]; then
-      if grep -q "^---$" "$OUTPUT_PATH"; then
-        sed -i '1,/^---$/{/^---$/!d}' "$OUTPUT_PATH"
+      if grep -q "^---$" "$ATTEMPT_OUTPUT"; then
+        sed -i '1,/^---$/{/^---$/!d}' "$ATTEMPT_OUTPUT"
         echo "Post-processed: stripped preamble before first '---'"
       else
-        sed -i '1i---' "$OUTPUT_PATH"
+        sed -i '1i---' "$ATTEMPT_OUTPUT"
         echo "Post-processed: prepended '---' (was missing)"
       fi
     fi
   fi
 
   # Validate
-  if [[ -f "$OUTPUT_PATH" ]] && validate_llm_output "$OUTPUT_PATH"; then
+  if [[ -f "$ATTEMPT_OUTPUT" ]] && validate_llm_output "$ATTEMPT_OUTPUT"; then
+    mv "$ATTEMPT_OUTPUT" "$OUTPUT_PATH"
     LLM_SUCCEEDED=true
     break
   fi
 
-  # Archive failed output
-  ARCHIVE_DIR="$(dirname "$OUTPUT_PATH")/archive"
-  mkdir -p "$ARCHIVE_DIR"
-  ARCHIVE_FILE="$ARCHIVE_DIR/$(basename "$OUTPUT_PATH" .md)_failed_$(date +%s).md"
-  cp "$OUTPUT_PATH" "$ARCHIVE_FILE"
-  echo "Failed output archived to: $ARCHIVE_FILE"
+  # Archive failed validation output
+  if [[ -s "$ATTEMPT_OUTPUT" ]]; then
+    archive_attempt_output "$ATTEMPT_OUTPUT" "validation_failed"
+  fi
+  rm -f "$ATTEMPT_OUTPUT"
 
   if [[ $attempt -lt $MAX_RETRIES ]]; then
     echo "Retrying in ${RETRY_DELAY}s..."
