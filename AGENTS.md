@@ -45,6 +45,7 @@ This is the canonical top-level guidance file for contributors and AI coding age
   - For full `submit_clyfar.sh` isolation, override roots:
     - `CLYFAR_DIR`, `DATA_ROOT`, `FIG_ROOT`, `EXPORT_DIR`, `LOG_DIR`
     - Set `CLYFAR_ENABLE_UPLOAD=0` for local-only runs (propagates through `run_gefs_clyfar.py`, export stage, and LLM upload stage).
+  - To avoid duplicate API uploads when using `submit_clyfar.sh`, keep `CLYFAR_SKIP_INTERNAL_EXPORT=1` (default in submit script); submit performs the single export/upload pass.
 
 ## Coding Standards
 - Follow PEP 8; 4-space indentation; type hints where practical.
