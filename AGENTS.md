@@ -14,6 +14,7 @@ This is the canonical top-level guidance file for contributors and AI coding age
   - `utils/` shared helpers.
   - `export/` BasinWx product export/upload.
 - Local artifacts (not source): `data/`, `figures/`, `figures_parallel/`.
+- Archived root-level legacy notes/resources/drafts: `docs/archive/root_notes/`.
 
 ## Build and Run
 - Environment: `conda create -n clyfar python=3.11.9 && conda activate clyfar`

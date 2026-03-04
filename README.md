@@ -158,4 +158,4 @@ https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.
 ~/gits/clyfar/data/json_tests/CASE_YYYYMMDD_HHMMZ/llm_text/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
 ```
 
-See `LLM-SOP.md` for operational procedures and `templates/llm/prompt_body.md` for prompt configuration.
+See `docs/archive/root_notes/LLM-SOP.md` for operational procedures and `templates/llm/prompt_body.md` for prompt configuration.

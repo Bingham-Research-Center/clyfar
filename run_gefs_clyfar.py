@@ -421,7 +421,7 @@ def save_forecast_data(dfs: Dict[str, pd.DataFrame], variable: str, init_dt_dict
         if variable == "mslp":
             series = df[mslp_col]
             if series.isna().all():
-                # TODO: Fix in Herbie refactor (see TODO-HERBIE-REFACTOR.md)
+                # TODO: Fix in Herbie refactor (see docs/archive/root_notes/TODO-HERBIE-REFACTOR.md)
                 logger.warning(
                     "MSLP dataframe for %s contains only NaNs; writing anyway. "
                     "Forecast will use fallback MSLP values.", member
