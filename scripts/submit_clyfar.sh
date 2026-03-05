@@ -90,6 +90,11 @@ CLYFAR_ENABLE_UPLOAD="${CLYFAR_ENABLE_UPLOAD:-1}"
 #   0                -> run_gefs_clyfar may also export/upload (can duplicate uploads).
 CLYFAR_SKIP_INTERNAL_EXPORT="${CLYFAR_SKIP_INTERNAL_EXPORT:-1}"
 
+# Ensure child processes (run_gefs_clyfar.py, inline Python export block) receive
+# upload-control flags from this orchestrator.
+export CLYFAR_ENABLE_UPLOAD
+export CLYFAR_SKIP_INTERNAL_EXPORT
+
 # Create directories if needed
 mkdir -p "$DATA_ROOT" "$FIG_ROOT" "$EXPORT_DIR" "$LOG_DIR"
 
