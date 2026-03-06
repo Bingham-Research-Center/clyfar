@@ -7,9 +7,9 @@ Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements
 
 Lawson, Lyman, Davies, 2024 
 
-> **Current stable clyfar tag:** `v1.0.2`  
+> **Current stable clyfar tag:** `v1.0.3`  
 > **Package version source:** [`__init__.__version__`](__init__.py) (kept in sync with stable tag)  
-> **Current Ffion tag:** `ffion-v1.1.1`  
+> **Current Ffion tag:** `ffion-v1.1.2`  
 > **Ffion version source:** [`utils/versioning.py`](utils/versioning.py) (`FFION_VERSION`)
 
 ## Environment setup
@@ -89,6 +89,11 @@ Clyfar predictions are intended to be pushed to the BasinWx website (`basinwx.co
 - `DATA_UPLOAD_API_KEY`: 32-char hex key for BasinWx uploads
 - `BASINWX_API_URL`: https://basinwx.com (optional, defaults to this)
 
+**Operational notes (2026-03 hotfix):**
+- `scripts/submit_clyfar.sh` auto-init selection is anchored to Slurm `SubmitTime` to prevent queue-delay cycle skips (e.g., missing 12Z when a job starts late).
+- For interactive `./scripts/run_llm_outlook.sh ... --upload`, source `~/.bashrc_basinwx` first (or export upload vars manually) so API uploads use the production key context.
+- If you backfill a missed cycle outlook, regenerate the next cycle outlook with `--force` so previous-outlook comparisons reflect the repaired sequence.
+
 > **TODO (Operations):** Herbie cache management needs improvement. Currently cached GRIB/idx files can become stale or corrupted, causing failures on retry. Options to implement:
 > 1. Add `--fresh-cache` CLI flag to clear cache before run
 > 2. Use per-job temp cache: `export CLYFAR_HERBIE_CACHE="/tmp/herbie_${SLURM_JOB_ID}"`
@@ -152,6 +157,7 @@ https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.
 ```
 - This mirrors the production post-forecast Ffion flow in `scripts/submit_clyfar.sh`.
 - Default is test-safe (`LLM_SKIP_UPLOAD=1`); add `--upload` only when intentional.
+- For interactive `--upload` runs, source `~/.bashrc_basinwx` first to ensure valid API credentials are loaded.
 
 **Local path (CHPC):**
 ```

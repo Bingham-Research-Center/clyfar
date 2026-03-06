@@ -1,5 +1,5 @@
 # Repository Guidelines
-Date updated: 2026-03-04
+Date updated: 2026-03-05
 
 This is the canonical top-level guidance file for contributors and AI coding agents.
 
@@ -30,6 +30,7 @@ This is the canonical top-level guidance file for contributors and AI coding age
   - `./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force`
 - Use `--check` for prerequisite checks.
 - Default is upload-safe (`LLM_SKIP_UPLOAD=1`); opt in intentionally for upload.
+- For interactive upload runs, first `source ~/.bashrc_basinwx` (or export `DATA_UPLOAD_API_KEY` and `BASINWX_API_URL`) before `--upload`; otherwise uploads may fail with HTTP 401 due to wrong/missing API key in the shell context.
 - Canonical runtime versions:
   - Clyfar: repo-root `__init__.__version__`
   - Ffion: `utils/versioning.py` (`FFION_VERSION` + `get_ffion_version()`)
@@ -46,6 +47,8 @@ This is the canonical top-level guidance file for contributors and AI coding age
     - `CLYFAR_DIR`, `DATA_ROOT`, `FIG_ROOT`, `EXPORT_DIR`, `LOG_DIR`
     - Set `CLYFAR_ENABLE_UPLOAD=0` for local-only runs (propagates through `run_gefs_clyfar.py`, export stage, and LLM upload stage).
   - To avoid duplicate API uploads when using `submit_clyfar.sh`, keep `CLYFAR_SKIP_INTERNAL_EXPORT=1` (default in submit script); submit performs the single export/upload pass.
+- History-sensitive reruns:
+  - If a missed cycle is backfilled (e.g., 12Z), regenerate the next cycle outlook (e.g., 18Z) with `--force` so previous-outlook comparison uses the repaired sequence.
 
 ## Coding Standards
 - Follow PEP 8; 4-space indentation; type hints where practical.
@@ -71,6 +74,11 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - Guard entry points with `if __name__ == "__main__":`.
 - External download behavior lives in `nwp/`; treat cache/locking edits carefully.
 - Production uploads are enabled when credentials are present; unset `DATA_UPLOAD_API_KEY` or use testing mode to avoid accidental uploads.
+- Keep `scripts/submit_clyfar.sh` init auto-selection anchored to Slurm `SubmitTime` (not runtime `utcnow()` alone) so queue delays cannot skip expected 6-hour GEFS cycles.
+- Fast incident triage (token/time saver):
+  - Confirm run init quickly: `rg -n "Running Clyfar forecast for init time" ~/logs/basinwx/clyfar_<jobid>.out`
+  - Confirm upload stages: `rg -n "Successfully exported|Exporting PNG figures|PDF uploaded|Markdown uploaded|VALIDATION PASSED" ~/logs/basinwx/clyfar_<jobid>.out`
+  - Confirm cycle artifacts exist: `ls ~/basinwx-data/clyfar/basinwx_export/*YYYYMMDD_HH00Z* | wc -l`
 
 ## External Repositories
 - Technical report: `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
