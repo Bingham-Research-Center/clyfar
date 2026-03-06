@@ -75,6 +75,8 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - External download behavior lives in `nwp/`; treat cache/locking edits carefully.
 - Production uploads are enabled when credentials are present; unset `DATA_UPLOAD_API_KEY` or use testing mode to avoid accidental uploads.
 - Keep `scripts/submit_clyfar.sh` init auto-selection anchored to Slurm `SubmitTime` (not runtime `utcnow()` alone) so queue delays cannot skip expected 6-hour GEFS cycles.
+- Slurm `SubmitTime` from `scontrol show job` is scheduler-local wall time (MST/MDT) without timezone suffix. Convert local time to epoch first, then derive UTC anchor; do not parse it as UTC directly.
+- Expected post-fix cadence in this environment is submit at local `03:15`, `09:15`, `15:15`, `21:15` mapping to GEFS `00Z`, `06Z`, `12Z`, `18Z` respectively (DST can shift local clock labels; verify with `sacct` when unsure). Historical logs from before this fix may show wrong init mapping.
 - Fast incident triage (token/time saver):
   - Confirm run init quickly: `rg -n "Running Clyfar forecast for init time" ~/logs/basinwx/clyfar_<jobid>.out`
   - Confirm upload stages: `rg -n "Successfully exported|Exporting PNG figures|PDF uploaded|Markdown uploaded|VALIDATION PASSED" ~/logs/basinwx/clyfar_<jobid>.out`
