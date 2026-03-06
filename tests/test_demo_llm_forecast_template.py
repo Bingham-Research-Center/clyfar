@@ -49,7 +49,7 @@ Confidence_D11_15: LOW
     monkeypatch.setattr(template_script, "REPO_ROOT", repo_root)
     monkeypatch.setattr(template_script, "DEFAULT_PROMPT_TEMPLATE", prompt_template)
     monkeypatch.setattr(template_script, "DEFAULT_BIAS_FILE", bias_file)
-    monkeypatch.setattr(template_script, "CLYFAR_VERSION", "1.0.3")
+    monkeypatch.setattr(template_script, "CLYFAR_VERSION", "1.0.4")
     monkeypatch.setattr(template_script, "FFION_VERSION", "1.1.2")
 
     monkeypatch.setattr(
@@ -70,9 +70,9 @@ Confidence_D11_15: LOW
     out_path = current_case / "llm_text" / "forecast_prompt_20260101_0000Z.md"
     output = out_path.read_text(encoding="utf-8")
 
-    assert "- Clyfar version: `1.0.3`" in output
+    assert "- Clyfar version: `1.0.4`" in output
     assert "- Ffion version: `1.1.2`" in output
     assert "## Local File Index" in output
     assert str(clustering_path) in output
     assert str(previous_case / f"LLM-OUTLOOK-{previous_init}.md") in output
-    assert "Forecaster: Ffion v1.1.2 and Clyfar v1.0.3" in output
+    assert "Forecaster: Ffion v1.1.2 and Clyfar v1.0.4" in output

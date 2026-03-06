@@ -7,7 +7,7 @@ Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements
 
 Lawson, Lyman, Davies, 2024 
 
-> **Current stable clyfar tag:** `v1.0.3`  
+> **Current stable clyfar tag:** `v1.0.4`  
 > **Package version source:** [`__init__.__version__`](__init__.py) (kept in sync with stable tag)  
 > **Current Ffion tag:** `ffion-v1.1.2`  
 > **Ffion version source:** [`utils/versioning.py`](utils/versioning.py) (`FFION_VERSION`)

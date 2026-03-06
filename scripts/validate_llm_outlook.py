@@ -185,7 +185,7 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("outlook_file", type=Path, help="Path to LLM-OUTLOOK-*.md")
     parser.add_argument(
         "--expected-clyfar",
-        default=get_clyfar_version(default="1.0.3"),
+        default=get_clyfar_version(default="1.0.4"),
         help="Expected Clyfar version (default: runtime resolver)",
     )
     parser.add_argument(
