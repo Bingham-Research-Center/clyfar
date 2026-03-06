@@ -127,29 +127,31 @@ else
     # Auto-detect most recent GEFS run.
     # Important: use Slurm submit time as anchor so queue delays don't skip cycles.
     # GEFS runs at 00Z, 06Z, 12Z, 18Z; schedule is 4.5h after cycle availability.
-    SUBMIT_TIME_UTC=""
+    SUBMIT_TIME_RAW=""
+    SUBMIT_TIME_EPOCH=""
     if [ -n "${SLURM_JOB_ID:-}" ] && command -v scontrol >/dev/null 2>&1; then
-        SUBMIT_TIME_UTC=$(scontrol show job "$SLURM_JOB_ID" -o 2>/dev/null | sed -n 's/.*SubmitTime=\([^ ]*\).*/\1/p' | head -n1)
+        SUBMIT_TIME_RAW=$(scontrol show job "$SLURM_JOB_ID" -o 2>/dev/null | sed -n 's/.*SubmitTime=\([^ ]*\).*/\1/p' | head -n1)
+        # Slurm SubmitTime is typically in scheduler local time with no timezone suffix.
+        # Convert to epoch using local-time interpretation, then anchor in UTC math.
+        if [ -n "$SUBMIT_TIME_RAW" ] && [ "$SUBMIT_TIME_RAW" != "Unknown" ]; then
+            SUBMIT_TIME_EPOCH=$(date -d "$SUBMIT_TIME_RAW" +%s 2>/dev/null || true)
+        fi
     fi
 
-    INIT_TIME=$(SUBMIT_TIME_UTC="$SUBMIT_TIME_UTC" python3 - <<'PY'
-from datetime import datetime, timedelta, timezone
+    INIT_TIME=$(SUBMIT_TIME_EPOCH="$SUBMIT_TIME_EPOCH" python3 - <<'PY'
+from datetime import datetime, timedelta
 import os
 
-submit_str = os.environ.get("SUBMIT_TIME_UTC", "").strip()
+submit_epoch = os.environ.get("SUBMIT_TIME_EPOCH", "").strip()
 anchor = None
-if submit_str and submit_str != "Unknown":
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z"):
-        try:
-            anchor = datetime.strptime(submit_str, fmt)
-            break
-        except ValueError:
-            continue
+if submit_epoch:
+    try:
+        anchor = datetime.utcfromtimestamp(int(submit_epoch))
+    except ValueError:
+        anchor = None
 
 if anchor is None:
     anchor = datetime.utcnow()
-elif anchor.tzinfo is not None:
-    anchor = anchor.astimezone(timezone.utc).replace(tzinfo=None)
 
 target = anchor - timedelta(hours=4, minutes=30)
 gefs_hour = (target.hour // 6) * 6
@@ -160,8 +162,11 @@ PY
 
     GEFS_HOUR=${INIT_TIME:8:2}
     echo "Auto-detected init time: $INIT_TIME (GEFS ${GEFS_HOUR}Z run)"
-    if [ -n "$SUBMIT_TIME_UTC" ] && [ "$SUBMIT_TIME_UTC" != "Unknown" ]; then
-        echo "Init anchor UTC (Slurm submit): $SUBMIT_TIME_UTC"
+    if [ -n "$SUBMIT_TIME_RAW" ] && [ "$SUBMIT_TIME_RAW" != "Unknown" ]; then
+        echo "Init anchor (Slurm submit local): $SUBMIT_TIME_RAW"
+    fi
+    if [ -n "$SUBMIT_TIME_EPOCH" ]; then
+        echo "Init anchor UTC (converted): $(date -u -d "@$SUBMIT_TIME_EPOCH" '+%Y-%m-%d %H:%M:%S')"
     else
         echo "Init anchor UTC (fallback current): $(date -u '+%Y-%m-%d %H:%M:%S')"
     fi
