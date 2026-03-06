@@ -124,25 +124,47 @@ done
 if [ -n "$INIT_TIME" ]; then
     echo "Using provided init time: $INIT_TIME"
 else
-    # Auto-detect most recent GEFS run using Python datetime math
-    # GEFS runs at 00Z, 06Z, 12Z, 18Z
-    # We run 4.5hr after each cycle, so subtract 4.5hr and round down to nearest 6hr cycle
+    # Auto-detect most recent GEFS run.
+    # Important: use Slurm submit time as anchor so queue delays don't skip cycles.
+    # GEFS runs at 00Z, 06Z, 12Z, 18Z; schedule is 4.5h after cycle availability.
+    SUBMIT_TIME_UTC=""
+    if [ -n "${SLURM_JOB_ID:-}" ] && command -v scontrol >/dev/null 2>&1; then
+        SUBMIT_TIME_UTC=$(scontrol show job "$SLURM_JOB_ID" -o 2>/dev/null | sed -n 's/.*SubmitTime=\([^ ]*\).*/\1/p' | head -n1)
+    fi
 
-    INIT_TIME=$(python3 -c "
-from datetime import datetime, timedelta
+    INIT_TIME=$(SUBMIT_TIME_UTC="$SUBMIT_TIME_UTC" python3 - <<'PY'
+from datetime import datetime, timedelta, timezone
+import os
 
-now_utc = datetime.utcnow()
-# Subtract 4.5 hours to get approximate GEFS init time
-target = now_utc - timedelta(hours=4, minutes=30)
-# Round down to nearest 6-hour cycle (00, 06, 12, 18)
+submit_str = os.environ.get("SUBMIT_TIME_UTC", "").strip()
+anchor = None
+if submit_str and submit_str != "Unknown":
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z"):
+        try:
+            anchor = datetime.strptime(submit_str, fmt)
+            break
+        except ValueError:
+            continue
+
+if anchor is None:
+    anchor = datetime.utcnow()
+elif anchor.tzinfo is not None:
+    anchor = anchor.astimezone(timezone.utc).replace(tzinfo=None)
+
+target = anchor - timedelta(hours=4, minutes=30)
 gefs_hour = (target.hour // 6) * 6
-# Construct the init time
 init_dt = target.replace(hour=gefs_hour, minute=0, second=0, microsecond=0)
 print(init_dt.strftime('%Y%m%d%H'))
-")
+PY
+)
 
     GEFS_HOUR=${INIT_TIME:8:2}
     echo "Auto-detected init time: $INIT_TIME (GEFS ${GEFS_HOUR}Z run)"
+    if [ -n "$SUBMIT_TIME_UTC" ] && [ "$SUBMIT_TIME_UTC" != "Unknown" ]; then
+        echo "Init anchor UTC (Slurm submit): $SUBMIT_TIME_UTC"
+    else
+        echo "Init anchor UTC (fallback current): $(date -u '+%Y-%m-%d %H:%M:%S')"
+    fi
     echo "Current UTC: $(date -u '+%Y-%m-%d %H:%M:%S')"
 fi
 
