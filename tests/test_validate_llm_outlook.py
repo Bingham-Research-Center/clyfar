@@ -11,7 +11,7 @@ def _write_outlook(path: Path, body: str) -> Path:
 def _valid_outlook_body(data_path: Path) -> str:
     return f"""---
 > - **EXPERIMENTAL AI-GENERATED FORECAST**
-> - Forecaster: **Ffion v1.1.1** (ffion@jrl.ac), using **Clyfar v1.0.2** and GEFS ensemble inputs.
+> - Forecaster: **Ffion v1.1.2** (ffion@jrl.ac), using **Clyfar v1.0.3** and GEFS ensemble inputs.
 ---
 
 # Clyfar Ozone Outlook
@@ -37,7 +37,7 @@ def test_validate_outlook_passes_for_valid_content(tmp_path):
         _valid_outlook_body(referenced),
     )
 
-    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.2", expected_ffion="1.1.1")
+    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.3", expected_ffion="1.1.2")
     assert ok
     assert errors == []
 
@@ -50,7 +50,7 @@ def test_validate_outlook_fails_on_version_mismatch(tmp_path):
         _valid_outlook_body(referenced),
     )
 
-    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.3", expected_ffion="1.1.1")
+    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.4", expected_ffion="1.1.2")
     assert not ok
     assert any("Clyfar version mismatch" in err for err in errors)
 
@@ -61,7 +61,7 @@ def test_validate_outlook_fails_without_required_markers(tmp_path):
     body = _valid_outlook_body(referenced).replace("AlertLevel_D11_15: MODERATE\n", "")
     outlook = _write_outlook(tmp_path / "LLM-OUTLOOK-test.md", body)
 
-    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.2", expected_ffion="1.1.1")
+    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.3", expected_ffion="1.1.2")
     assert not ok
     assert any("Missing marker: AlertLevel_D11_15" in err for err in errors)
 
@@ -73,7 +73,7 @@ def test_validate_outlook_fails_on_missing_data_logger_path(tmp_path):
         _valid_outlook_body(missing),
     )
 
-    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.2", expected_ffion="1.1.1")
+    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.3", expected_ffion="1.1.2")
     assert not ok
     assert any("Data Logger path does not exist" in err for err in errors)
 
@@ -90,6 +90,6 @@ def test_validate_outlook_accepts_case_relative_data_logger_paths(tmp_path):
     body = _valid_outlook_body(Path("probs/forecast_exceedance_probabilities_20260101_0000Z.json"))
     outlook = _write_outlook(llm_dir / "LLM-OUTLOOK-20260101_0000Z.md", body)
 
-    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.2", expected_ffion="1.1.1")
+    ok, errors = validate_outlook(outlook, expected_clyfar="1.0.3", expected_ffion="1.1.2")
     assert ok
     assert errors == []

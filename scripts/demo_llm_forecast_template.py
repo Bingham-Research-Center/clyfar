@@ -41,8 +41,8 @@ from utils.versioning import get_clyfar_version, get_ffion_version
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
 DEFAULT_BIAS_FILE = REPO_ROOT / "templates" / "llm" / "short_term_biases.json"
-CLYFAR_VERSION = get_clyfar_version(default="1.0.2")
-FFION_VERSION = get_ffion_version(default="1.1.1")
+CLYFAR_VERSION = get_clyfar_version(default="1.0.3")
+FFION_VERSION = get_ffion_version(default="1.1.2")
 
 # Previous outlook configuration
 MAX_PREVIOUS_OUTLOOKS = 2

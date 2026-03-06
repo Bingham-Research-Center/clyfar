@@ -20,7 +20,7 @@ def test_get_clyfar_version_env_override(monkeypatch):
 
 def test_get_ffion_version_repo_default(monkeypatch):
     monkeypatch.delenv("FFION_VERSION", raising=False)
-    assert versioning.get_ffion_version(default="0.0.0") == "1.1.1"
+    assert versioning.get_ffion_version(default="0.0.0") == "1.1.2"
 
 
 def test_get_ffion_version_env_override(monkeypatch):

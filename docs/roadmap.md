@@ -2,7 +2,7 @@
 Date updated: 2026-03-02
 
 > **Status note (historical planning doc):** This file contains pre-v1 planning context.  
-> **Current stable clyfar tag:** `v1.0.2`  
+> **Current stable clyfar tag:** `v1.0.3`  
 > **Active prioritized TODOs:** see `docs/TODO_PRIORITIZED.md`.
 
 ## Mission Snapshot
