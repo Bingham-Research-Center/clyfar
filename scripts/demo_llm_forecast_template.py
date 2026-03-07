@@ -37,6 +37,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.extract_outlook_summary import extract_outlook_summary
+from utils.ffion_science import resolve_ffion_science_bundle
 from utils.versioning import get_clyfar_version, get_ffion_version
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
@@ -97,6 +98,38 @@ def render_prompt_template(path: Path, replacements: Dict[str, str]) -> str:
     for key, value in replacements.items():
         text = text.replace(f"{{{{{key}}}}}", value)
     return text.rstrip()
+
+
+def format_science_bundle_lines(science_bundle, qa_path: Optional[Path]) -> List[str]:
+    """Return prompt metadata lines for the resolved prompt-science bundle."""
+    lines: List[str] = []
+    lines.append("## Ffion Science Bundle")
+    lines.append("")
+    lines.append("> Versioned editable science surface used for this render and future reforecasting.")
+    lines.append(f"- Science version: `{science_bundle.science_version}`")
+    lines.append(f"- Label: `{science_bundle.label}`")
+    lines.append(f"- Manifest: `{science_bundle.manifest_path}`")
+    lines.append(f"- Prompt template: `{science_bundle.prompt_template}`")
+    lines.append(f"- Prompt sha256: `{science_bundle.prompt_sha256}`")
+    if science_bundle.bias_file:
+        lines.append(f"- Bias file: `{science_bundle.bias_file}`")
+        lines.append(f"- Bias sha256: `{science_bundle.bias_sha256}`")
+    else:
+        lines.append("- Bias file: (none)")
+    if qa_path:
+        lines.append(f"- QA file in use: `{qa_path}`")
+    else:
+        lines.append("- QA file in use: (none)")
+    if science_bundle.qa_file:
+        lines.append(f"- Bundle QA source: `{science_bundle.qa_file}`")
+        lines.append(f"- Bundle QA sha256: `{science_bundle.qa_sha256}`")
+        lines.append(f"- QA enabled by default: `{science_bundle.qa_enabled_by_default}`")
+    else:
+        lines.append("- Bundle QA source: (none)")
+    if science_bundle.notes:
+        lines.append(f"- Notes: {science_bundle.notes}")
+    lines.append("")
+    return lines
 
 
 def load_bias_entries(path: Path) -> List[Dict]:
@@ -280,30 +313,42 @@ def main() -> None:
         "--qa-file",
         type=str,
         default=None,
-        help="Optional path to freeform operator notes for the LLM context.",
+        help="Optional path to freeform operator notes for the LLM context (overrides bundle/default QA).",
     )
     parser.add_argument(
         "--bias-file",
         type=str,
-        default=os.environ.get("LLM_BIAS_FILE", str(DEFAULT_BIAS_FILE)),
-        help="Path to short-term bias JSON used for relevance-gated caution notes.",
+        default=None,
+        help="Path to short-term bias JSON used for relevance-gated caution notes (overrides science bundle).",
     )
     parser.add_argument(
         "--prompt-template",
         type=str,
-        default=os.environ.get("LLM_PROMPT_TEMPLATE", str(DEFAULT_PROMPT_TEMPLATE)),
-        help=f"Path to the markdown template used for the prompt body (default: {DEFAULT_PROMPT_TEMPLATE}).",
+        default=None,
+        help="Path to the markdown template used for the prompt body (overrides science bundle).",
+    )
+    parser.add_argument(
+        "--science-version",
+        type=str,
+        default=os.environ.get("LLM_SCIENCE_VERSION") or os.environ.get("FFION_SCIENCE_VERSION"),
+        help="Version of the versioned prompt-science bundle to use.",
+    )
+    parser.add_argument(
+        "--science-manifest",
+        type=str,
+        default=os.environ.get("LLM_SCIENCE_MANIFEST") or os.environ.get("FFION_SCIENCE_MANIFEST"),
+        help="Explicit prompt-science manifest path to use.",
     )
     args = parser.parse_args()
-
-    if args.qa_file:
-        print(f"Using Q&A context file: {args.qa_file}")
-    else:
-        print("No Q&A context file found or specified.")
 
     data_root = REPO_ROOT / "data" / "json_tests"
     if not data_root.exists():
         raise SystemExit(f"Data directory not found: {data_root}")
+
+    science_bundle = resolve_ffion_science_bundle(
+        science_version=args.science_version,
+        manifest_path=args.science_manifest,
+    )
 
     norm_init = parse_init(args.init)
     case_root = case_root_for_init(data_root, norm_init)
@@ -327,17 +372,40 @@ def main() -> None:
         "dendrograms_possibilities": figs_root / "dendrograms" / "possibilities",
     }
 
+    prompt_template_value = (
+        args.prompt_template
+        or os.environ.get("LLM_PROMPT_TEMPLATE")
+        or str(science_bundle.prompt_template)
+        or str(DEFAULT_PROMPT_TEMPLATE)
+    )
+    prompt_template_path = Path(prompt_template_value).expanduser()
+
+    bias_value = (
+        args.bias_file
+        or os.environ.get("LLM_BIAS_FILE")
+        or (str(science_bundle.bias_file) if science_bundle.bias_file else None)
+        or str(DEFAULT_BIAS_FILE)
+    )
+    bias_path = Path(bias_value).expanduser() if bias_value else None
+
+    qa_value = args.qa_file or os.environ.get("LLM_QA_FILE")
+    if not qa_value and science_bundle.qa_enabled_by_default and science_bundle.qa_file:
+        qa_value = str(science_bundle.qa_file)
+
+    qa_path: Optional[Path] = None
     qa_text = None
-    if args.qa_file:
-        qa_path = Path(args.qa_file).expanduser()
+    if qa_value:
+        qa_path = Path(qa_value).expanduser()
         if qa_path.exists():
             qa_text = qa_path.read_text()
+            print(f"Using Q&A context file: {qa_path}")
         else:
             print(f"Warning: Q&A file not found: {qa_path}")
+    else:
+        print("No Q&A context file found or specified.")
 
     bias_entries: List[Dict] = []
-    if args.bias_file:
-        bias_path = Path(args.bias_file).expanduser()
+    if bias_path is not None:
         if bias_path.exists():
             bias_entries = load_bias_entries(bias_path)
         else:
@@ -376,6 +444,8 @@ def main() -> None:
     lines.append(f"- Case root: `{case_root}`")
     lines.append(f"- Clyfar version: `{CLYFAR_VERSION}`")
     lines.append(f"- Ffion version: `{FFION_VERSION}`")
+    lines.append(f"- Ffion science version: `{science_bundle.science_version}`")
+    lines.append(f"- Ffion science manifest: `{science_bundle.manifest_path}`")
 
     # List JSON files (Claude reads them via file access, no embedding)
     for name, path in json_subdirs.items():
@@ -437,6 +507,8 @@ def main() -> None:
     if previous_parse_failures:
         for failed_path in previous_parse_failures:
             lines.append(f"- Previous outlook parse failed: `{failed_path}`")
+
+    lines.extend(format_science_bundle_lines(science_bundle, qa_path))
 
     if bias_entries:
         lines.append("")
@@ -536,18 +608,19 @@ def main() -> None:
         )
     lines.append("")
 
-    template_path = Path(args.prompt_template).expanduser()
-    if not template_path.exists():
-        raise SystemExit(f"Prompt template not found: {template_path}")
+    if not prompt_template_path.exists():
+        raise SystemExit(f"Prompt template not found: {prompt_template_path}")
     replacements = {
         "INIT": norm_init,
         "CASE_ROOT": str(case_root),
         "RECENT_CASE_COUNT": str(len(recent_cases)),
         "CLYFAR_VERSION": CLYFAR_VERSION,
         "FFION_VERSION": FFION_VERSION,
+        "FFION_SCIENCE_VERSION": science_bundle.science_version,
+        "FFION_SCIENCE_LABEL": science_bundle.label,
     }
     lines.append("")
-    lines.append(render_prompt_template(template_path, replacements))
+    lines.append(render_prompt_template(prompt_template_path, replacements))
 
     out_path.write_text("\n".join(lines))
     print(f"Wrote LLM forecast prompt to {out_path}")

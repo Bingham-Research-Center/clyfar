@@ -1,4 +1,5 @@
 import sys
+import json
 from pathlib import Path
 
 from scripts import demo_llm_forecast_template as template_script
@@ -36,19 +37,41 @@ Confidence_D11_15: LOW
         encoding="utf-8",
     )
 
-    prompt_template = repo_root / "templates" / "llm" / "prompt_body.md"
+    prompt_template = repo_root / "templates" / "llm" / "versions" / "ffion_prompt_v9.9.0.md"
     prompt_template.parent.mkdir(parents=True)
     prompt_template.write_text(
-        "Forecaster: Ffion v{{FFION_VERSION}} and Clyfar v{{CLYFAR_VERSION}} ({{INIT}} {{CASE_ROOT}} {{RECENT_CASE_COUNT}})",
+        (
+            "Forecaster: Ffion v{{FFION_VERSION}} and Clyfar v{{CLYFAR_VERSION}} "
+            "(science {{FFION_SCIENCE_VERSION}} {{INIT}} {{CASE_ROOT}} {{RECENT_CASE_COUNT}})"
+        ),
         encoding="utf-8",
     )
 
-    bias_file = repo_root / "templates" / "llm" / "short_term_biases.json"
+    bias_file = repo_root / "templates" / "llm" / "biases" / "ffion_biases_v9.9.0.json"
+    bias_file.parent.mkdir(parents=True, exist_ok=True)
     bias_file.write_text("[]", encoding="utf-8")
 
+    qa_file = repo_root / "templates" / "llm" / "qa" / "ffion_qa_v9.9.0.md"
+    qa_file.parent.mkdir(parents=True, exist_ok=True)
+    qa_file.write_text("Test QA notes.\n", encoding="utf-8")
+
+    science_manifest = repo_root / "templates" / "llm" / "science" / "ffion_science_v9.9.0.json"
+    science_manifest.parent.mkdir(parents=True, exist_ok=True)
+    science_manifest.write_text(
+        json.dumps(
+            {
+                "science_version": "9.9.0",
+                "label": "Test science bundle",
+                "prompt_template": "../versions/ffion_prompt_v9.9.0.md",
+                "bias_file": "../biases/ffion_biases_v9.9.0.json",
+                "qa_file": "../qa/ffion_qa_v9.9.0.md",
+                "qa_enabled_by_default": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
     monkeypatch.setattr(template_script, "REPO_ROOT", repo_root)
-    monkeypatch.setattr(template_script, "DEFAULT_PROMPT_TEMPLATE", prompt_template)
-    monkeypatch.setattr(template_script, "DEFAULT_BIAS_FILE", bias_file)
     monkeypatch.setattr(template_script, "CLYFAR_VERSION", "1.0.4")
     monkeypatch.setattr(template_script, "FFION_VERSION", "1.1.2")
 
@@ -58,10 +81,8 @@ Confidence_D11_15: LOW
         [
             "demo_llm_forecast_template.py",
             "2026010100",
-            "--prompt-template",
-            str(prompt_template),
-            "--bias-file",
-            str(bias_file),
+            "--science-manifest",
+            str(science_manifest),
         ],
     )
 
@@ -72,7 +93,11 @@ Confidence_D11_15: LOW
 
     assert "- Clyfar version: `1.0.4`" in output
     assert "- Ffion version: `1.1.2`" in output
+    assert "- Ffion science version: `9.9.0`" in output
     assert "## Local File Index" in output
+    assert "## Ffion Science Bundle" in output
+    assert str(science_manifest) in output
     assert str(clustering_path) in output
     assert str(previous_case / f"LLM-OUTLOOK-{previous_init}.md") in output
     assert "Forecaster: Ffion v1.1.2 and Clyfar v1.0.4" in output
+    assert "science 9.9.0" in output

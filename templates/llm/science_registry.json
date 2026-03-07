@@ -1,0 +1,9 @@
+{
+  "active_science_version": "1.0.0",
+  "versions": {
+    "1.0.0": {
+      "manifest": "templates/llm/science/ffion_science_v1.0.0.json",
+      "notes": "Initial versioned Ffion prompt-science bundle."
+    }
+  }
+}
