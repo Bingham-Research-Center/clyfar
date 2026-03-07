@@ -32,6 +32,8 @@ BASE_URL="${BASINWX_API_URL:-https://basinwx.com}"
 FROM_API="${LLM_FROM_API:-0}"  # default: use local CASE data
 HISTORY="${LLM_HISTORY:-5}"
 QA_FILE="${LLM_QA_FILE:-}"
+SCIENCE_VERSION="${LLM_SCIENCE_VERSION:-${FFION_SCIENCE_VERSION:-}}"
+SCIENCE_MANIFEST="${LLM_SCIENCE_MANIFEST:-${FFION_SCIENCE_MANIFEST:-}}"
 LOCAL_SOURCE="${LLM_LOCAL_SOURCE:-}"
 
 # Optional Slurm settings for auto-interactive mode
@@ -53,6 +55,12 @@ fi
 if [[ -n "$QA_FILE" ]]; then
   pipeline_cmd+=(--qa-file "$QA_FILE")
 fi
+if [[ -n "$SCIENCE_VERSION" ]]; then
+  pipeline_cmd+=(--science-version "$SCIENCE_VERSION")
+fi
+if [[ -n "$SCIENCE_MANIFEST" ]]; then
+  pipeline_cmd+=(--science-manifest "$SCIENCE_MANIFEST")
+fi
 pipeline_cmd_str=$(printf '%q ' "${pipeline_cmd[@]}")
 
 echo "=== CHPC LLM PIPELINE ==="
@@ -63,6 +71,12 @@ echo "From API:  $FROM_API"
 echo "History:   $HISTORY"
 if [[ -n "$QA_FILE" ]]; then
   echo "QA File:   $QA_FILE"
+fi
+if [[ -n "$SCIENCE_VERSION" ]]; then
+  echo "Science version: $SCIENCE_VERSION"
+fi
+if [[ -n "$SCIENCE_MANIFEST" ]]; then
+  echo "Science manifest: $SCIENCE_MANIFEST"
 fi
 if [[ "$FROM_API" != "1" && -n "$LOCAL_SOURCE" ]]; then
   echo "Local source: $LOCAL_SOURCE"

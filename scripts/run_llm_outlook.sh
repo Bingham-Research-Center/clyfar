@@ -49,6 +49,9 @@ Options:
   --check                 Check prerequisites only, do not run LLM-GENERATE.sh
   --force                 Regenerate even if outlook markdown already exists
   --with-qa               Enable Q&A context via scripts/set_llm_qa.sh
+  --qa-file PATH          Explicit QA/operator-notes file to use
+  --science-version V     Versioned Ffion prompt-science bundle to use
+  --science-manifest P    Explicit Ffion prompt-science manifest path to use
   --history N             Number of previous inits to sync (default: 5)
   --retries N             LLM_MAX_RETRIES value (default: 3; cron parity)
   --upload                Enable outlook upload (default: disabled for testing)
@@ -135,10 +138,13 @@ process_init() {
     local check_only="$2"
     local force="$3"
     local with_qa="$4"
-    local history="$5"
-    local retries="$6"
-    local upload_enabled="$7"
-    local keep_cli_overrides="$8"
+    local qa_file_override="$5"
+    local science_version="$6"
+    local science_manifest="$7"
+    local history="$8"
+    local retries="$9"
+    local upload_enabled="${10}"
+    local keep_cli_overrides="${11}"
 
     local norm_init
     norm_init="$(normalise_init "$init_time")"
@@ -181,6 +187,12 @@ process_init() {
     export PATH="$HOME/.local/bin:$PATH"
     add_texlive_to_path
     export LLM_MAX_RETRIES="$retries"
+    if [[ -n "$science_version" ]]; then
+        export LLM_SCIENCE_VERSION="$science_version"
+    fi
+    if [[ -n "$science_manifest" ]]; then
+        export LLM_SCIENCE_MANIFEST="$science_manifest"
+    fi
 
     if [[ "$upload_enabled" == "true" ]]; then
         unset LLM_SKIP_UPLOAD 2>/dev/null || true
@@ -190,7 +202,17 @@ process_init() {
 
     if [[ "$with_qa" == "true" && -f "$CLYFAR_DIR/scripts/set_llm_qa.sh" ]]; then
         echo "Enabling Q&A context via scripts/set_llm_qa.sh"
-        source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
+        if [[ -n "$qa_file_override" ]]; then
+            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --qa-file "$qa_file_override" 2>/dev/null || true
+        elif [[ -n "$science_manifest" ]]; then
+            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --science-manifest "$science_manifest" 2>/dev/null || true
+        elif [[ -n "$science_version" ]]; then
+            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --science-version "$science_version" 2>/dev/null || true
+        else
+            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
+        fi
+    elif [[ -n "$qa_file_override" ]]; then
+        export LLM_QA_FILE="$qa_file_override"
     fi
 
     echo "Running LLM-GENERATE.sh (LLM_MAX_RETRIES=$LLM_MAX_RETRIES, upload=$upload_enabled)..."
@@ -221,6 +243,9 @@ main() {
     local check_only=false
     local force=false
     local with_qa=false
+    local qa_file_override=""
+    local science_version="${LLM_SCIENCE_VERSION:-${FFION_SCIENCE_VERSION:-}}"
+    local science_manifest="${LLM_SCIENCE_MANIFEST:-${FFION_SCIENCE_MANIFEST:-}}"
     local history=5
     local retries=3
     local upload_enabled=false
@@ -239,6 +264,18 @@ main() {
             --with-qa)
                 with_qa=true
                 shift
+                ;;
+            --qa-file)
+                qa_file_override="$2"
+                shift 2
+                ;;
+            --science-version)
+                science_version="$2"
+                shift 2
+                ;;
+            --science-manifest)
+                science_manifest="$2"
+                shift 2
                 ;;
             --history)
                 history="$2"
@@ -320,12 +357,21 @@ main() {
     echo "Force regenerate: $force"
     echo "Check only: $check_only"
     echo "Keep CLI overrides: $keep_cli_overrides"
+    if [[ -n "$science_version" ]]; then
+        echo "Science version: $science_version"
+    fi
+    if [[ -n "$science_manifest" ]]; then
+        echo "Science manifest: $science_manifest"
+    fi
+    if [[ -n "$qa_file_override" ]]; then
+        echo "QA file override: $qa_file_override"
+    fi
     echo "================================================================"
 
     local ok=0
     local fail=0
     for init in "${inits[@]}"; do
-        if process_init "$init" "$check_only" "$force" "$with_qa" "$history" "$retries" "$upload_enabled" "$keep_cli_overrides"; then
+        if process_init "$init" "$check_only" "$force" "$with_qa" "$qa_file_override" "$science_version" "$science_manifest" "$history" "$retries" "$upload_enabled" "$keep_cli_overrides"; then
             ok=$((ok + 1))
         else
             fail=$((fail + 1))

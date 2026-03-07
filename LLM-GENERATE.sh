@@ -7,6 +7,8 @@
 # Environment variables:
 #   LLM_RENDER_PROMPT   (default 1)  - if set to 1, re-render the prompt file first
 #   LLM_QA_FILE         - optional Q&A markdown passed to demo_llm_forecast_template.py
+#   LLM_SCIENCE_VERSION - optional versioned Ffion prompt-science bundle selector
+#   LLM_SCIENCE_MANIFEST - optional explicit Ffion prompt-science manifest path
 #   LLM_PROMPT_TEMPLATE - optional path to override templates/llm/prompt_body.md
 #   LLM_OUTPUT_BASENAME - prefix for the LLM output file (default LLM-OUTLOOK)
 #   LLM_CLI_COMMAND     - full shell command to run (reads prompt from STDIN)
@@ -27,6 +29,8 @@ fi
 INIT="$1"
 RENDER_PROMPT="${LLM_RENDER_PROMPT:-1}"
 QA_FILE="${LLM_QA_FILE:-}"
+SCIENCE_VERSION="${LLM_SCIENCE_VERSION:-${FFION_SCIENCE_VERSION:-}}"
+SCIENCE_MANIFEST="${LLM_SCIENCE_MANIFEST:-${FFION_SCIENCE_MANIFEST:-}}"
 PROMPT_TEMPLATE="${LLM_PROMPT_TEMPLATE:-}"
 OUTPUT_BASENAME="${LLM_OUTPUT_BASENAME:-LLM-OUTLOOK}"
 CLI_COMMAND="${LLM_CLI_COMMAND:-}"
@@ -101,6 +105,12 @@ if [[ "$RENDER_PROMPT" == "1" ]]; then
   cmd=("$PYTHON_BIN" scripts/demo_llm_forecast_template.py "$NORM_INIT")
   if [[ -n "$QA_FILE" ]]; then
     cmd+=(--qa-file "$QA_FILE")
+  fi
+  if [[ -n "$SCIENCE_VERSION" ]]; then
+    cmd+=(--science-version "$SCIENCE_VERSION")
+  fi
+  if [[ -n "$SCIENCE_MANIFEST" ]]; then
+    cmd+=(--science-manifest "$SCIENCE_MANIFEST")
   fi
   if [[ -n "$PROMPT_TEMPLATE" ]]; then
     cmd+=(--prompt-template "$PROMPT_TEMPLATE")
