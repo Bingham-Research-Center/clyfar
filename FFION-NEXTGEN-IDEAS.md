@@ -220,7 +220,7 @@
 - Reforecast selectors now exist in the pipeline.
 - The renderer accepts `--ffion-version` and `--ffion-manifest`.
 - `LLM-GENERATE.sh`, `scripts/run_llm_outlook.sh`, `scripts/run_case_pipeline.py`, `LOCAL-LLM-PROD.sh`, and `CHPC-LLM-PROD.sh` now pass that Ffion selection through.
-- Old `ffion_science` names remain only as compatibility shims, not as a third version axis.
+- Old `ffion_science` transition files were moved into a dated archive and are no longer part of the live code path.
 - `templates/llm/prompt_body.md` is the active prompt copy for the current Ffion version.
 
 ### What Changed To Make Ffion Reforecastable

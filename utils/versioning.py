@@ -27,7 +27,7 @@ def _normalise_version(raw: str) -> str:
     return value
 
 
-def get_clyfar_version(default: str = "1.0.5") -> str:
+def get_clyfar_version(default: str = "0.0.0") -> str:
     """Return the active clyfar version string.
 
     Resolution order:

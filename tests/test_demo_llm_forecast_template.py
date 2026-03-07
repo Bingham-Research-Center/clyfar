@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from scripts import demo_llm_forecast_template as template_script
+from utils.versioning import get_clyfar_version
 
 
 def test_prompt_includes_versions_and_local_file_index(tmp_path, monkeypatch):
@@ -89,7 +90,7 @@ Confidence_D11_15: LOW
     out_path = current_case / "llm_text" / "forecast_prompt_20260101_0000Z.md"
     output = out_path.read_text(encoding="utf-8")
 
-    assert "- Clyfar version: `1.0.5`" in output
+    assert f"- Clyfar version: `{get_clyfar_version()}`" in output
     assert "- Ffion version: `9.9.0`" in output
     assert "- Ffion manifest: " in output
     assert "## Local File Index" in output
@@ -97,4 +98,4 @@ Confidence_D11_15: LOW
     assert str(ffion_manifest) in output
     assert str(clustering_path) in output
     assert str(previous_case / f"LLM-OUTLOOK-{previous_init}.md") in output
-    assert "Forecaster: Ffion v9.9.0 and Clyfar v1.0.5" in output
+    assert f"Forecaster: Ffion v9.9.0 and Clyfar v{get_clyfar_version()}" in output

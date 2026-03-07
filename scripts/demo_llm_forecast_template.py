@@ -41,9 +41,6 @@ from utils.ffion_bundle import resolve_ffion_bundle, sha256_file
 from utils.versioning import get_clyfar_version, get_ffion_version
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
-DEFAULT_BIAS_FILE = REPO_ROOT / "templates" / "llm" / "short_term_biases.json"
-DEFAULT_CLYFAR_VERSION = "1.0.5"
-DEFAULT_FFION_VERSION = "1.1.3"
 
 # Previous outlook configuration
 MAX_PREVIOUS_OUTLOOKS = 2
@@ -359,10 +356,10 @@ def main() -> None:
     if not data_root.exists():
         raise SystemExit(f"Data directory not found: {data_root}")
 
-    clyfar_version = get_clyfar_version(default=DEFAULT_CLYFAR_VERSION)
+    clyfar_version = get_clyfar_version()
     requested_ffion_version = args.ffion_version
     if requested_ffion_version is None and args.ffion_manifest is None:
-        requested_ffion_version = get_ffion_version(default=DEFAULT_FFION_VERSION)
+        requested_ffion_version = get_ffion_version()
     ffion_bundle = resolve_ffion_bundle(
         ffion_version=requested_ffion_version,
         manifest_path=args.ffion_manifest,
@@ -403,7 +400,6 @@ def main() -> None:
         args.bias_file
         or os.environ.get("LLM_BIAS_FILE")
         or (str(ffion_bundle.bias_file) if ffion_bundle.bias_file else None)
-        or str(DEFAULT_BIAS_FILE)
     )
     bias_path = Path(bias_value).expanduser() if bias_value else None
 

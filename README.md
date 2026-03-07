@@ -7,10 +7,8 @@ Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements
 
 Lawson, Lyman, Davies, 2024 
 
-> **Current stable clyfar tag:** `v1.0.5`  
-> **Package version source:** [`__init__.__version__`](__init__.py) (kept in sync with stable tag)  
-> **Current Ffion tag:** `ffion-v1.1.3`  
-> **Ffion version source:** [`utils/versioning.py`](utils/versioning.py) (`FFION_VERSION`)  
+> **Clyfar release source:** [`__init__.__version__`](__init__.py) (should match `v*` git tags)  
+> **Ffion release source:** [`utils/versioning.py`](utils/versioning.py) (`FFION_VERSION`, should match `ffion-v*` git tags)  
 > **Ffion bundle registry:** [`templates/llm/ffion_registry.json`](templates/llm/ffion_registry.json)
 
 ## Environment setup

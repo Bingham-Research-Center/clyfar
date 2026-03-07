@@ -68,6 +68,20 @@ def _resolve_path(raw: str | None, *, relative_to: Path) -> Path | None:
     return path
 
 
+def _resolve_registry_manifest(raw: str | None, *, registry_path: Path) -> Path | None:
+    if not raw:
+        return None
+    path = Path(raw).expanduser()
+    if path.is_absolute():
+        return path
+
+    repo_relative = (_REPO_ROOT / path).resolve()
+    if repo_relative.exists():
+        return repo_relative
+
+    return (registry_path.parent / path).resolve()
+
+
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -110,7 +124,7 @@ def resolve_ffion_bundle(
             raise FileNotFoundError(
                 f"Ffion version {requested_version!r} not found in registry {registry_path}"
             )
-        manifest = _resolve_path(entry.get("manifest"), relative_to=registry_path.parent)
+        manifest = _resolve_registry_manifest(entry.get("manifest"), registry_path=registry_path)
         if manifest is None:
             raise FileNotFoundError(
                 f"Registry entry for Ffion version {requested_version!r} is missing a manifest path"

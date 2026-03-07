@@ -2,7 +2,7 @@
 Date updated: 2026-03-02
 
 > **Status note (historical planning doc):** This file contains pre-v1 planning context.  
-> **Current stable clyfar tag:** `v1.0.4`  
+> **Current stable clyfar tag:** see repo-root [`__init__.__version__`](../__init__.py) and matching `v*` git tags.  
 > **Active prioritized TODOs:** see `docs/TODO_PRIORITIZED.md`.
 
 ## Mission Snapshot
