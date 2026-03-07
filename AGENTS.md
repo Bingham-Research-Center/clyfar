@@ -1,5 +1,5 @@
 # Repository Guidelines
-Date updated: 2026-03-05
+Date updated: 2026-03-06
 
 This is the canonical top-level guidance file for contributors and AI coding agents.
 
@@ -34,6 +34,11 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - Canonical runtime versions:
   - Clyfar: repo-root `__init__.__version__`
   - Ffion: `utils/versioning.py` (`FFION_VERSION` + `get_ffion_version()`)
+- Prompt-science versioning is a first-class concern for tech-report reproducibility and reforecasting.
+  - Treat the editable conditioning surface as a separate model artifact from runtime `FFION_VERSION`.
+  - Registry: `templates/llm/science_registry.json`; active manifest resolves the versioned file list for reforecasts.
+  - Current editable surface is: versioned prompt template under `templates/llm/versions/`, versioned bias caveats under `templates/llm/biases/`, and versioned optional operator/Q&A notes under `templates/llm/qa/`.
+  - For subjective X-vs-Y Ffion comparisons, pin and record the exact prompt/bias/QA file list and version separately so a fixed reforecast can be rerun later.
 - Post-generation validation:
   - `scripts/validate_llm_outlook.py` validates banner versions, required alert markers, and Data Logger local file links.
   - `LLM-GENERATE.sh` writes attempt output to temp files and only promotes to canonical `LLM-OUTLOOK-*.md` after validation.
@@ -49,6 +54,9 @@ This is the canonical top-level guidance file for contributors and AI coding age
   - To avoid duplicate API uploads when using `submit_clyfar.sh`, keep `CLYFAR_SKIP_INTERNAL_EXPORT=1` (default in submit script); submit performs the single export/upload pass.
 - History-sensitive reruns:
   - If a missed cycle is backfilled (e.g., 12Z), regenerate the next cycle outlook (e.g., 18Z) with `--force` so previous-outlook comparison uses the repaired sequence.
+- Generated-artifact bloat control:
+  - Use `python scripts/prune_llm_case_artifacts.py --dry-run` to inspect old `llm_text/archive/` and temp attempt files.
+  - Add `--apply` only when you intend to delete old generated artifacts.
 
 ## Coding Standards
 - Follow PEP 8; 4-space indentation; type hints where practical.
