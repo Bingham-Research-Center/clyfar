@@ -19,13 +19,14 @@
 # Purpose: Run Clyfar ozone forecasts on CHPC compute nodes
 #          instead of login nodes to avoid resource constraints
 #
-# Schedule: Run 4× daily at 04:30, 10:30, 16:30, 22:30 UTC
-#           (4.5 hours after GEFS runs at 00Z, 06Z, 12Z, 18Z)
-#           MST equivalents: 21:30, 03:30, 09:30, 15:30
+# Schedule: Run 4x daily at local 03:15, 09:15, 15:15, 21:15
+#           on the CHPC scheduler host (Mountain time; MST/MDT).
+#           These map to GEFS 00Z, 06Z, 12Z, 18Z cycle handling.
+#           Keep local-vs-UTC anchoring explicit when debugging.
 #
 # Usage:
 #   Manual:   sbatch submit_clyfar.sh [YYYYMMDDHH] [--no-retry]
-#   Cron:     30 4,10,16,22 * * * sbatch ~/gits/clyfar/scripts/submit_clyfar.sh
+#   Cron:     15 3,9,15,21 * * * sbatch ~/gits/clyfar/scripts/submit_clyfar.sh
 #
 # Arguments:
 #   $1: Optional forecast initialization time (YYYYMMDDHH)
@@ -38,7 +39,7 @@
 #   - SYNOPTIC_API_TOKEN (if used)
 #
 # Created by: John Lawson & Claude
-# Last updated: 2026-03-02
+# Last updated: 2026-03-07
 #####################################################################
 
 set -euo pipefail  # Exit on error, undefined variables, pipe failures
@@ -361,7 +362,11 @@ EXPORT_EXIT_CODE=$?
 
 if [ $EXPORT_EXIT_CODE -ne 0 ]; then
     echo "WARNING: Export to BasinWx failed with exit code $EXPORT_EXIT_CODE"
+    echo "ALERT_FORECAST_EXPORT_FAILED init=$INIT_TIME exit=$EXPORT_EXIT_CODE"
+    echo "STATUS_FORECAST_EXPORT=FAILED init=$INIT_TIME exit=$EXPORT_EXIT_CODE"
     # Don't exit - forecast data is still saved locally
+else
+    echo "STATUS_FORECAST_EXPORT=SUCCESS init=$INIT_TIME"
 fi
 
 # Generate LLM outlook (optional, non-blocking)
@@ -369,6 +374,7 @@ fi
 echo "================================================================"
 echo "Generating LLM outlook..."
 echo "================================================================"
+echo "STATUS_LLM_STAGE=START init=$INIT_TIME"
 
 LLM_SUCCESS=false
 if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
@@ -425,10 +431,12 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
         2)
             echo "WARNING: LLM output validation failed (meta-response detected)"
             echo "Manual regeneration required: ./LLM-GENERATE.sh $INIT_TIME"
+            echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME exit=$LLM_EXIT reason=validation_failed"
             ;;
         *)
             echo "WARNING: LLM outlook generation failed (exit $LLM_EXIT)"
             echo "You can retry manually: ./LLM-GENERATE.sh $INIT_TIME"
+            echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME exit=$LLM_EXIT reason=generator_failed"
             ;;
     esac
 
@@ -441,34 +449,52 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
                 echo "Validating outlook content integrity..."
                 if ! python3 "$VALIDATOR" "$OUTLOOK_FILE"; then
                     echo "WARNING: Outlook validation failed; skipping upload."
+                    echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=post_generation_validation_failed"
                     LLM_SUCCESS=false
                 fi
             else
                 echo "WARNING: Outlook validator not found at $VALIDATOR"
+                echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=validator_missing"
                 LLM_SUCCESS=false
             fi
         else
             echo "WARNING: LLM outlook file missing after generation: $OUTLOOK_FILE"
+            echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=outlook_missing"
             LLM_SUCCESS=false
         fi
     fi
 
     if [ "$LLM_SUCCESS" = true ]; then
+        echo "STATUS_LLM_STAGE=SUCCESS init=$INIT_TIME"
         # Upload PDF to BasinWx (after LLM generation creates it)
         PDF_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.pdf"
         if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ] && [ -f "$PDF_FILE" ] && [ -n "$DATA_UPLOAD_API_KEY" ]; then
             echo "Uploading LLM outlook PDF to BasinWx..."
-            python3 -c "
+            if python3 -c "
 from export.to_basinwx import upload_pdf_to_basinwx
-if upload_pdf_to_basinwx('$PDF_FILE'):
-    print('PDF uploaded successfully')
-else:
-    print('PDF upload failed')
-"
+raise SystemExit(0 if upload_pdf_to_basinwx('$PDF_FILE') else 1)
+"; then
+                echo "PDF uploaded successfully"
+                echo "STATUS_SUBMIT_LLM_PDF_PUSH=SUCCESS init=$INIT_TIME pdf=$PDF_FILE"
+            else
+                echo "WARNING: submit-stage LLM PDF upload failed"
+                echo "ALERT_SUBMIT_LLM_PDF_PUSH_FAILED init=$INIT_TIME pdf=$PDF_FILE"
+                echo "STATUS_SUBMIT_LLM_PDF_PUSH=FAILED init=$INIT_TIME pdf=$PDF_FILE"
+            fi
+        elif [ "$CLYFAR_ENABLE_UPLOAD" != "1" ]; then
+            echo "STATUS_SUBMIT_LLM_PDF_PUSH=SKIPPED init=$INIT_TIME reason=upload_disabled"
+        elif [ ! -f "$PDF_FILE" ]; then
+            echo "STATUS_SUBMIT_LLM_PDF_PUSH=SKIPPED init=$INIT_TIME reason=pdf_missing"
+        else
+            echo "STATUS_SUBMIT_LLM_PDF_PUSH=SKIPPED init=$INIT_TIME reason=missing_api_key"
         fi
+    else
+        echo "STATUS_LLM_STAGE=FAILED init=$INIT_TIME"
     fi
 else
     echo "WARNING: LLM-GENERATE.sh not found, skipping outlook generation"
+    echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=generator_script_missing"
+    echo "STATUS_LLM_STAGE=FAILED init=$INIT_TIME"
 fi
 
 # Report completion

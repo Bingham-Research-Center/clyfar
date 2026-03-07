@@ -81,6 +81,8 @@ if [[ ! -d "$CASE_DIR" ]]; then
   exit 1
 fi
 
+echo "STATUS_LLM_GENERATION=START init=$NORM_INIT"
+
 # Warn if Q&A context is active
 if [[ -n "$QA_FILE" ]]; then
   echo ""
@@ -112,11 +114,17 @@ if [[ "$RENDER_PROMPT" == "1" ]]; then
     cmd+=(--prompt-template "$PROMPT_TEMPLATE")
   fi
   echo "Rendering prompt via: ${cmd[*]}"
-  "${cmd[@]}"
+  if ! "${cmd[@]}"; then
+    echo "ALERT_LLM_PROMPT_RENDER_FAILED init=$NORM_INIT" >&2
+    echo "STATUS_LLM_GENERATION=FAILED init=$NORM_INIT reason=prompt_render_failed" >&2
+    exit 1
+  fi
 fi
 
 if [[ ! -f "$PROMPT_PATH" ]]; then
   echo "Prompt file not found: $PROMPT_PATH" >&2
+  echo "ALERT_LLM_PROMPT_MISSING init=$NORM_INIT path=$PROMPT_PATH" >&2
+  echo "STATUS_LLM_GENERATION=FAILED init=$NORM_INIT reason=prompt_missing" >&2
   exit 1
 fi
 
@@ -250,6 +258,8 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
       continue
     fi
     echo "All $MAX_RETRIES LLM attempts failed (CLI error)." >&2
+    echo "ALERT_LLM_GENERATION_FAILED init=$NORM_INIT reason=cli_error attempts=$MAX_RETRIES" >&2
+    echo "STATUS_LLM_GENERATION=FAILED init=$NORM_INIT reason=cli_error" >&2
     exit 1
   fi
 
@@ -291,8 +301,12 @@ if [[ "$LLM_SUCCEEDED" == false ]]; then
   echo "All $MAX_RETRIES LLM attempts failed validation." >&2
   echo "Manual retry: ./LLM-GENERATE.sh $INIT" >&2
   echo "========================================" >&2
+  echo "ALERT_LLM_GENERATION_FAILED init=$NORM_INIT reason=validation_failed attempts=$MAX_RETRIES" >&2
+  echo "STATUS_LLM_GENERATION=FAILED init=$NORM_INIT reason=validation_failed" >&2
   exit 2
 fi
+
+echo "STATUS_LLM_GENERATION=SUCCESS init=$NORM_INIT outlook=$OUTPUT_PATH"
 
 # Add texlive to PATH for PDF generation
 # Note: CHPC module system has broken libreadline.so.6 dependency,
@@ -308,25 +322,40 @@ if [[ -f "$OUTPUT_PATH" && -s "$OUTPUT_PATH" ]]; then
   PDF_PATH="${OUTPUT_PATH%.md}.pdf"
   if "$SCRIPT_DIR/scripts/outlook_to_pdf.sh" "$OUTPUT_PATH" "$PDF_PATH"; then
     echo "PDF generated: $PDF_PATH"
+    echo "STATUS_LLM_PDF_GENERATION=SUCCESS init=$NORM_INIT pdf=$PDF_PATH"
     # Upload PDF and markdown to BasinWx API
     if [[ "$SKIP_UPLOAD" == "1" ]]; then
       echo "Skipping outlook upload (LLM_SKIP_UPLOAD=1)"
+      echo "STATUS_LLM_UPLOAD_PDF=SKIPPED init=$NORM_INIT reason=LLM_SKIP_UPLOAD"
+      echo "STATUS_LLM_UPLOAD_MARKDOWN=SKIPPED init=$NORM_INIT reason=LLM_SKIP_UPLOAD"
     elif [[ -n "${DATA_UPLOAD_API_KEY:-}" ]]; then
       if "$PYTHON_BIN" -c "from export.to_basinwx import upload_outlook_to_basinwx; exit(0 if upload_outlook_to_basinwx('$PDF_PATH') else 1)"; then
         echo "PDF uploaded to BasinWx"
+        echo "STATUS_LLM_UPLOAD_PDF=SUCCESS init=$NORM_INIT path=$PDF_PATH"
       else
         echo "Warning: PDF upload failed (non-fatal)" >&2
+        echo "ALERT_LLM_UPLOAD_PDF_FAILED init=$NORM_INIT path=$PDF_PATH" >&2
+        echo "STATUS_LLM_UPLOAD_PDF=FAILED init=$NORM_INIT path=$PDF_PATH" >&2
       fi
       if "$PYTHON_BIN" -c "from export.to_basinwx import upload_outlook_to_basinwx; exit(0 if upload_outlook_to_basinwx('$OUTPUT_PATH') else 1)"; then
         echo "Markdown uploaded to BasinWx"
+        echo "STATUS_LLM_UPLOAD_MARKDOWN=SUCCESS init=$NORM_INIT path=$OUTPUT_PATH"
       else
         echo "Warning: Markdown upload failed (non-fatal)" >&2
+        echo "ALERT_LLM_UPLOAD_MARKDOWN_FAILED init=$NORM_INIT path=$OUTPUT_PATH" >&2
+        echo "STATUS_LLM_UPLOAD_MARKDOWN=FAILED init=$NORM_INIT path=$OUTPUT_PATH" >&2
       fi
     else
       echo "Skipping outlook upload (DATA_UPLOAD_API_KEY not set)"
+      echo "STATUS_LLM_UPLOAD_PDF=SKIPPED init=$NORM_INIT reason=missing_api_key"
+      echo "STATUS_LLM_UPLOAD_MARKDOWN=SKIPPED init=$NORM_INIT reason=missing_api_key"
     fi
   else
     echo "Warning: PDF generation failed (non-fatal)" >&2
+    echo "ALERT_LLM_PDF_GENERATION_FAILED init=$NORM_INIT pdf=$PDF_PATH" >&2
+    echo "STATUS_LLM_PDF_GENERATION=FAILED init=$NORM_INIT pdf=$PDF_PATH" >&2
+    echo "STATUS_LLM_UPLOAD_PDF=SKIPPED init=$NORM_INIT reason=pdf_generation_failed" >&2
+    echo "STATUS_LLM_UPLOAD_MARKDOWN=SKIPPED init=$NORM_INIT reason=pdf_generation_failed" >&2
   fi
 fi
 

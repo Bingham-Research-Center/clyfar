@@ -1,5 +1,5 @@
 # Repository Guidelines
-Date updated: 2026-03-06
+Date updated: 2026-03-07
 
 This is the canonical top-level guidance file for contributors and AI coding agents.
 
@@ -31,6 +31,12 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - Use `--check` for prerequisite checks.
 - Default is upload-safe (`LLM_SKIP_UPLOAD=1`); opt in intentionally for upload.
 - For interactive upload runs, first `source ~/.bashrc_basinwx` (or export `DATA_UPLOAD_API_KEY` and `BASINWX_API_URL`) before `--upload`; otherwise uploads may fail with HTTP 401 due to wrong/missing API key in the shell context.
+- If upload auth looks wrong, reload the BasinWx env explicitly instead of trusting the inherited shell:
+  - `unset DATA_UPLOAD_API_KEY BASINWX_API_URL; source ~/.bashrc_basinwx`
+- Cold-start triage / rerun pattern:
+  - Direct Ffion rerun with uploads: `unset DATA_UPLOAD_API_KEY BASINWX_API_URL; source ~/.bashrc_basinwx; ./scripts/run_llm_outlook.sh YYYYMMDDHH --force --upload`
+  - Full cron-parity replay to Slurm: `unset DATA_UPLOAD_API_KEY BASINWX_API_URL; source ~/.bashrc_basinwx; sbatch scripts/submit_clyfar.sh YYYYMMDDHH`
+  - Remember that `LLM-GENERATE.sh` auto-sources `~/.bashrc_basinwx` only when API vars are absent; it will not correct a stale but already-set wrong key.
 - Canonical runtime versions:
   - Clyfar: repo-root `__init__.__version__`
   - Ffion: `utils/versioning.py` (`FFION_VERSION` + `get_ffion_version()`)
@@ -68,6 +74,8 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - Prefer fast deterministic validation:
   - Smoke run with `--testing` and reduced members/CPUs.
   - Focused unit tests for changed logic.
+- Concise operational/Ffion regression test:
+  - `env PYTHONPATH=. pytest -q tests/test_ffion_bundle.py tests/test_llm_log_markers.py tests/test_validate_llm_outlook.py`
 - Before committing major changes, run:
   - `python run_gefs_clyfar.py -i 2025010100 -n 2 -m 2 -t`
 
@@ -81,13 +89,31 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - Guard entry points with `if __name__ == "__main__":`.
 - External download behavior lives in `nwp/`; treat cache/locking edits carefully.
 - Production uploads are enabled when credentials are present; unset `DATA_UPLOAD_API_KEY` or use testing mode to avoid accidental uploads.
+- CHPC/Slurm scheduler time is local Mountain time (MST/MDT). BasinWx-facing artifacts, GEFS cycle names, most product timestamps, and many remote services are UTC. Keep both clocks visible during incident work.
 - Keep `scripts/submit_clyfar.sh` init auto-selection anchored to Slurm `SubmitTime` (not runtime `utcnow()` alone) so queue delays cannot skip expected 6-hour GEFS cycles.
 - Slurm `SubmitTime` from `scontrol show job` is scheduler-local wall time (MST/MDT) without timezone suffix. Convert local time to epoch first, then derive UTC anchor; do not parse it as UTC directly.
 - Expected post-fix cadence in this environment is submit at local `03:15`, `09:15`, `15:15`, `21:15` mapping to GEFS `00Z`, `06Z`, `12Z`, `18Z` respectively (DST can shift local clock labels; verify with `sacct` when unsure). Historical logs from before this fix may show wrong init mapping.
+- Common environment gotchas:
+  - Use `env PYTHONPATH=. pytest ...` for repo tests; bare `pytest` can fail on imports.
+  - Slurm jobs need `~/.local/bin` in `PATH` for `claude`.
+  - PDF generation on CHPC depends on direct texlive path injection; do not assume the module system is usable.
+- Log-reading pattern:
+  - `.out` is the orchestration/status stream.
+  - `.err` often contains the actual Python traceback or library warnings.
+  - A run can be `COMPLETED` in Slurm while the LLM stage still failed non-fatally; check the LLM markers explicitly.
 - Fast incident triage (token/time saver):
   - Confirm run init quickly: `rg -n "Running Clyfar forecast for init time" ~/logs/basinwx/clyfar_<jobid>.out`
-  - Confirm upload stages: `rg -n "Successfully exported|Exporting PNG figures|PDF uploaded|Markdown uploaded|VALIDATION PASSED" ~/logs/basinwx/clyfar_<jobid>.out`
+  - Confirm export + LLM stages: `rg -n "STATUS_FORECAST_EXPORT|STATUS_LLM_STAGE|STATUS_LLM_GENERATION|STATUS_LLM_UPLOAD_|STATUS_SUBMIT_LLM_PDF_PUSH|ALERT_" ~/logs/basinwx/clyfar_<jobid>.out ~/logs/basinwx/clyfar_<jobid>.err`
+  - Confirm upload stages: `rg -n "Successfully exported|Generating LLM outlook|VALIDATION PASSED|PDF uploaded successfully|Markdown uploaded to BasinWx" ~/logs/basinwx/clyfar_<jobid>.out`
   - Confirm cycle artifacts exist: `ls ~/basinwx-data/clyfar/basinwx_export/*YYYYMMDD_HH00Z* | wc -l`
+  - Confirm scheduler outcome separately: `sacct -j <jobid> --format=JobID,JobName,Elapsed,State,ExitCode`
+
+## Future Ops Priorities
+- When operations pause toward end of March, prioritize moving the operational install away from a mutable repo checkout:
+  - install/package Clyfar as an operational versioned deployment
+  - keep hot-path runtime data off home and out of the repo; prefer scratch for speed, then archive/promote to durable storage intentionally
+- Put editing on a separate worktree-style path so `main` or an operational checkout is not modified during live runs.
+- The packaging/install solution and the worktree solution may be combined; the key requirement is that live ops run from a pinned, non-edited tree.
 
 ## External Repositories
 - Technical report: `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
