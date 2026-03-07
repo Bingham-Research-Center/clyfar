@@ -1,0 +1,9 @@
+{
+  "ffion_version": "1.1.2",
+  "label": "Ffion 1.1.2 historical bundle",
+  "prompt_template": "../versions/ffion_prompt_v1.1.2.md",
+  "bias_file": "../biases/ffion_biases_v1.1.2.json",
+  "qa_file": "../qa/ffion_qa_v1.1.2.md",
+  "qa_enabled_by_default": false,
+  "notes": "Historical Ffion 1.1.2 prompt bundle from the prior separate prompt-science packaging."
+}

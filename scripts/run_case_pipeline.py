@@ -138,12 +138,12 @@ def main() -> None:
         help="Optional path to a Q&A markdown file to include in the LLM prompt.",
     )
     parser.add_argument(
-        "--science-version",
-        help="Optional versioned Ffion prompt-science bundle to use.",
+        "--ffion-version",
+        help="Optional Ffion version to use for the versioned outlook bundle.",
     )
     parser.add_argument(
-        "--science-manifest",
-        help="Optional explicit Ffion prompt-science manifest path to use.",
+        "--ffion-manifest",
+        help="Optional explicit Ffion manifest path to use.",
     )
     args = parser.parse_args()
 
@@ -196,10 +196,10 @@ def main() -> None:
     llm_cmd = [sys.executable, str(REPO_ROOT / "scripts" / "demo_llm_forecast_template.py"), args.init]
     if args.qa_file:
         llm_cmd.extend(["--qa-file", args.qa_file])
-    if args.science_version:
-        llm_cmd.extend(["--science-version", args.science_version])
-    if args.science_manifest:
-        llm_cmd.extend(["--science-manifest", args.science_manifest])
+    if args.ffion_version:
+        llm_cmd.extend(["--ffion-version", args.ffion_version])
+    if args.ffion_manifest:
+        llm_cmd.extend(["--ffion-manifest", args.ffion_manifest])
     print("Running:", " ".join(llm_cmd))
     subprocess.run(llm_cmd, check=True, env=env, cwd=str(REPO_ROOT))
 

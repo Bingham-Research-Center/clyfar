@@ -7,7 +7,7 @@ TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "llm" / "pro
 def test_prompt_body_uses_runtime_ffion_placeholder():
     text = TEMPLATE_PATH.read_text(encoding="utf-8")
     assert "Ffion v{{FFION_VERSION}}" in text
-    assert "Ffion Science v{{FFION_SCIENCE_VERSION}}" in text
+    assert "Ffion Science" not in text
 
 
 def test_prompt_body_uses_uinta_geographic_term():

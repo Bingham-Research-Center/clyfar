@@ -22,8 +22,7 @@ INIT="$1"  # e.g. 2025121200
 BASE_URL="${BASINWX_API_URL:-https://basinwx.com}"
 HISTORY="${LLM_HISTORY:-5}"
 QA_FILE="${LLM_QA_FILE:-}"
-SCIENCE_VERSION="${LLM_SCIENCE_VERSION:-${FFION_SCIENCE_VERSION:-}}"
-SCIENCE_MANIFEST="${LLM_SCIENCE_MANIFEST:-${FFION_SCIENCE_MANIFEST:-}}"
+FFION_MANIFEST="${FFION_MANIFEST:-${LLM_FFION_MANIFEST:-}}"
 
 # Resolve repo root relative to this script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,11 +39,11 @@ echo "History:  $HISTORY"
 if [[ -n "$QA_FILE" ]]; then
   echo "QA File: $QA_FILE"
 fi
-if [[ -n "$SCIENCE_VERSION" ]]; then
-  echo "Science version: $SCIENCE_VERSION"
+if [[ -n "${FFION_VERSION:-}" ]]; then
+  echo "Ffion version: ${FFION_VERSION}"
 fi
-if [[ -n "$SCIENCE_MANIFEST" ]]; then
-  echo "Science manifest: $SCIENCE_MANIFEST"
+if [[ -n "$FFION_MANIFEST" ]]; then
+  echo "Ffion manifest: $FFION_MANIFEST"
 fi
 echo
 
@@ -52,11 +51,11 @@ cmd=(python scripts/run_case_pipeline.py --init "$INIT" --history "$HISTORY" --f
 if [[ -n "$QA_FILE" ]]; then
   cmd+=(--qa-file "$QA_FILE")
 fi
-if [[ -n "$SCIENCE_VERSION" ]]; then
-  cmd+=(--science-version "$SCIENCE_VERSION")
+if [[ -n "${FFION_VERSION:-}" ]]; then
+  cmd+=(--ffion-version "${FFION_VERSION}")
 fi
-if [[ -n "$SCIENCE_MANIFEST" ]]; then
-  cmd+=(--science-manifest "$SCIENCE_MANIFEST")
+if [[ -n "$FFION_MANIFEST" ]]; then
+  cmd+=(--ffion-manifest "$FFION_MANIFEST")
 fi
 "${cmd[@]}"
 

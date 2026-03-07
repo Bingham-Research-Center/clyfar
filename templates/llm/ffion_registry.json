@@ -1,0 +1,12 @@
+{
+  "versions": {
+    "1.1.2": {
+      "manifest": "templates/llm/ffion/ffion_v1.1.2.json",
+      "notes": "Historical Ffion 1.1.2 bundle before collapsing the separate science-version axis."
+    },
+    "1.1.3": {
+      "manifest": "templates/llm/ffion/ffion_v1.1.3.json",
+      "notes": "Ffion bundle keyed directly to FFION_VERSION; no separate science-version axis."
+    }
+  }
+}

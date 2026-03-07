@@ -50,8 +50,8 @@ Options:
   --force                 Regenerate even if outlook markdown already exists
   --with-qa               Enable Q&A context via scripts/set_llm_qa.sh
   --qa-file PATH          Explicit QA/operator-notes file to use
-  --science-version V     Versioned Ffion prompt-science bundle to use
-  --science-manifest P    Explicit Ffion prompt-science manifest path to use
+  --ffion-version V       Ffion version to use
+  --ffion-manifest P      Explicit Ffion manifest path to use
   --history N             Number of previous inits to sync (default: 5)
   --retries N             LLM_MAX_RETRIES value (default: 3; cron parity)
   --upload                Enable outlook upload (default: disabled for testing)
@@ -139,8 +139,8 @@ process_init() {
     local force="$3"
     local with_qa="$4"
     local qa_file_override="$5"
-    local science_version="$6"
-    local science_manifest="$7"
+    local ffion_version="$6"
+    local ffion_manifest="$7"
     local history="$8"
     local retries="$9"
     local upload_enabled="${10}"
@@ -187,11 +187,11 @@ process_init() {
     export PATH="$HOME/.local/bin:$PATH"
     add_texlive_to_path
     export LLM_MAX_RETRIES="$retries"
-    if [[ -n "$science_version" ]]; then
-        export LLM_SCIENCE_VERSION="$science_version"
+    if [[ -n "$ffion_version" ]]; then
+        export FFION_VERSION="$ffion_version"
     fi
-    if [[ -n "$science_manifest" ]]; then
-        export LLM_SCIENCE_MANIFEST="$science_manifest"
+    if [[ -n "$ffion_manifest" ]]; then
+        export FFION_MANIFEST="$ffion_manifest"
     fi
 
     if [[ "$upload_enabled" == "true" ]]; then
@@ -204,10 +204,10 @@ process_init() {
         echo "Enabling Q&A context via scripts/set_llm_qa.sh"
         if [[ -n "$qa_file_override" ]]; then
             source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --qa-file "$qa_file_override" 2>/dev/null || true
-        elif [[ -n "$science_manifest" ]]; then
-            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --science-manifest "$science_manifest" 2>/dev/null || true
-        elif [[ -n "$science_version" ]]; then
-            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --science-version "$science_version" 2>/dev/null || true
+        elif [[ -n "$ffion_manifest" ]]; then
+            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --ffion-manifest "$ffion_manifest" 2>/dev/null || true
+        elif [[ -n "$ffion_version" ]]; then
+            source "$CLYFAR_DIR/scripts/set_llm_qa.sh" --ffion-version "$ffion_version" 2>/dev/null || true
         else
             source "$CLYFAR_DIR/scripts/set_llm_qa.sh" 2>/dev/null || true
         fi
@@ -244,8 +244,8 @@ main() {
     local force=false
     local with_qa=false
     local qa_file_override=""
-    local science_version="${LLM_SCIENCE_VERSION:-${FFION_SCIENCE_VERSION:-}}"
-    local science_manifest="${LLM_SCIENCE_MANIFEST:-${FFION_SCIENCE_MANIFEST:-}}"
+    local ffion_version="${FFION_VERSION:-}"
+    local ffion_manifest="${FFION_MANIFEST:-${LLM_FFION_MANIFEST:-}}"
     local history=5
     local retries=3
     local upload_enabled=false
@@ -269,12 +269,12 @@ main() {
                 qa_file_override="$2"
                 shift 2
                 ;;
-            --science-version)
-                science_version="$2"
+            --ffion-version)
+                ffion_version="$2"
                 shift 2
                 ;;
-            --science-manifest)
-                science_manifest="$2"
+            --ffion-manifest)
+                ffion_manifest="$2"
                 shift 2
                 ;;
             --history)
@@ -357,11 +357,11 @@ main() {
     echo "Force regenerate: $force"
     echo "Check only: $check_only"
     echo "Keep CLI overrides: $keep_cli_overrides"
-    if [[ -n "$science_version" ]]; then
-        echo "Science version: $science_version"
+    if [[ -n "$ffion_version" ]]; then
+        echo "Ffion version: $ffion_version"
     fi
-    if [[ -n "$science_manifest" ]]; then
-        echo "Science manifest: $science_manifest"
+    if [[ -n "$ffion_manifest" ]]; then
+        echo "Ffion manifest: $ffion_manifest"
     fi
     if [[ -n "$qa_file_override" ]]; then
         echo "QA file override: $qa_file_override"
@@ -371,7 +371,7 @@ main() {
     local ok=0
     local fail=0
     for init in "${inits[@]}"; do
-        if process_init "$init" "$check_only" "$force" "$with_qa" "$qa_file_override" "$science_version" "$science_manifest" "$history" "$retries" "$upload_enabled" "$keep_cli_overrides"; then
+        if process_init "$init" "$check_only" "$force" "$with_qa" "$qa_file_override" "$ffion_version" "$ffion_manifest" "$history" "$retries" "$upload_enabled" "$keep_cli_overrides"; then
             ok=$((ok + 1))
         else
             fail=$((fail + 1))

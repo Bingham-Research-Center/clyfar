@@ -185,12 +185,12 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument("outlook_file", type=Path, help="Path to LLM-OUTLOOK-*.md")
     parser.add_argument(
         "--expected-clyfar",
-        default=get_clyfar_version(default="1.0.4"),
+        default=get_clyfar_version(default="1.0.5"),
         help="Expected Clyfar version (default: runtime resolver)",
     )
     parser.add_argument(
         "--expected-ffion",
-        default=get_ffion_version(default="1.1.2"),
+        default=get_ffion_version(default="1.1.3"),
         help="Expected Ffion version (default: runtime resolver)",
     )
     return parser.parse_args(list(argv) if argv is not None else None)

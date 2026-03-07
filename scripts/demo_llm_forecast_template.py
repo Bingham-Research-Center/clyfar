@@ -37,13 +37,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.extract_outlook_summary import extract_outlook_summary
-from utils.ffion_science import resolve_ffion_science_bundle
+from utils.ffion_bundle import resolve_ffion_bundle, sha256_file
 from utils.versioning import get_clyfar_version, get_ffion_version
 
 DEFAULT_PROMPT_TEMPLATE = REPO_ROOT / "templates" / "llm" / "prompt_body.md"
 DEFAULT_BIAS_FILE = REPO_ROOT / "templates" / "llm" / "short_term_biases.json"
-CLYFAR_VERSION = get_clyfar_version(default="1.0.4")
-FFION_VERSION = get_ffion_version(default="1.1.2")
+DEFAULT_CLYFAR_VERSION = "1.0.5"
+DEFAULT_FFION_VERSION = "1.1.3"
 
 # Previous outlook configuration
 MAX_PREVIOUS_OUTLOOKS = 2
@@ -100,34 +100,48 @@ def render_prompt_template(path: Path, replacements: Dict[str, str]) -> str:
     return text.rstrip()
 
 
-def format_science_bundle_lines(science_bundle, qa_path: Optional[Path]) -> List[str]:
-    """Return prompt metadata lines for the resolved prompt-science bundle."""
+def format_ffion_bundle_lines(
+    ffion_bundle,
+    *,
+    prompt_template_path: Path,
+    bias_path: Optional[Path],
+    qa_path: Optional[Path],
+) -> List[str]:
+    """Return prompt metadata lines for the resolved Ffion bundle."""
     lines: List[str] = []
-    lines.append("## Ffion Science Bundle")
+    lines.append("## Ffion Bundle")
     lines.append("")
-    lines.append("> Versioned editable science surface used for this render and future reforecasting.")
-    lines.append(f"- Science version: `{science_bundle.science_version}`")
-    lines.append(f"- Label: `{science_bundle.label}`")
-    lines.append(f"- Manifest: `{science_bundle.manifest_path}`")
-    lines.append(f"- Prompt template: `{science_bundle.prompt_template}`")
-    lines.append(f"- Prompt sha256: `{science_bundle.prompt_sha256}`")
-    if science_bundle.bias_file:
-        lines.append(f"- Bias file: `{science_bundle.bias_file}`")
-        lines.append(f"- Bias sha256: `{science_bundle.bias_sha256}`")
+    lines.append("> Versioned editable Ffion file set used for this render and future reforecasting.")
+    lines.append(f"- Ffion version: `{ffion_bundle.ffion_version}`")
+    lines.append(f"- Label: `{ffion_bundle.label}`")
+    lines.append(f"- Manifest: `{ffion_bundle.manifest_path}`")
+    lines.append(f"- Bundle prompt template: `{ffion_bundle.prompt_template}`")
+    lines.append(f"- Bundle prompt sha256: `{ffion_bundle.prompt_sha256}`")
+    if prompt_template_path.exists():
+        lines.append(f"- Prompt template in use: `{prompt_template_path}`")
+        lines.append(f"- Prompt sha256 in use: `{sha256_file(prompt_template_path)}`")
+    if ffion_bundle.bias_file:
+        lines.append(f"- Bundle bias file: `{ffion_bundle.bias_file}`")
+        lines.append(f"- Bundle bias sha256: `{ffion_bundle.bias_sha256}`")
     else:
-        lines.append("- Bias file: (none)")
+        lines.append("- Bundle bias file: (none)")
+    if bias_path and bias_path.exists():
+        lines.append(f"- Bias file in use: `{bias_path}`")
+        lines.append(f"- Bias sha256 in use: `{sha256_file(bias_path)}`")
+    elif bias_path is None:
+        lines.append("- Bias file in use: (none)")
     if qa_path:
         lines.append(f"- QA file in use: `{qa_path}`")
     else:
         lines.append("- QA file in use: (none)")
-    if science_bundle.qa_file:
-        lines.append(f"- Bundle QA source: `{science_bundle.qa_file}`")
-        lines.append(f"- Bundle QA sha256: `{science_bundle.qa_sha256}`")
-        lines.append(f"- QA enabled by default: `{science_bundle.qa_enabled_by_default}`")
+    if ffion_bundle.qa_file:
+        lines.append(f"- Bundle QA source: `{ffion_bundle.qa_file}`")
+        lines.append(f"- Bundle QA sha256: `{ffion_bundle.qa_sha256}`")
+        lines.append(f"- QA enabled by default: `{ffion_bundle.qa_enabled_by_default}`")
     else:
         lines.append("- Bundle QA source: (none)")
-    if science_bundle.notes:
-        lines.append(f"- Notes: {science_bundle.notes}")
+    if ffion_bundle.notes:
+        lines.append(f"- Notes: {ffion_bundle.notes}")
     lines.append("")
     return lines
 
@@ -319,25 +333,25 @@ def main() -> None:
         "--bias-file",
         type=str,
         default=None,
-        help="Path to short-term bias JSON used for relevance-gated caution notes (overrides science bundle).",
+        help="Path to short-term bias JSON used for relevance-gated caution notes (overrides Ffion bundle).",
     )
     parser.add_argument(
         "--prompt-template",
         type=str,
         default=None,
-        help="Path to the markdown template used for the prompt body (overrides science bundle).",
+        help="Path to the markdown template used for the prompt body (overrides Ffion bundle).",
     )
     parser.add_argument(
-        "--science-version",
+        "--ffion-version",
         type=str,
-        default=os.environ.get("LLM_SCIENCE_VERSION") or os.environ.get("FFION_SCIENCE_VERSION"),
-        help="Version of the versioned prompt-science bundle to use.",
+        default=None,
+        help="Ffion version to use when resolving the versioned outlook bundle.",
     )
     parser.add_argument(
-        "--science-manifest",
+        "--ffion-manifest",
         type=str,
-        default=os.environ.get("LLM_SCIENCE_MANIFEST") or os.environ.get("FFION_SCIENCE_MANIFEST"),
-        help="Explicit prompt-science manifest path to use.",
+        default=os.environ.get("FFION_MANIFEST") or os.environ.get("LLM_FFION_MANIFEST"),
+        help="Explicit Ffion manifest path to use.",
     )
     args = parser.parse_args()
 
@@ -345,10 +359,15 @@ def main() -> None:
     if not data_root.exists():
         raise SystemExit(f"Data directory not found: {data_root}")
 
-    science_bundle = resolve_ffion_science_bundle(
-        science_version=args.science_version,
-        manifest_path=args.science_manifest,
+    clyfar_version = get_clyfar_version(default=DEFAULT_CLYFAR_VERSION)
+    requested_ffion_version = args.ffion_version
+    if requested_ffion_version is None and args.ffion_manifest is None:
+        requested_ffion_version = get_ffion_version(default=DEFAULT_FFION_VERSION)
+    ffion_bundle = resolve_ffion_bundle(
+        ffion_version=requested_ffion_version,
+        manifest_path=args.ffion_manifest,
     )
+    ffion_version = ffion_bundle.ffion_version
 
     norm_init = parse_init(args.init)
     case_root = case_root_for_init(data_root, norm_init)
@@ -375,7 +394,7 @@ def main() -> None:
     prompt_template_value = (
         args.prompt_template
         or os.environ.get("LLM_PROMPT_TEMPLATE")
-        or str(science_bundle.prompt_template)
+        or str(ffion_bundle.prompt_template)
         or str(DEFAULT_PROMPT_TEMPLATE)
     )
     prompt_template_path = Path(prompt_template_value).expanduser()
@@ -383,14 +402,14 @@ def main() -> None:
     bias_value = (
         args.bias_file
         or os.environ.get("LLM_BIAS_FILE")
-        or (str(science_bundle.bias_file) if science_bundle.bias_file else None)
+        or (str(ffion_bundle.bias_file) if ffion_bundle.bias_file else None)
         or str(DEFAULT_BIAS_FILE)
     )
     bias_path = Path(bias_value).expanduser() if bias_value else None
 
     qa_value = args.qa_file or os.environ.get("LLM_QA_FILE")
-    if not qa_value and science_bundle.qa_enabled_by_default and science_bundle.qa_file:
-        qa_value = str(science_bundle.qa_file)
+    if not qa_value and ffion_bundle.qa_enabled_by_default and ffion_bundle.qa_file:
+        qa_value = str(ffion_bundle.qa_file)
 
     qa_path: Optional[Path] = None
     qa_text = None
@@ -442,10 +461,9 @@ def main() -> None:
     lines.append("")
     lines.append(f"- Init time: `{norm_init}`")
     lines.append(f"- Case root: `{case_root}`")
-    lines.append(f"- Clyfar version: `{CLYFAR_VERSION}`")
-    lines.append(f"- Ffion version: `{FFION_VERSION}`")
-    lines.append(f"- Ffion science version: `{science_bundle.science_version}`")
-    lines.append(f"- Ffion science manifest: `{science_bundle.manifest_path}`")
+    lines.append(f"- Clyfar version: `{clyfar_version}`")
+    lines.append(f"- Ffion version: `{ffion_version}`")
+    lines.append(f"- Ffion manifest: `{ffion_bundle.manifest_path}`")
 
     # List JSON files (Claude reads them via file access, no embedding)
     for name, path in json_subdirs.items():
@@ -508,7 +526,14 @@ def main() -> None:
         for failed_path in previous_parse_failures:
             lines.append(f"- Previous outlook parse failed: `{failed_path}`")
 
-    lines.extend(format_science_bundle_lines(science_bundle, qa_path))
+    lines.extend(
+        format_ffion_bundle_lines(
+            ffion_bundle,
+            prompt_template_path=prompt_template_path,
+            bias_path=bias_path,
+            qa_path=qa_path,
+        )
+    )
 
     if bias_entries:
         lines.append("")
@@ -614,10 +639,10 @@ def main() -> None:
         "INIT": norm_init,
         "CASE_ROOT": str(case_root),
         "RECENT_CASE_COUNT": str(len(recent_cases)),
-        "CLYFAR_VERSION": CLYFAR_VERSION,
-        "FFION_VERSION": FFION_VERSION,
-        "FFION_SCIENCE_VERSION": science_bundle.science_version,
-        "FFION_SCIENCE_LABEL": science_bundle.label,
+        "CLYFAR_VERSION": clyfar_version,
+        "FFION_VERSION": ffion_version,
+        "FFION_SCIENCE_VERSION": ffion_bundle.ffion_version,
+        "FFION_SCIENCE_LABEL": ffion_bundle.label,
     }
     lines.append("")
     lines.append(render_prompt_template(prompt_template_path, replacements))

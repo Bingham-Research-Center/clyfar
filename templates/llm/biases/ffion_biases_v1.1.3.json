@@ -1,0 +1,18 @@
+[
+  {
+    "bias_id": "solar_memory_high_bias",
+    "summary": "Clyfar can overweight short-term solar forcing because memory effects are limited, which can inflate elevated/extreme possibilities in the near term.",
+    "lead_day_start": 1,
+    "lead_day_end": 5,
+    "min_non_null_fraction": 0.10,
+    "confidence_impact": "When this bias materially affects interpretation, lower confidence by one tier (for example HIGH to MEDIUM)."
+  },
+  {
+    "bias_id": "early_cycle_data_quality",
+    "summary": "If early-cycle weather inputs show noisy snow or wind behavior, treat day 1-3 high-ozone signals as tentative until the next run confirms persistence.",
+    "lead_day_start": 1,
+    "lead_day_end": 3,
+    "min_max_non_null_high": 0.25,
+    "confidence_impact": "Prefer cautious language in day 1-3 sections when this note is active."
+  }
+]
