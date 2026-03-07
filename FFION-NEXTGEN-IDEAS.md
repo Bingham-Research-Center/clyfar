@@ -203,31 +203,34 @@
 
 ## Pipeline State After This Refactor
 
-- Prompt-science now has a separate registry from runtime `FFION_VERSION`.
-- Registry path: `templates/llm/science_registry.json`
-- Active bundle manifest: `templates/llm/science/ffion_science_v1.0.0.json`
-- Versioned prompt source: `templates/llm/versions/ffion_prompt_v1.0.0.md`
-- Versioned bias caveats: `templates/llm/biases/ffion_biases_v1.0.0.json`
-- Versioned optional QA notes: `templates/llm/qa/ffion_qa_v1.0.0.md`
-- Python resolver: `utils/ffion_science.py`
-- CLI resolver: `scripts/resolve_ffion_science.py`
+- The repo now intentionally uses only two version systems: `Clyfar` and `Ffion`.
+- Ffion bundle registry path: `templates/llm/ffion_registry.json`
+- Historical Ffion manifest: `templates/llm/ffion/ffion_v1.1.2.json`
+- Active Ffion manifest: `templates/llm/ffion/ffion_v1.1.3.json`
+- Historical prompt source: `templates/llm/versions/ffion_prompt_v1.1.2.md`
+- Active prompt source: `templates/llm/versions/ffion_prompt_v1.1.3.md`
+- Historical bias caveats: `templates/llm/biases/ffion_biases_v1.1.2.json`
+- Active bias caveats: `templates/llm/biases/ffion_biases_v1.1.3.json`
+- Historical optional QA notes: `templates/llm/qa/ffion_qa_v1.1.2.md`
+- Active optional QA notes: `templates/llm/qa/ffion_qa_v1.1.3.md`
+- Python resolver: `utils/ffion_bundle.py`
+- CLI resolver: `scripts/resolve_ffion_bundle.py`
 - QA helper no longer stores editable science inline.
-- `scripts/set_llm_qa.sh` now resolves a versioned QA file from the science bundle or accepts an explicit `--qa-file`.
+- `scripts/set_llm_qa.sh` now resolves a versioned QA file from the selected Ffion bundle or accepts an explicit `--qa-file`.
 - Reforecast selectors now exist in the pipeline.
-- The renderer accepts `--science-version` and `--science-manifest`.
-- `LLM-GENERATE.sh`, `scripts/run_llm_outlook.sh`, `scripts/run_case_pipeline.py`, `LOCAL-LLM-PROD.sh`, and `CHPC-LLM-PROD.sh` now pass that science selection through.
-- This keeps runtime `FFION_VERSION` unchanged.
-- That is the right choice.
-- These are prompt-science changes, not a Ffion runtime-version bump.
+- The renderer accepts `--ffion-version` and `--ffion-manifest`.
+- `LLM-GENERATE.sh`, `scripts/run_llm_outlook.sh`, `scripts/run_case_pipeline.py`, `LOCAL-LLM-PROD.sh`, and `CHPC-LLM-PROD.sh` now pass that Ffion selection through.
+- Old `ffion_science` names remain only as compatibility shims, not as a third version axis.
+- `templates/llm/prompt_body.md` is the active prompt copy for the current Ffion version.
 
-### What Changed To Make Science Versionable
+### What Changed To Make Ffion Reforecastable
 
 - The editable science surface is now explicitly file-based and nameable.
-- A reforecast can pin a science version without pinning a new runtime Ffion version.
+- A reforecast can pin a Ffion version directly.
 - The old shell-script QA text is now a versioned markdown file.
-- The prompt renderer now records science bundle metadata in the rendered `forecast_prompt_*.md`.
-- The prompt body now carries `Ffion Science v...` metadata into the generated outlook header.
-- This gives a cleaner subjectivity trail for a tech report or side-by-side write-up.
+- The prompt renderer now records the active Ffion manifest and file hashes in the rendered `forecast_prompt_*.md`.
+- The final outlook header only needs the Ffion version banner, not a separate prompt-science banner.
+- This is simpler for a tech report and cleaner for side-by-side Ffion X-vs-Y write-ups.
 
 ### Bloat Control Added
 
@@ -238,20 +241,18 @@
 
 ## Best Prompt Versioning Model
 
-- Keep `FFION_VERSION` for runtime/workflow identity.
-- Add `FFION_PROMPT_VERSION` for prompt semantics.
+- Keep exactly two version systems: `CLYFAR_VERSION` and `FFION_VERSION`.
+- Let each `FFION_VERSION` resolve one manifest entry in `templates/llm/ffion_registry.json`.
 - Store immutable prompt source files under a versioned directory.
-- Example path: `templates/llm/versions/ffion_prompt_v1.2.0.md`
-- Keep `templates/llm/prompt_body.md` as an active pointer or small wrapper, not the only canonical source.
-- Add a prompt registry file.
-- Example: `templates/llm/prompt_registry.json`
-- Registry fields should include: prompt version, file path, sha256, status, effective date, owner, notes.
-- Stamp prompt version and prompt hash into:
+- Example path: `templates/llm/versions/ffion_prompt_v1.1.3.md`
+- Keep `templates/llm/prompt_body.md` as the active copy of the current Ffion prompt.
+- Manifest fields should include: Ffion version, prompt path, bias path, QA path, hashes, status, notes.
+- Stamp manifest path and file hashes into:
 - `forecast_prompt_<INIT>.md`
-- `LLM-OUTLOOK-<INIT>.md`
-- validation output
-- Add a short prompt changelog file.
-- Example: `docs/ffion_prompt_changelog.md`
+- Optionally `LLM-OUTLOOK-<INIT>.md` if the banner ever needs more provenance later
+- validation output if stricter bundle checks are added
+- Add a short Ffion changelog or release note file.
+- Example: `docs/ffion_changelog.md`
 - Do not version generated prompts or generated outlook archives in git.
 - Do version the prompt source, registry, tests, and changelog.
 

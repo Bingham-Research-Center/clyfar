@@ -34,11 +34,10 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - Canonical runtime versions:
   - Clyfar: repo-root `__init__.__version__`
   - Ffion: `utils/versioning.py` (`FFION_VERSION` + `get_ffion_version()`)
-- Prompt-science versioning is a first-class concern for tech-report reproducibility and reforecasting.
-  - Treat the editable conditioning surface as a separate model artifact from runtime `FFION_VERSION`.
-  - Registry: `templates/llm/science_registry.json`; active manifest resolves the versioned file list for reforecasts.
-  - Current editable surface is: versioned prompt template under `templates/llm/versions/`, versioned bias caveats under `templates/llm/biases/`, and versioned optional operator/Q&A notes under `templates/llm/qa/`.
-  - For subjective X-vs-Y Ffion comparisons, pin and record the exact prompt/bias/QA file list and version separately so a fixed reforecast can be rerun later.
+- Ffion versioning is a first-class concern for tech-report reproducibility and reforecasting.
+  - Keep only two version axes: repo-wide Clyfar and Ffion.
+  - Each `FFION_VERSION` resolves a versioned prompt/bias/QA file list via `templates/llm/ffion_registry.json`.
+  - Record the exact manifest and file hashes in rendered prompts so fixed reforecasts and X-vs-Y Ffion comparisons can be rerun later.
 - Post-generation validation:
   - `scripts/validate_llm_outlook.py` validates banner versions, required alert markers, and Data Logger local file links.
   - `LLM-GENERATE.sh` writes attempt output to temp files and only promotes to canonical `LLM-OUTLOOK-*.md` after validation.

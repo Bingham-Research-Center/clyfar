@@ -7,11 +7,11 @@ Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements
 
 Lawson, Lyman, Davies, 2024 
 
-> **Current stable clyfar tag:** `v1.0.4`  
+> **Current stable clyfar tag:** `v1.0.5`  
 > **Package version source:** [`__init__.__version__`](__init__.py) (kept in sync with stable tag)  
-> **Current Ffion tag:** `ffion-v1.1.2`  
+> **Current Ffion tag:** `ffion-v1.1.3`  
 > **Ffion version source:** [`utils/versioning.py`](utils/versioning.py) (`FFION_VERSION`)  
-> **Prompt-science registry:** [`templates/llm/science_registry.json`](templates/llm/science_registry.json)
+> **Ffion bundle registry:** [`templates/llm/ffion_registry.json`](templates/llm/ffion_registry.json)
 
 ## Environment setup
 1. Install/initialize Miniforge or Conda (see [docs/setup_conda.md](docs/setup_conda.md) for platform specifics).
@@ -127,7 +127,7 @@ Notes
 Clyfar generates AI-assisted ozone outlooks using the "Ffion" forecaster (Claude LLM). Each outlook is available as a professionally formatted PDF.
 
 The LLM prompt banner includes Clyfar and Ffion version metadata injected at generation time from `__init__.__version__` and `utils/versioning.py`.
-The editable forecast-science surface is versioned separately via [`templates/llm/science_registry.json`](templates/llm/science_registry.json), which resolves a versioned prompt template, bias file, and optional QA/operator-notes file for fixed reforecasts.
+The editable Ffion surface is versioned under `FFION_VERSION` via [`templates/llm/ffion_registry.json`](templates/llm/ffion_registry.json), which resolves the prompt template, bias file, and optional QA/operator-notes file for fixed reforecasts.
 
 **Public access URL:**
 ```
@@ -157,13 +157,13 @@ https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.
 # Serial 6-hourly regeneration window
 ./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force
 
-# Fixed prompt-science reforecast
-LLM_SCIENCE_VERSION=1.0.0 ./scripts/run_llm_outlook.sh 2026022400 --force
+# Fixed Ffion reforecast
+./scripts/run_llm_outlook.sh 2026022400 --ffion-version 1.1.2 --force
 ```
 - This mirrors the production post-forecast Ffion flow in `scripts/submit_clyfar.sh`.
 - Default is test-safe (`LLM_SKIP_UPLOAD=1`); add `--upload` only when intentional.
 - For interactive `--upload` runs, source `~/.bashrc_basinwx` first to ensure valid API credentials are loaded.
-- For versioned QA notes, use `source scripts/set_llm_qa.sh --science-version <VERSION>` or pass `--qa-file` directly.
+- For versioned QA notes, use `source scripts/set_llm_qa.sh --ffion-version <VERSION>` or pass `--qa-file` directly.
 
 **Generated-artifact pruning:**
 ```bash
@@ -179,4 +179,4 @@ python scripts/prune_llm_case_artifacts.py --apply
 ~/gits/clyfar/data/json_tests/CASE_YYYYMMDD_HHMMZ/llm_text/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
 ```
 
-See `docs/archive/root_notes/LLM-SOP.md` for operational procedures, `templates/llm/science_registry.json` for prompt-science version selection, and `templates/llm/prompt_body.md` for the legacy compatibility prompt path.
+See `docs/archive/root_notes/LLM-SOP.md` for operational procedures, `templates/llm/ffion_registry.json` for Ffion bundle selection, and `templates/llm/prompt_body.md` for the active prompt path.
