@@ -2,3 +2,9 @@
 Our machine intelligence models should improve via machine learning etc.
 
 We also want to verify (evaluate) forecasts against observations. This is done similarly to weather forecasts, both probabilistically (in the sense of information flow and possibility) and deterministically (crisp value). Can look at compromise of "top 2--3 scenarios" and how to find that from the aggregated MF or possibility distribution.
+
+### Canonical verification reference
+The definitive verification math and methods are maintained in:
+`../../brc-knowledge/scholarium/active-projects/clyfar/possibilistic-verification-methods.md`
+
+Five working design documents (POSS-SCORE-IDEAS-COMPLEX.md, POSS-SCORE-IDEAS-PLAIN.md, POSS-SCORE-CRITIQUE.md, POSS-VS-PROB-BRIDGE.md, POSS-HEATMAP-SCORECARD.md) were archived to `archive/` on 2026-03-24 after being absorbed into the canonical document. See `archive/README.md` for details.
