@@ -94,7 +94,7 @@ crontab /tmp/clyfar_crontab.backup.YYYYMMDD_HHMMSS
 ## Repo state snapshot for milestone planning
 
 Current repo version:
-- `__init__.__version__`: `1.0.5`
+- `__init__.__version__`: `1.0.6`
 
 Current label set (GitHub issues/PR labels):
 - `bug`
@@ -109,7 +109,7 @@ Current label set (GitHub issues/PR labels):
 - `potential bug`
 
 Current git tags include:
-- Clyfar tags through `v1.0.5`
+- Clyfar tags through `v1.0.6`
 - Ffion tags through `ffion-v1.1.3`
 - LLM/pipeline milestone tags (`ai-llm-v*`, `llm-v*`)
 
@@ -147,8 +147,8 @@ Scoring word: **Leverage** (10 = highest leverage)
 ## Suggested milestone next step
 
 If this hibernation handoff is accepted, consider:
-- bump Clyfar version from `1.0.5` to a milestone patch/minor (your preference)
-- tag the release
+- keep Clyfar at `1.0.6` as the hibernation baseline
+- run 2025/2026 reforecast evaluation with this baseline for the preprint
 - start a `v1.1` project board keyed to the top 10 leverage items above
 
 ## AI-agent note
