@@ -2,6 +2,7 @@
 Bingham Research Center's (Utah State University) Ozone Prediction Model Clyfar
 
 > **AI-Assisted Development:** See `AGENTS.md` for canonical contributor/agent workflow guidance. This repo uses clean package boundaries across clyfar, brc-tools, and ubair-website.
+> **Seasonal operations runbook:** See `HIBERNATION.md` for cron pause/resume/tweak procedures, restart testing, and dev-mode priorities.
 
 Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements information should be updated in `requirements.txt`.
 
@@ -76,7 +77,7 @@ Clyfar predictions are intended to be pushed to the BasinWx website (`basinwx.co
 - Model execution: ✓ Working (run_gefs_clyfar.py)
 - Output generation: ✓ Working (parquet + PNG figures)
 - Website upload: ✓ Working (JSON + PNG via export/to_basinwx.py)
-- Cron scheduling: ✓ Configured (4× daily: 03:30, 09:30, 15:30, 21:30 UTC)
+- Cron scheduling: Seasonal mode (as of 2026-03-30: observations active; Clyfar 6-hourly submit line paused/commented)
 
 **CHPC paths:**
 - Conda env: `clyfar-nov2025` via `~/software/pkg/miniforge3`
@@ -92,6 +93,43 @@ Clyfar predictions are intended to be pushed to the BasinWx website (`basinwx.co
 - `scripts/submit_clyfar.sh` auto-init selection is anchored to Slurm `SubmitTime` to prevent queue-delay cycle skips (e.g., missing 12Z when a job starts late).
 - For interactive `./scripts/run_llm_outlook.sh ... --upload`, source `~/.bashrc_basinwx` first (or export upload vars manually) so API uploads use the production key context.
 - If you backfill a missed cycle outlook, regenerate the next cycle outlook with `--force` so previous-outlook comparisons reflect the repaired sequence.
+
+### Cron operations: pause/resume/tweak (plain language)
+
+The normal pattern is to keep both cronjobs in the same user crontab:
+- observations every 5 minutes
+- Clyfar forecast submit every 6 hours (`15 3,9,15,21 * * *`, local scheduler time)
+
+When you want to pause only forecasts for offseason, **comment out** the Clyfar line and leave observations alone.
+
+Example active lines:
+```cron
+# Observations - Every 5 minutes
+*/5 * * * * /bin/bash -c 'source ~/.bashrc_basinwx && source ~/software/pkg/miniforge3/etc/profile.d/conda.sh && conda activate clyfar-nov2025 && python ~/gits/brc-tools/brc_tools/download/get_map_obs.py >> ~/logs/obs.log 2>&1'
+
+# Clyfar 6-hourly submits
+15 3,9,15,21 * * * /bin/bash -c 'source ~/.bashrc_basinwx && export PATH=$PATH:/uufs/notchpeak.peaks/sys/installdir/slurm/std/bin && cd ~/gits/clyfar && sbatch scripts/submit_clyfar.sh >> ~/logs/clyfar_submit.log 2>&1'
+```
+
+Example paused-forecast state (what we use in hibernation):
+```cron
+# Observations - Every 5 minutes
+*/5 * * * * /bin/bash -c 'source ~/.bashrc_basinwx && source ~/software/pkg/miniforge3/etc/profile.d/conda.sh && conda activate clyfar-nov2025 && python ~/gits/brc-tools/brc_tools/download/get_map_obs.py >> ~/logs/obs.log 2>&1'
+
+# Clyfar 6-hourly submits (paused for offseason)
+# 15 3,9,15,21 * * * /bin/bash -c 'source ~/.bashrc_basinwx && export PATH=$PATH:/uufs/notchpeak.peaks/sys/installdir/slurm/std/bin && cd ~/gits/clyfar && sbatch scripts/submit_clyfar.sh >> ~/logs/clyfar_submit.log 2>&1'
+```
+
+Quick commands:
+```bash
+# Inspect current crontab with line numbers
+crontab -l | nl -ba
+
+# Edit safely
+crontab -e
+```
+
+To return to normal, remove the leading `#` from the Clyfar line. To tweak cadence, edit only the cron timing fields and keep the command body unchanged. See `HIBERNATION.md` for the full restart checklist and tested examples.
 
 > **TODO (Operations):** Herbie cache management needs improvement. Currently cached GRIB/idx files can become stale or corrupted, causing failures on retry. Options to implement:
 > 1. Add `--fresh-cache` CLI flag to clear cache before run

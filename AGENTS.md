@@ -1,7 +1,10 @@
 # Repository Guidelines
-Date updated: 2026-03-07
+Date updated: 2026-03-30
 
 This is the canonical top-level guidance file for contributors and AI coding agents.
+
+## First-Read Context (Seasonal)
+- Read `HIBERNATION.md` after this file for current seasonal ops state (forecast cron pause/resume/tweak, restart checks, and dev-mode priorities).
 
 ## Project Structure
 - Entry point: `run_gefs_clyfar.py` orchestrates GEFS ingest, preprocessing, FIS inference, plots, and exports.
@@ -114,6 +117,7 @@ This is the canonical top-level guidance file for contributors and AI coding age
   - keep hot-path runtime data off home and out of the repo; prefer scratch for speed, then archive/promote to durable storage intentionally
 - Put editing on a separate worktree-style path so `main` or an operational checkout is not modified during live runs.
 - The packaging/install solution and the worktree solution may be combined; the key requirement is that live ops run from a pinned, non-edited tree.
+- Use `HIBERNATION.md` as the operational pause/runbook checkpoint between live-season and dev-season modes.
 
 ## External Repositories
 - Technical report: `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`

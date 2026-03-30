@@ -1,13 +1,14 @@
 # Documentation Hub
-Date updated: 2026-03-02
+Date updated: 2026-03-30
 
 Use this page as the jumping-off point for orientation, planning, and deeper research. Follow the "Quick start" list first, then dive into the topical docs as needed.
 
-Historical planning docs may reference pre-v1 tags (for provenance). Treat `README.md`, `AGENTS.md`, and `docs/TODO_PRIORITIZED.md` as the active operational truth set.
+Historical planning docs may reference pre-v1 tags (for provenance). Treat `README.md`, `AGENTS.md`, `HIBERNATION.md`, and `docs/TODO_PRIORITIZED.md` as the active operational truth set.
 
 ## Quick start
 - [`README.md`](../README.md#environment-setup) — Project summary, prerequisites, and the canonical smoke test (mirrored in [`AGENTS.md`](../AGENTS.md#testing-guidelines)).
 - [`AGENTS.md`](../AGENTS.md#testing-guidelines) — Collaboration guardrails, coding conventions, day-to-day workflows, and the same smoke command under Testing Guidelines (points back to the README entry above for consistency).
+- [`HIBERNATION.md`](../HIBERNATION.md) — Seasonal ops runbook: cron pause/resume/tweak guidance, restart checklist, and prioritized dev-mode roadmap.
 - `docs/archive/AI_AGENT_ONBOARDING.md` — **AI agents start here:** efficient protocol to minimize token usage and respect team conventions.
 - `docs/project_overview.md` — Narrative tour of the architecture and possibility-theory framing.
 - `docs/TODO_PRIORITIZED.md` — Active TODO list ranked by likelihood and effort.
@@ -33,3 +34,4 @@ Historical planning docs may reference pre-v1 tags (for provenance). Treat `READ
 - Update this hub whenever docs are added, renamed, or relocated.
 - Refresh the "Date updated" stamp and key links after significant content edits.
 - Archive or delete pointers to documents that move out of the repository.
+- Keep `HIBERNATION.md` current whenever seasonal operational mode changes.

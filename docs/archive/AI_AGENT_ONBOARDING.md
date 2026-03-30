@@ -24,6 +24,14 @@ cat AGENTS.md
 - **Follow these religiously** to avoid conflicts with other agents' work
 - Sets the behavioral contract for all contributors (human and AI)
 
+### **Step 2.5: Read seasonal ops context when relevant** (targeted)
+If your task touches scheduling, deploy/ops behavior, or seasonal mode changes:
+```bash
+cat HIBERNATION.md
+```
+- Contains the current cron pause/resume/tweak runbook
+- Documents restart checks and current hibernation/dev-mode priorities
+
 ### **Step 3: Read context only if needed** (selective, based on task)
 Based on your specific task, read **exactly one** of these:
 - **Bug fix/feature?** → `docs/project_overview.md` (88 lines, architecture context)
@@ -153,6 +161,7 @@ GEFS member. Uses InterProcessLock in safe_get_CONUS()."
 |------|-------|---------|--------------|
 | `AGENTS.md` | 41 | Behavioral contract | Always (first read) |
 | `docs/README.md` | 32 | Navigation map | Always (second read) |
+| `HIBERNATION.md` | ~160 | Seasonal ops runbook | Any cron/deployment/ops task |
 | `git log -10` | ~10 | Recent changes | Every session |
 | `fis/v0p9.py` | ~400 | Core scientific logic | Science changes |
 | `run_gefs_clyfar.py` | ~200 | Entry point orchestration | Workflow changes |
