@@ -1,6 +1,8 @@
 # Clyfar Storage Guide
 
 Quick reference for CHPC storage locations, policies, and archival strategy.
+For the v1.0.6 smoke and winter-rerun handoff, use
+[`docs/chpc-v106-dry-run.md`](chpc-v106-dry-run.md).
 
 ---
 
@@ -66,7 +68,7 @@ scripts/storage_inventory.sh
 scripts/storage_inventory.sh --clean
 
 # Clear Herbie cache
-rm -rf ~/gits/clyfar/data/herbie_cache/*
+rm -rf /scratch/general/vast/$USER/clyfar/herbie_cache/*
 
 # Check home quota
 df -h ~

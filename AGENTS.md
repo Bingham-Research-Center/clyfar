@@ -120,6 +120,14 @@ This is the canonical top-level guidance file for contributors and AI coding age
 - Use `HIBERNATION.md` as the operational pause/runbook checkpoint between live-season and dev-season modes.
 
 ## External Repositories
-- Technical report: `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
-- Knowledge base: `/Users/johnlawson/Documents/GitHub/brc-knowledge`
+- Control plane for tasks, run cards, and reports: `../ceidwad`
+- Technical report / manuscript repo: `../preprint-clyfar-v0p9`
+- Knowledge base: `../brc-knowledge`
 - Operational sibling tools: `../brc-tools`
+
+## Cross-repo Working Pattern
+- Treat `../ceidwad` as the control plane for task cards, run cards, and execution reports.
+- Treat this repo as the source of truth for forecast logic, verification scripts, and operational behavior.
+- Treat `../preprint-clyfar-v0p9` as the source of truth for manuscript state and section drafting.
+- Treat `../brc-knowledge` as durable reference material; link to it rather than copying.
+- Use `../brc-tools` only when shared utilities are directly relevant to the current task.

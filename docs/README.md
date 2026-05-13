@@ -22,6 +22,7 @@ Historical planning docs may reference pre-v1 tags (for provenance). Treat `READ
 - `docs/cross_repo_workflow.md` — Guidance for coordinating with adjacent knowledge-base repositories.
 - `docs/repo_review.md` — Snapshot of code structure, risks, and improvement opportunities.
 - `docs/validation.md` — Local smoke test command and SLURM submission template.
+- `docs/chpc-v106-dry-run.md` — CHPC v1.0.6 storage-safe smoke and winter-rerun handoff.
 - `docs/TESTING.md` — Pytest primer and conventions.
 - `docs/science-questions.md` — Concise, high‑impact questions driving MF calibration and science changes.
 
