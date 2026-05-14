@@ -34,16 +34,12 @@ if [[ "${1:-}" == "--clean" ]]; then
 fi
 
 # Storage locations
-# Quotas, mount paths, and CHPC-wide policy live in the team reference:
-#   ~/gits/brc-knowledge/scholarium/reference-base/resources/chpc-team-resource-inventory.md
-# lawson-group6 is the current active archive store (group5 has shown autofs
-# faults on some notch* nodes). Override CLYFAR_ARCHIVE_BASE to retarget.
 HERBIE_CACHE="${CLYFAR_HERBIE_CACHE:-$HOME/gits/clyfar/data/herbie_cache}"
-SCRATCH_TEST="${CLYFAR_SCRATCH_TEST:-/scratch/general/vast/$USER/clyfar_test}"
-SCRATCH_PROD="${CLYFAR_SCRATCH_PROD:-/scratch/general/vast/$USER/clyfar}"
+SCRATCH_TEST="/scratch/general/vast/clyfar_test"
+SCRATCH_PROD="/scratch/general/vast/clyfar"
 HOME_DATA="$HOME/basinwx-data/clyfar"
 TMP_CACHE="/tmp/clyfar_herbie"
-ARCHIVE_BASE="${CLYFAR_ARCHIVE_BASE:-/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar}"
+ARCHIVE_BASE="/uufs/chpc.utah.edu/common/home/lawson-group5/clyfar"
 
 # Helper: Get directory size (returns "0" if doesn't exist)
 get_size() {
@@ -97,33 +93,11 @@ days_since_access() {
     fi
 }
 
-# Helper: warn (don't fail) if the archive base parent volume is not mounted on this node.
-# Cottonwood lawson-group{4,5,6} are autofs-triggered and can silently fault per-node;
-# a script hardcoding one of them would otherwise no-op invisibly.
-check_archive_mount() {
-    local base="$1"
-    local volume
-    # Extract /uufs/chpc.utah.edu/common/home/lawson-groupN from the archive base
-    volume=$(echo "$base" | sed -E 's|(/uufs/chpc\.utah\.edu/common/home/lawson-group[0-9]+).*|\1|')
-    if [[ "$volume" == "$base" || -z "$volume" ]]; then
-        return 0  # Not a recognised group path; skip check.
-    fi
-    if ! df -hT "$volume" >/dev/null 2>&1; then
-        echo -e "${YELLOW}[!] WARNING: archive volume $volume is not mounted on $(hostname).${NC}"
-        echo -e "${YELLOW}    Autofs may have faulted; try a different node, or set CLYFAR_ARCHIVE_BASE${NC}"
-        echo -e "${YELLOW}    to another lawson-group{4,5,6} path. Continuing with local inventory.${NC}"
-        echo ""
-    fi
-}
-
 # Print header
 echo ""
 echo -e "${BLUE}=== CLYFAR STORAGE INVENTORY ===${NC}"
 echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-echo "Archive base: $ARCHIVE_BASE"
 echo ""
-
-check_archive_mount "$ARCHIVE_BASE"
 
 # EPHEMERAL
 echo -e "${YELLOW}EPHEMERAL (auto-wiped on reboot):${NC}"
@@ -135,8 +109,8 @@ fi
 echo ""
 
 # SCRATCH
-echo -e "${YELLOW}SCRATCH (60-day atime-based auto-purge):${NC}"
-echo "  Files not accessed for >60 days are deleted automatically."
+echo -e "${YELLOW}SCRATCH (60-day auto-purge, 50TB quota):${NC}"
+echo "  Policy: Files not accessed for >60 days are deleted weekly"
 echo ""
 
 for scratch_dir in "$SCRATCH_TEST" "$SCRATCH_PROD"; do
@@ -197,7 +171,7 @@ fi
 echo ""
 
 # HOME
-echo -e "${YELLOW}HOME (permanent, no auto-purge):${NC}"
+echo -e "${YELLOW}HOME (permanent, 7.3 GiB quota):${NC}"
 home_used=$(df -h ~ 2>/dev/null | tail -1 | awk '{print $3}')
 home_avail=$(df -h ~ 2>/dev/null | tail -1 | awk '{print $4}')
 home_pct=$(df -h ~ 2>/dev/null | tail -1 | awk '{print $5}')
@@ -211,7 +185,7 @@ fi
 echo ""
 
 # ARCHIVE
-echo -e "${YELLOW}ARCHIVE (Cottonwood lawson-group{4,5,6}, no auto-purge):${NC}"
+echo -e "${YELLOW}ARCHIVE (permanent, 37 TiB total across lawson-group4/5/6):${NC}"
 if [[ -d "$ARCHIVE_BASE" ]]; then
     echo "  $ARCHIVE_BASE"
     echo "    Size: $(get_size "$ARCHIVE_BASE")"
