@@ -75,6 +75,9 @@ conda activate clyfar-nov2025 || {
 
 # Set paths (overridable for isolated test runs)
 CLYFAR_DIR="${CLYFAR_DIR:-$HOME/gits/clyfar}"
+# TODO(policy): DATA_ROOT defaults to $HOME, which contradicts the scratch-first
+# storage policy in docs/STORAGE-GUIDE.md. Flip the default to
+# /scratch/general/vast/$USER/clyfar with a post-run rsync to lawson-group6.
 DATA_ROOT="${DATA_ROOT:-$HOME/basinwx-data/clyfar}"
 FIG_ROOT="${FIG_ROOT:-$DATA_ROOT/figures}"
 EXPORT_DIR="${EXPORT_DIR:-$DATA_ROOT/basinwx_export}"
