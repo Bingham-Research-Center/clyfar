@@ -201,6 +201,21 @@ https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.
 - For interactive `--upload` runs, source `~/.bashrc_basinwx` first to ensure valid API credentials are loaded.
 - For versioned QA notes, use `source scripts/set_llm_qa.sh --ffion-version <VERSION>` or pass `--qa-file` directly.
 
+**Winter 2025-2026 replay harness:**
+```bash
+# Inspect the serial Slurm plan without submitting jobs
+./scripts/run_winter_replay.py --dry-run
+
+# Pilot first two 6-hourly inits, local-only uploads, isolated cache
+./scripts/run_winter_replay.py --max-inits 2 --ffion-version 1.1.3
+
+# Resume the full default window, skipping successful ledger rows
+./scripts/run_winter_replay.py --resume --ffion-version 1.1.3
+```
+- Default window is `2025120100` through `2026031518`, inclusive and 6-hourly.
+- The driver submits one Slurm job, validates artifacts, writes a manifest/ledger/quicklook, archives CASE output, cleans the isolated Herbie cache, then advances.
+- Uploads are forced off with `CLYFAR_ENABLE_UPLOAD=0` and `LLM_SKIP_UPLOAD=1`.
+
 **Generated-artifact pruning:**
 ```bash
 # Inspect old llm_text archive/temp files

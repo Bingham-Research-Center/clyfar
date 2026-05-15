@@ -403,20 +403,26 @@ def make_dated_rootdir(rootdir: str, init_dt_dict: dict):
                     rootdir, init_dt_dict['naive'].strftime('%Y%m%d_%HZ'))
 
 def create_forecast_fname(variable: str, member: str,
-                            init_dt_dict: datetime.datetime) -> str:
+                            init_dt_dict: datetime.datetime,
+                            dataroot: str = "./data") -> str:
     """Create the file path for saving forecast data."""
-    dataroot = "./data"
     utils.try_create(dataroot)
     timestr = init_dt_dict.strftime('%Y%m%d_%H%MZ')
     fpath = os.path.join(dataroot, timestr, f"{timestr}_{variable}_{member}_df.parquet")
     return fpath
 
-def save_forecast_data(dfs: Dict[str, pd.DataFrame], variable: str, init_dt_dict: dict):
+def save_forecast_data(
+    dfs: Dict[str, pd.DataFrame],
+    variable: str,
+    init_dt_dict: dict,
+    dataroot: str = "./data",
+):
     """Save forecast data to disk."""
     lookup = Lookup()
     mslp_col = lookup.string_dict['mslp']["array_name"]
     for member, df in dfs.items():
-        fpath = create_forecast_fname(variable, member, init_dt_dict['naive'])
+        fpath = create_forecast_fname(
+            variable, member, init_dt_dict['naive'], dataroot=dataroot)
         utils.try_create(os.path.dirname(fpath))
         if variable == "mslp":
             series = df[mslp_col]
@@ -442,16 +448,19 @@ def archive_clyfar_parquets_to_run(
     clyfar_data_root: str,
     init_dt: datetime.datetime,
     clyfar_df_dict: Dict[str, pd.DataFrame],
+    dailymax_df_dict: Optional[Dict[str, pd.DataFrame]] = None,
 ) -> str:
     """Archive Clyfar parquets to the per-init _run directory.
 
-    Copies parquets to {data_root}/{YYYYMMDD_HHMMz}_run/parquets/
+    Copies parquets to {data_root}/{YYYYMMDD_HHMMZ}_run/parquets/
     while keeping the current "latest" copies in the root for operational use.
+    Daily-max tables are archived under parquets/dailymax/ when provided.
 
     Args:
         clyfar_data_root: Root data directory (e.g., ~/basinwx-data/clyfar)
         init_dt: Forecast initialization datetime (naive UTC)
         clyfar_df_dict: Dictionary of Clyfar member DataFrames
+        dailymax_df_dict: Optional dictionary of daily-max Clyfar member DataFrames
 
     Returns:
         Path to the parquets archive directory
@@ -470,14 +479,36 @@ def archive_clyfar_parquets_to_run(
             archived_count += 1
 
     logger.info(f"Archived {archived_count} parquets to {parquets_dir}")
+
+    if dailymax_df_dict:
+        dailymax_dir = os.path.join(parquets_dir, "dailymax")
+        utils.try_create(dailymax_dir)
+        dailymax_count = 0
+        for clyfar_member in dailymax_df_dict.keys():
+            src = os.path.join(
+                clyfar_data_root, "dailymax", f"{clyfar_member}_dailymax.parquet")
+            dst = os.path.join(dailymax_dir, f"{clyfar_member}_dailymax.parquet")
+            if os.path.exists(src):
+                shutil.copy2(src, dst)
+                dailymax_count += 1
+        logger.info(f"Archived {dailymax_count} dailymax parquets to {dailymax_dir}")
     return parquets_dir
 
 
-def load_forecast_data(variable: str, init_dt: datetime.datetime, member_names: list):
+def load_forecast_data(
+    variable: str,
+    init_dt: datetime.datetime,
+    member_names: list,
+    dataroot: str = "./data",
+):
     """Load forecast data from disk."""
     dfs = {}
     for member in member_names:
-        fpath = create_forecast_fname(variable, member, init_dt)
+        fpath = create_forecast_fname(variable, member, init_dt, dataroot=dataroot)
+        if not os.path.exists(fpath) and dataroot != "./data":
+            legacy_fpath = create_forecast_fname(variable, member, init_dt)
+            if os.path.exists(legacy_fpath):
+                fpath = legacy_fpath
         dfs[member] = pd.read_parquet(fpath)
     return dfs
 
@@ -568,7 +599,8 @@ def gefs_to_clyfar_membername(gefs_member: str) -> str:
 
 def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
                                forecast_cache: Optional[Dict[str, Dict[str, pd.DataFrame]]]=None,
-                               diagnostics: Optional[List[Dict]] = None):
+                               diagnostics: Optional[List[Dict]] = None,
+                               forecast_data_root: str = "./data"):
     """Run Clyfar driven by a single member of GEFS.
 
     init_dt should be naive.
@@ -594,7 +626,8 @@ def run_singlemember_inference(init_dt: datetime.datetime, member, percentiles,
                 continue
 
         all_vrbl_dfs[variable] = load_forecast_data(
-            variable, init_dt, member_names=[member,])[member]
+            variable, init_dt, member_names=[member,],
+            dataroot=forecast_data_root)[member]
 
     # data_dict = reorganise_data(all_vrbl_dfs)
 
@@ -799,6 +832,10 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
     init_dt_dict = utils.get_valid_forecast_init(force_init_dt=dt)
 
     variables = ['wind', 'solar', 'snow', 'mslp', 'temp']
+    gefs_data_root = os.getenv(
+        "CLYFAR_GEFS_DATA_ROOT",
+        os.path.join(clyfar_data_root, "gefs_representative"),
+    )
 
     results = None
 
@@ -816,7 +853,8 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         if save:
             print("Saving GEFS data for", init_dt_dict['naive'])
             for variable, dfs in results.items():
-                save_forecast_data(dfs, variable, init_dt_dict)
+                save_forecast_data(
+                    dfs, variable, init_dt_dict, dataroot=gefs_data_root)
 
         if visualise:
             print("Visualizing GEFS data for", init_dt_dict['naive'])
@@ -842,7 +880,8 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             member_df = run_singlemember_inference(
                 init_dt_dict['naive'], member,
                 percentiles, forecast_cache=results,
-                diagnostics=fis_diagnostics)
+                diagnostics=fis_diagnostics,
+                forecast_data_root=gefs_data_root)
             clyfar_df_dict[clyfar_member] = member_df
             dailymax_df_dict[clyfar_member] = utils.compute_local_daily_max(
                 member_df, target_tz=LOCAL_TIMEZONE)
@@ -875,7 +914,8 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
 
             # Archive parquets to _run directory for historical tracking
             archive_clyfar_parquets_to_run(
-                clyfar_data_root, init_dt_dict['naive'], clyfar_df_dict)
+                clyfar_data_root, init_dt_dict['naive'], clyfar_df_dict,
+                dailymax_df_dict=dailymax_df_dict)
 
         if log_fis and fis_diagnostics:
             diag_df = pd.DataFrame(fis_diagnostics)
@@ -1167,7 +1207,13 @@ if __name__ == "__main__":
                 "log_fis": args.log_fis,
             }
             artifacts = {
-                "forecast_data_dir": os.path.join(args.data_root, run_label),
+                "forecast_data_dir": os.path.join(
+                    os.getenv(
+                        "CLYFAR_GEFS_DATA_ROOT",
+                        os.path.join(args.data_root, "gefs_representative"),
+                    ),
+                    run_label,
+                ),
                 "figures_dir": os.path.join(
                     args.fig_root, args.inittime.strftime("%Y%m%d_%HZ")),
                 "log_file": None,
