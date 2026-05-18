@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import re
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Iterable, List, Sequence, Tuple
 
@@ -25,6 +27,8 @@ REQUIRED_MARKERS = (
     "Confidence_D11_15",
 )
 
+LOCAL_FILE_EXTENSIONS = (".json", ".md", ".pdf", ".png", ".csv", ".parquet", ".txt")
+
 
 def _normalise_version(version: str) -> str:
     value = version.strip()
@@ -33,6 +37,57 @@ def _normalise_version(version: str) -> str:
     if value.lower().startswith("v"):
         return value[1:].strip()
     return value
+
+
+def _normalise_path_text(raw: str) -> str:
+    """Return a cleaned path token suitable for existence checks."""
+    text = unicodedata.normalize("NFKC", raw)
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf").strip()
+
+
+def _brace_expand(pattern: str) -> List[str]:
+    """Expand a single level of shell-style brace groups recursively."""
+    start = pattern.find("{")
+    if start == -1:
+        return [pattern]
+
+    depth = 0
+    end = -1
+    for idx in range(start, len(pattern)):
+        char = pattern[idx]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                end = idx
+                break
+
+    if end == -1:
+        return [pattern]
+
+    body = pattern[start + 1 : end]
+    parts: List[str] = []
+    chunk: List[str] = []
+    nested = 0
+    for char in body:
+        if char == "," and nested == 0:
+            parts.append("".join(chunk))
+            chunk = []
+            continue
+        if char == "{":
+            nested += 1
+        elif char == "}":
+            nested = max(0, nested - 1)
+        chunk.append(char)
+    parts.append("".join(chunk))
+
+    expanded: List[str] = []
+    prefix = pattern[:start]
+    suffix = pattern[end + 1 :]
+    for part in parts:
+        expanded.extend(_brace_expand(prefix + part + suffix))
+    return expanded
 
 
 def extract_header_versions(text: str) -> Tuple[str | None, str | None]:
@@ -79,18 +134,20 @@ def extract_local_paths(text: str) -> List[str]:
 
     candidates: List[str] = []
     backtick_pattern = re.compile(r"`([^`]+)`")
-    abs_pattern = re.compile(r"(?<![A-Za-z0-9_])(/[^\s,;`'\"\\]\)]+)")
+    # Match plain local paths in bullet lists. Replay validation depends on
+    # the Data Logger section exposing these paths directly.
+    abs_pattern = re.compile(r"(?<![A-Za-z0-9_])(/[^\s,;`'\"\\)]+)")
 
     for line in section:
         for match in backtick_pattern.findall(line):
-            item = match.strip().rstrip(".,;:)]}")
+            item = _normalise_path_text(match.strip().rstrip(".,;:)]}"))
             if item.startswith(("http://", "https://")):
                 continue
-            if "/" in item:
+            if "/" in item or item.lower().endswith(LOCAL_FILE_EXTENSIONS):
                 candidates.append(item)
 
         for match in abs_pattern.findall(line):
-            item = match.strip().rstrip(".,;:)]}")
+            item = _normalise_path_text(match.strip().rstrip(".,;:)]}"))
             if item.startswith(("http://", "https://")):
                 continue
             candidates.append(item)
@@ -113,21 +170,32 @@ def marker_errors(text: str) -> List[str]:
 
 
 def _path_exists(raw: str, outlook_path: Path) -> bool:
-    path = Path(raw)
+    path = Path(_normalise_path_text(raw))
     if path.is_absolute():
-        return path.exists()
+        candidates = (path,)
+    else:
+        outlook_dir = outlook_path.parent
+        case_root = outlook_dir.parent
+        json_tests_root = case_root.parent
+        candidates = (
+            (outlook_dir / path).resolve(),
+            (case_root / path).resolve(),
+            (json_tests_root / path).resolve(),
+            (REPO_ROOT / path).resolve(),
+        )
 
-    # Relative paths are resolved against common report contexts.
-    outlook_dir = outlook_path.parent
-    case_root = outlook_dir.parent
-    json_tests_root = case_root.parent
-    candidates = (
-        (outlook_dir / path).resolve(),
-        (case_root / path).resolve(),
-        (json_tests_root / path).resolve(),
-        (REPO_ROOT / path).resolve(),
-    )
-    return any(candidate.exists() for candidate in candidates)
+    def _matches(candidate: Path) -> bool:
+        if candidate.exists():
+            return True
+        patterns = _brace_expand(str(candidate))
+        for pattern in patterns:
+            if not any(char in pattern for char in "*?[]"):
+                continue
+            if glob.glob(pattern):
+                return True
+        return False
+
+    return any(_matches(candidate) for candidate in candidates)
 
 
 def validate_outlook(
@@ -173,7 +241,9 @@ def validate_outlook(
         else:
             for raw in local_paths:
                 if not _path_exists(raw, outlook_path):
-                    errors.append(f"Data Logger path does not exist: {raw}")
+                    errors.append(
+                        f"Data Logger path does not exist after normalization/glob expansion: {raw}"
+                    )
 
     return len(errors) == 0, errors
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from scripts.validate_llm_outlook import validate_outlook
+from scripts.validate_llm_outlook import extract_local_paths, validate_outlook
 from utils.versioning import get_clyfar_version, get_ffion_version
 
 
@@ -49,6 +49,17 @@ def test_validate_outlook_passes_for_valid_content(tmp_path):
     assert errors == []
 
 
+def test_extract_local_paths_handles_plain_absolute_data_logger_bullets(tmp_path):
+    referenced = tmp_path / "source.json"
+    referenced.write_text("{}", encoding="utf-8")
+    outlook = _write_outlook(
+        tmp_path / "LLM-OUTLOOK-test.md",
+        _valid_outlook_body(referenced),
+    )
+
+    assert extract_local_paths(outlook.read_text(encoding="utf-8")) == [str(referenced)]
+
+
 def test_validate_outlook_fails_on_version_mismatch(tmp_path):
     referenced = tmp_path / "source.json"
     referenced.write_text("{}", encoding="utf-8")
@@ -59,7 +70,7 @@ def test_validate_outlook_fails_on_version_mismatch(tmp_path):
 
     ok, errors = validate_outlook(
         outlook,
-        expected_clyfar="1.0.6",
+        expected_clyfar=f"{get_clyfar_version()}-mismatch",
         expected_ffion=get_ffion_version(),
     )
     assert not ok
@@ -107,6 +118,66 @@ def test_validate_outlook_accepts_case_relative_data_logger_paths(tmp_path):
     rel_file.write_text("{}", encoding="utf-8")
 
     body = _valid_outlook_body(Path("probs/forecast_exceedance_probabilities_20260101_0000Z.json"))
+    outlook = _write_outlook(llm_dir / "LLM-OUTLOOK-20260101_0000Z.md", body)
+
+    ok, errors = validate_outlook(
+        outlook,
+        expected_clyfar=get_clyfar_version(),
+        expected_ffion=get_ffion_version(),
+    )
+    assert ok
+    assert errors == []
+
+
+def test_validate_outlook_accepts_glob_data_logger_paths_when_unique_match_exists(tmp_path):
+    case_root = tmp_path / "CASE_20260101_0000Z"
+    llm_dir = case_root / "llm_text"
+    llm_dir.mkdir(parents=True)
+
+    rel_file = case_root / "probs" / "forecast_exceedance_probabilities_20260101_0000Z.json"
+    rel_file.parent.mkdir(parents=True)
+    rel_file.write_text("{}", encoding="utf-8")
+
+    body = _valid_outlook_body(Path("probs/forecast_exceedance_probabilities_*.json"))
+    outlook = _write_outlook(llm_dir / "LLM-OUTLOOK-20260101_0000Z.md", body)
+
+    ok, errors = validate_outlook(
+        outlook,
+        expected_clyfar=get_clyfar_version(),
+        expected_ffion=get_ffion_version(),
+    )
+    assert ok
+    assert errors == []
+
+
+def test_validate_outlook_rejects_unmatched_glob_data_logger_paths(tmp_path):
+    case_root = tmp_path / "CASE_20260101_0000Z"
+    llm_dir = case_root / "llm_text"
+    llm_dir.mkdir(parents=True)
+
+    body = _valid_outlook_body(Path("probs/forecast_exceedance_probabilities_*.json"))
+    outlook = _write_outlook(llm_dir / "LLM-OUTLOOK-20260101_0000Z.md", body)
+
+    ok, errors = validate_outlook(
+        outlook,
+        expected_clyfar=get_clyfar_version(),
+        expected_ffion=get_ffion_version(),
+    )
+    assert not ok
+    assert any("Data Logger path does not exist" in err for err in errors)
+
+
+def test_validate_outlook_strips_invisible_characters_from_data_logger_paths(tmp_path):
+    case_root = tmp_path / "CASE_20260101_0000Z"
+    llm_dir = case_root / "llm_text"
+    llm_dir.mkdir(parents=True)
+
+    rel_file = case_root / "probs" / "forecast_exceedance_probabilities_20260101_0000Z.json"
+    rel_file.parent.mkdir(parents=True)
+    rel_file.write_text("{}", encoding="utf-8")
+
+    hidden = "probs/forecast_exceedance_probabilities_\u200b20260101_0000Z.json"
+    body = _valid_outlook_body(Path(hidden))
     outlook = _write_outlook(llm_dir / "LLM-OUTLOOK-20260101_0000Z.md", body)
 
     ok, errors = validate_outlook(

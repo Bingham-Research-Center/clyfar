@@ -9,6 +9,7 @@
 #   LLM_QA_FILE         - optional Q&A markdown passed to demo_llm_forecast_template.py
 #   FFION_VERSION       - optional Ffion version override for fixed reforecasts
 #   FFION_MANIFEST      - optional explicit Ffion manifest path
+#   CLYFAR_JSON_TESTS_ROOT - optional CASE root override for isolated replays
 #   LLM_PROMPT_TEMPLATE - optional path to override templates/llm/prompt_body.md
 #   LLM_OUTPUT_BASENAME - prefix for the LLM output file (default LLM-OUTLOOK)
 #   LLM_CLI_COMMAND     - full shell command to run (reads prompt from STDIN)
@@ -70,7 +71,8 @@ normalise_init() {
 NORM_INIT="$(normalise_init "$INIT")"
 DATE_PART="${NORM_INIT:0:8}"
 HOUR_PART="${NORM_INIT:9:4}"
-JSON_TESTS_ROOT="$SCRIPT_DIR/data/json_tests"
+JSON_TESTS_ROOT="${CLYFAR_JSON_TESTS_ROOT:-${LLM_JSON_TESTS_ROOT:-$SCRIPT_DIR/data/json_tests}}"
+export CLYFAR_JSON_TESTS_ROOT="$JSON_TESTS_ROOT"
 CASE_DIR="$JSON_TESTS_ROOT/CASE_${DATE_PART}_${HOUR_PART}Z"
 PROMPT_PATH="$CASE_DIR/llm_text/forecast_prompt_${NORM_INIT}.md"
 OUTPUT_PATH="$CASE_DIR/llm_text/${OUTPUT_BASENAME}-${NORM_INIT}.md"
@@ -95,7 +97,7 @@ fi
 CLUSTERING_FILE="$CASE_DIR/forecast_clustering_summary_${NORM_INIT}.json"
 if [[ ! -f "$CLUSTERING_FILE" ]]; then
   echo "Generating clustering summary for $NORM_INIT..."
-  if "$PYTHON_BIN" scripts/generate_clustering_summary.py "$NORM_INIT" 2>/dev/null; then
+  if "$PYTHON_BIN" scripts/generate_clustering_summary.py --case-dir "$CASE_DIR" 2>/dev/null; then
     echo "  Created: $CLUSTERING_FILE"
   else
     echo "  Warning: Could not generate clustering summary (non-fatal)"
@@ -279,9 +281,13 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
 
   # Validate
   if [[ -f "$ATTEMPT_OUTPUT" ]] && validate_llm_output "$ATTEMPT_OUTPUT"; then
-    mv "$ATTEMPT_OUTPUT" "$OUTPUT_PATH"
-    LLM_SUCCEEDED=true
-    break
+    echo "Running replay validator before promoting canonical markdown..."
+    if "$PYTHON_BIN" scripts/validate_llm_outlook.py "$ATTEMPT_OUTPUT"; then
+      mv "$ATTEMPT_OUTPUT" "$OUTPUT_PATH"
+      LLM_SUCCEEDED=true
+      break
+    fi
+    echo "Replay validator failed; not promoting canonical markdown." >&2
   fi
 
   # Archive failed validation output

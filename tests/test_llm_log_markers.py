@@ -11,6 +11,7 @@ def test_llm_generate_exposes_machine_parseable_status_markers():
     assert "ALERT_LLM_PROMPT_RENDER_FAILED" in script
     assert "STATUS_LLM_UPLOAD_PDF=" in script
     assert "STATUS_LLM_UPLOAD_MARKDOWN=" in script
+    assert "scripts/validate_llm_outlook.py" in script
 
 
 def test_submit_script_exposes_stage_and_push_markers():
