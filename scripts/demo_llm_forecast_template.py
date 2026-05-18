@@ -67,19 +67,28 @@ def case_root_for_init(base: Path, norm_init: str) -> Path:
     return base / case_id
 
 
-def list_recent_cases(base: Path, limit: int = 8) -> List[str]:
+def list_recent_cases(base: Path, limit: int = 8, current_init: Optional[str] = None) -> List[str]:
     """
     List up to `limit` most recent CASE_YYYYMMDD_HHMMZ dirs under base.
     Returns their init strings 'YYYYMMDD_HHMMZ'.
     """
     cases: List[Tuple[str, Path]] = []
+    current_dt = None
+    if current_init:
+        current_dt = datetime.strptime(current_init, "%Y%m%d_%H%MZ")
+
     for d in base.glob("CASE_*"):
         name = d.name  # CASE_YYYYMMDD_HHMMZ
         if len(name) < 5:
             continue
         try:
             case_init = name.split("CASE_")[1]
+            case_dt = datetime.strptime(case_init, "%Y%m%d_%H%MZ")
         except IndexError:
+            continue
+        except ValueError:
+            continue
+        if current_dt and case_dt > current_dt:
             continue
         cases.append((case_init, d))
 
@@ -352,7 +361,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    data_root = REPO_ROOT / "data" / "json_tests"
+    data_root_value = os.environ.get("CLYFAR_JSON_TESTS_ROOT") or os.environ.get("LLM_JSON_TESTS_ROOT")
+    data_root = Path(data_root_value).expanduser().resolve() if data_root_value else REPO_ROOT / "data" / "json_tests"
     if not data_root.exists():
         raise SystemExit(f"Data directory not found: {data_root}")
 
@@ -439,7 +449,7 @@ def main() -> None:
         metrics = extract_cluster_metrics(clustering_summary)
         relevant_biases = select_relevant_biases(bias_entries, metrics)
 
-    recent_cases = list_recent_cases(data_root, limit=8)
+    recent_cases = list_recent_cases(data_root, limit=8, current_init=norm_init)
 
     # Gather previous outlook summaries for comparison
     previous_outlooks, previous_used_paths, previous_parse_failures = gather_previous_outlooks(

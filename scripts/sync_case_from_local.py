@@ -17,6 +17,7 @@ Usage (from repo root):
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -112,6 +113,12 @@ def main() -> None:
         help="Local directory containing forecast JSON files (flat).",
     )
     parser.add_argument(
+        "--target-root",
+        type=str,
+        default=None,
+        help="Target json_tests root for CASE directories (default: CLYFAR_JSON_TESTS_ROOT or repo data/json_tests).",
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Overwrite existing CASE files with source versions.",
@@ -122,7 +129,8 @@ def main() -> None:
     if not source_dir.exists():
         raise SystemExit(f"Source directory not found: {source_dir}")
 
-    data_root = REPO_ROOT / "data" / "json_tests"
+    target_root = args.target_root or os.environ.get("CLYFAR_JSON_TESTS_ROOT")
+    data_root = Path(target_root).expanduser().resolve() if target_root else REPO_ROOT / "data" / "json_tests"
     data_root.mkdir(parents=True, exist_ok=True)
 
     norm_init = parse_init(args.init)

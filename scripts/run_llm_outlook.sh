@@ -36,7 +36,8 @@ NC='\033[0m'
 # Paths
 CLYFAR_DIR="${CLYFAR_DIR:-$HOME/gits/clyfar}"
 EXPORT_DIR="${EXPORT_DIR:-$HOME/basinwx-data/clyfar/basinwx_export}"
-DATA_ROOT="$CLYFAR_DIR/data/json_tests"
+DATA_ROOT="${CLYFAR_JSON_TESTS_ROOT:-$CLYFAR_DIR/data/json_tests}"
+export CLYFAR_JSON_TESTS_ROOT="$DATA_ROOT"
 
 usage() {
     local exit_code="${1:-1}"
@@ -169,6 +170,7 @@ process_init() {
     python3 scripts/sync_case_from_local.py \
         --init "$init_time" \
         --source "$EXPORT_DIR" \
+        --target-root "$DATA_ROOT" \
         --history "$history" \
         --overwrite
 

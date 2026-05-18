@@ -99,3 +99,22 @@ Confidence_D11_15: LOW
     assert str(clustering_path) in output
     assert str(previous_case / f"LLM-OUTLOOK-{previous_init}.md") in output
     assert f"Forecaster: Ffion v9.9.0 and Clyfar v{get_clyfar_version()}" in output
+
+
+def test_recent_cases_are_anchored_to_current_init(tmp_path):
+    data_root = tmp_path / "json_tests"
+    for init in (
+        "20251201_0000Z",
+        "20251201_0600Z",
+        "20251201_1200Z",
+        "20260301_0000Z",
+    ):
+        (data_root / f"CASE_{init}").mkdir(parents=True)
+
+    recent = template_script.list_recent_cases(
+        data_root,
+        limit=8,
+        current_init="20251201_0600Z",
+    )
+
+    assert recent == ["20251201_0000Z", "20251201_0600Z"]

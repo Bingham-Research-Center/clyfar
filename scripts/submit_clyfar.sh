@@ -79,6 +79,7 @@ DATA_ROOT="${DATA_ROOT:-$HOME/basinwx-data/clyfar}"
 FIG_ROOT="${FIG_ROOT:-$DATA_ROOT/figures}"
 EXPORT_DIR="${EXPORT_DIR:-$DATA_ROOT/basinwx_export}"
 LOG_DIR="${LOG_DIR:-$HOME/logs/basinwx}"
+JSON_TESTS_ROOT="${JSON_TESTS_ROOT:-${CLYFAR_JSON_TESTS_ROOT:-$DATA_ROOT/json_tests}}"
 
 # Upload control:
 #   1 (default) -> normal operational uploads
@@ -95,9 +96,10 @@ CLYFAR_SKIP_INTERNAL_EXPORT="${CLYFAR_SKIP_INTERNAL_EXPORT:-1}"
 # upload-control flags from this orchestrator.
 export CLYFAR_ENABLE_UPLOAD
 export CLYFAR_SKIP_INTERNAL_EXPORT
+export CLYFAR_JSON_TESTS_ROOT="$JSON_TESTS_ROOT"
 
 # Create directories if needed
-mkdir -p "$DATA_ROOT" "$FIG_ROOT" "$EXPORT_DIR" "$LOG_DIR"
+mkdir -p "$DATA_ROOT" "$FIG_ROOT" "$EXPORT_DIR" "$LOG_DIR" "$JSON_TESTS_ROOT"
 
 cd "$CLYFAR_DIR" || {
     echo "ERROR: Clyfar directory not found at $CLYFAR_DIR"
@@ -351,7 +353,7 @@ fig_results = export_figures_to_basinwx(
     fig_root="$FIG_ROOT",
     init_dt=init_dt,
     upload=upload_enabled,
-    json_tests_root="$DATA_ROOT/json_tests"
+    json_tests_root="$JSON_TESTS_ROOT"
 )
 print(f"  Heatmap PNGs: {len(fig_results['heatmaps'])}")
 print(f"  Meteogram PNGs: {len(fig_results['meteograms'])}")
@@ -383,6 +385,7 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     python3 scripts/sync_case_from_local.py \
         --init "$INIT_TIME" \
         --source "$EXPORT_DIR" \
+        --target-root "$JSON_TESTS_ROOT" \
         --history 5 \
         --overwrite || {
         echo "WARNING: CASE sync failed, LLM may have incomplete context"
@@ -441,7 +444,7 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     esac
 
     if [ "$LLM_SUCCESS" = true ]; then
-        OUTLOOK_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.md"
+        OUTLOOK_FILE="$JSON_TESTS_ROOT/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.md"
         if [ -f "$OUTLOOK_FILE" ]; then
             echo "LLM outlook generated: $OUTLOOK_FILE"
             VALIDATOR="$CLYFAR_DIR/scripts/validate_llm_outlook.py"
@@ -467,7 +470,7 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
     if [ "$LLM_SUCCESS" = true ]; then
         echo "STATUS_LLM_STAGE=SUCCESS init=$INIT_TIME"
         # Upload PDF to BasinWx (after LLM generation creates it)
-        PDF_FILE="$CLYFAR_DIR/data/json_tests/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.pdf"
+        PDF_FILE="$JSON_TESTS_ROOT/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.pdf"
         if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ] && [ -f "$PDF_FILE" ] && [ -n "$DATA_UPLOAD_API_KEY" ]; then
             echo "Uploading LLM outlook PDF to BasinWx..."
             if python3 -c "
@@ -507,6 +510,7 @@ echo "Output locations:"
 echo "  Parquet data: $DATA_ROOT"
 echo "  Figures: $FIG_ROOT"
 echo "  JSON exports: $EXPORT_DIR"
+echo "  CASE data: $JSON_TESTS_ROOT"
 echo "  Logs: $LOG_DIR"
 echo ""
 echo "View job details: sacct -j $SLURM_JOB_ID --format=JobID,JobName,Elapsed,State,ExitCode"

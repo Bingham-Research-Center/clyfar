@@ -172,7 +172,8 @@ def main() -> None:
         case_root = Path(args.case_dir).resolve()
         norm_init = case_root.name.replace("CASE_", "")
     elif args.init:
-        data_root = REPO_ROOT / "data" / "json_tests"
+        data_root_value = os.environ.get("CLYFAR_JSON_TESTS_ROOT")
+        data_root = Path(data_root_value).expanduser().resolve() if data_root_value else REPO_ROOT / "data" / "json_tests"
         norm_init = parse_init(args.init)
         case_root = case_root_for_init(data_root, norm_init)
     else:

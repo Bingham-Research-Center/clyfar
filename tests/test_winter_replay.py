@@ -37,6 +37,7 @@ def test_sbatch_command_disables_uploads(tmp_path):
     assert "LLM_SKIP_UPLOAD=1" in joined
     assert "CLYFAR_SKIP_INTERNAL_EXPORT=1" in joined
     assert "CLYFAR_GEFS_DATA_ROOT=" in joined
+    assert "CLYFAR_JSON_TESTS_ROOT=" in joined
     assert "FFION_VERSION=1.1.3" in joined
     assert cmd[-3:] == [
         str(REPO_ROOT / "scripts" / "submit_clyfar.sh"),
@@ -45,7 +46,59 @@ def test_sbatch_command_disables_uploads(tmp_path):
     ]
 
 
-def test_validate_artifacts_accepts_complete_fixture(tmp_path, monkeypatch):
+def test_wait_for_job_accepts_slurm_derived_job_ids(monkeypatch):
+    calls = {"squeue": 0, "sacct": 0, "sleep": []}
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "squeue":
+            calls["squeue"] += 1
+            return replay.subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[0] == "sacct":
+            calls["sacct"] += 1
+            return replay.subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="12869709.batch|COMPLETED|0:0|00:10:00\n",
+                stderr="",
+            )
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(replay.subprocess, "run", fake_run)
+    monkeypatch.setattr(replay.time, "sleep", lambda seconds: calls["sleep"].append(seconds))
+
+    result = replay.wait_for_job("12869709", poll_seconds=1)
+
+    assert result == {"state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:10:00"}
+    assert calls["squeue"] == 1
+    assert calls["sacct"] == 1
+    assert calls["sleep"] == []
+
+
+def test_wait_for_job_retries_sacct_before_falling_back(monkeypatch):
+    calls = {"squeue": 0, "sacct": 0, "sleep": []}
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == "squeue":
+            calls["squeue"] += 1
+            return replay.subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        if cmd[0] == "sacct":
+            calls["sacct"] += 1
+            stdout = "" if calls["sacct"] < 3 else "12869709|COMPLETED|0:0|00:10:00\n"
+            return replay.subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
+        raise AssertionError(f"unexpected command: {cmd}")
+
+    monkeypatch.setattr(replay.subprocess, "run", fake_run)
+    monkeypatch.setattr(replay.time, "sleep", lambda seconds: calls["sleep"].append(seconds))
+
+    result = replay.wait_for_job("12869709", poll_seconds=1)
+
+    assert result == {"state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:10:00"}
+    assert calls["squeue"] == 1
+    assert calls["sacct"] == 3
+    assert calls["sleep"] == [5, 5]
+
+
+def test_validate_artifacts_accepts_complete_fixture(tmp_path):
     paths = replay.build_paths(tmp_path / "replay")
     replay.ensure_dirs(paths)
     init = "2025120100"
@@ -84,20 +137,18 @@ def test_validate_artifacts_accepts_complete_fixture(tmp_path, monkeypatch):
     (paths.export_dir / f"forecast_clustering_summary_{norm}.json").write_text("{}")
     (paths.export_dir / f"forecast_gefs_weather_members_{norm}.json").write_text("{}")
 
-    (paths.fig_root / "heatmap").mkdir()
-    (paths.fig_root / "meteograms").mkdir()
+    (paths.fig_root / "heatmap").mkdir(exist_ok=True)
+    (paths.fig_root / "meteograms").mkdir(exist_ok=True)
     for member in range(1, expected_members + 1):
         (paths.fig_root / "heatmap" / f"heatmap_UB-poss_ozone_{figure_key}_clyfar{member:03d}.png").write_text("x")
     for variable in replay.VARIABLES:
         (paths.fig_root / "meteograms" / f"meteogram_UB-repr_{variable}_{figure_key}_GEFS.png").write_text("x")
 
-    fake_repo = tmp_path / "repo"
-    case_dir = fake_repo / "data" / "json_tests" / f"CASE_{norm}"
+    case_dir = paths.case_work_root / f"CASE_{norm}"
     llm_dir = case_dir / "llm_text"
     llm_dir.mkdir(parents=True)
     (llm_dir / f"LLM-OUTLOOK-{norm}.md").write_text("# outlook\n")
     (llm_dir / f"LLM-OUTLOOK-{norm}.pdf").write_bytes(b"%PDF-1.4\n")
-    monkeypatch.setattr(replay, "REPO_ROOT", fake_repo)
 
     result = replay.validate_artifacts(
         init,
@@ -109,3 +160,41 @@ def test_validate_artifacts_accepts_complete_fixture(tmp_path, monkeypatch):
     assert result["status"] == "SUCCESS"
     assert result["errors"] == []
     assert result["counts"]["gefs_representative_files"] == expected_members * len(replay.VARIABLES)
+
+
+def test_validate_artifacts_requires_immediate_previous_outlook_reference(tmp_path):
+    paths = replay.build_paths(tmp_path / "replay")
+    replay.ensure_dirs(paths)
+    init = "2025120106"
+    norm = replay.normalise_init(init)
+    prev_norm = "20251201_0000Z"
+    job_id = "12345"
+
+    (paths.log_dir / f"clyfar_{job_id}.out").write_text(
+        "\n".join(
+            [
+                f"STATUS_FORECAST_EXPORT=SUCCESS init={init}",
+                f"STATUS_LLM_STAGE=SUCCESS init={init}",
+                f"STATUS_SUBMIT_LLM_PDF_PUSH=SKIPPED init={init} reason=upload_disabled",
+            ]
+        )
+    )
+    (paths.log_dir / f"clyfar_{job_id}.err").write_text("")
+
+    current_llm = paths.case_work_root / f"CASE_{norm}" / "llm_text"
+    previous_llm = paths.case_work_root / f"CASE_{prev_norm}" / "llm_text"
+    current_llm.mkdir(parents=True)
+    previous_llm.mkdir(parents=True)
+    (current_llm / f"LLM-OUTLOOK-{norm}.md").write_text("# outlook without prior\n")
+    (current_llm / f"LLM-OUTLOOK-{norm}.pdf").write_bytes(b"%PDF-1.4\n")
+    (previous_llm / f"LLM-OUTLOOK-{prev_norm}.md").write_text("# previous\n")
+
+    result = replay.validate_artifacts(
+        init,
+        paths,
+        job_id=job_id,
+        expected_members=0,
+        skip_validator=True,
+    )
+    assert result["status"] == "FAILED"
+    assert any(prev_norm in error for error in result["errors"])

@@ -52,15 +52,23 @@ LEDGER_FIELDS = (
 @dataclass(frozen=True)
 class ReplayPaths:
     root: Path
+    archive_root: Path
     data_root: Path
     fig_root: Path
     export_dir: Path
     log_dir: Path
+    case_work_root: Path
     case_archive_root: Path
     manifest_dir: Path
     quicklook_dir: Path
+    archive_manifest_dir: Path
+    archive_quicklook_dir: Path
+    archive_export_dir: Path
+    archive_fig_heatmap_dir: Path
+    archive_fig_meteogram_dir: Path
     herbie_cache: Path
     ledger_path: Path
+    archive_ledger_path: Path
 
 
 def parse_init(init: str) -> dt.datetime:
@@ -98,24 +106,42 @@ def default_replay_root() -> Path:
     return Path(
         os.environ.get(
             "CLYFAR_REPLAY_ROOT",
-            Path.home() / "basinwx-data" / "clyfar_replay" / "winter_2025_2026",
+            "/scratch/general/vast/u0737349/clyfar_replay/winter_2025_2026",
         )
     )
 
 
-def build_paths(root: Path) -> ReplayPaths:
+def default_archive_root() -> Path:
+    return Path(
+        os.environ.get(
+            "CLYFAR_REPLAY_ARCHIVE_ROOT",
+            "/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026",
+        )
+    )
+
+
+def build_paths(root: Path, archive_root: Path | None = None) -> ReplayPaths:
     root = root.expanduser().resolve()
+    archive_root = (archive_root or root).expanduser().resolve()
     return ReplayPaths(
         root=root,
+        archive_root=archive_root,
         data_root=root / "data",
         fig_root=root / "figures",
         export_dir=root / "basinwx_export",
         log_dir=root / "logs",
-        case_archive_root=root / "cases",
+        case_work_root=root / "data" / "json_tests",
+        case_archive_root=archive_root / "cases",
         manifest_dir=root / "manifests",
         quicklook_dir=root / "quicklooks",
+        archive_manifest_dir=archive_root / "manifests",
+        archive_quicklook_dir=archive_root / "quicklooks",
+        archive_export_dir=archive_root / "basinwx_export",
+        archive_fig_heatmap_dir=archive_root / "figures" / "heatmap",
+        archive_fig_meteogram_dir=archive_root / "figures" / "meteograms",
         herbie_cache=root / "herbie_cache",
         ledger_path=root / "ledger.csv",
+        archive_ledger_path=archive_root / "ledger.csv",
     )
 
 
@@ -125,12 +151,43 @@ def ensure_dirs(paths: ReplayPaths) -> None:
         paths.fig_root,
         paths.export_dir,
         paths.log_dir,
+        paths.case_work_root,
         paths.case_archive_root,
         paths.manifest_dir,
         paths.quicklook_dir,
+        paths.archive_manifest_dir,
+        paths.archive_quicklook_dir,
+        paths.archive_export_dir,
+        paths.archive_fig_heatmap_dir,
+        paths.archive_fig_meteogram_dir,
         paths.herbie_cache,
     ):
         path.mkdir(parents=True, exist_ok=True)
+
+
+def validate_mounts(paths: ReplayPaths) -> None:
+    """Print CHPC filesystem status and fail early if required roots are unavailable."""
+    checks = (
+        Path("/scratch/general/vast/u0737349"),
+        Path("/uufs/chpc.utah.edu/common/home/lawson-group6"),
+    )
+    for mount_path in checks:
+        result = subprocess.run(
+            ["df", "-hT", str(mount_path)],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if result.stdout:
+            print(result.stdout.strip(), flush=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Required replay filesystem unavailable: {mount_path}. "
+                f"df stderr: {result.stderr.strip()}"
+            )
+    if not paths.archive_root.is_relative_to(Path("/uufs/chpc.utah.edu/common/home/lawson-group6")):
+        raise RuntimeError(f"Archive root must be under lawson-group6 storage: {paths.archive_root}")
 
 
 def run_checked(cmd: list[str], *, cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess[str]:
@@ -174,6 +231,8 @@ def build_sbatch_command(
         "LLM_SKIP_UPLOAD": "1",
         "CLYFAR_HERBIE_CACHE": str(paths.herbie_cache),
         "CLYFAR_GEFS_DATA_ROOT": str(paths.data_root / "gefs_representative"),
+        "CLYFAR_JSON_TESTS_ROOT": str(paths.case_work_root),
+        "JSON_TESTS_ROOT": str(paths.case_work_root),
     }
     if ffion_version:
         exports["FFION_VERSION"] = ffion_version
@@ -210,6 +269,17 @@ def submit_job(cmd: list[str]) -> str:
     return job_id
 
 
+def parse_sacct_record(stdout: str, job_id: str) -> dict[str, str] | None:
+    for line in stdout.splitlines():
+        parts = line.split("|")
+        if len(parts) < 4:
+            continue
+        record_job_id = parts[0]
+        if record_job_id == job_id or record_job_id.startswith(f"{job_id}.") or record_job_id.startswith(f"{job_id}_"):
+            return {"state": parts[1], "exit_code": parts[2], "elapsed": parts[3]}
+    return None
+
+
 def wait_for_job(job_id: str, poll_seconds: int) -> dict[str, str]:
     while True:
         result = subprocess.run(
@@ -225,20 +295,21 @@ def wait_for_job(job_id: str, poll_seconds: int) -> dict[str, str]:
             break
         time.sleep(poll_seconds)
 
-    time.sleep(5)
-    sacct = subprocess.run(
-        ["sacct", "-j", job_id, "--format=JobIDRaw,State,ExitCode,Elapsed", "-P", "-n"],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if sacct.returncode != 0:
-        return {"state": "UNKNOWN", "exit_code": "UNKNOWN", "elapsed": "UNKNOWN"}
-    for line in sacct.stdout.splitlines():
-        parts = line.split("|")
-        if len(parts) >= 4 and parts[0] == job_id:
-            return {"state": parts[1], "exit_code": parts[2], "elapsed": parts[3]}
+    for attempt in range(3):
+        if attempt > 0:
+            time.sleep(5)
+        sacct = subprocess.run(
+            ["sacct", "-j", job_id, "--format=JobIDRaw,State,ExitCode,Elapsed", "-P", "-n"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if sacct.returncode != 0:
+            continue
+        record = parse_sacct_record(sacct.stdout, job_id)
+        if record is not None:
+            return record
     return {"state": "UNKNOWN", "exit_code": "UNKNOWN", "elapsed": "UNKNOWN"}
 
 
@@ -299,8 +370,9 @@ def validate_artifacts(
     figure_key = init_for_figure_glob(init)
     out_log = paths.log_dir / f"clyfar_{job_id}.out"
     err_log = paths.log_dir / f"clyfar_{job_id}.err"
-    case_dir = REPO_ROOT / "data" / "json_tests" / f"CASE_{norm}"
+    case_dir = paths.case_work_root / f"CASE_{norm}"
     llm_dir = case_dir / "llm_text"
+    prompt_path = llm_dir / f"forecast_prompt_{norm}.md"
     markdown_path = llm_dir / f"LLM-OUTLOOK-{norm}.md"
     pdf_path = llm_dir / f"LLM-OUTLOOK-{norm}.pdf"
     run_dir = paths.data_root / f"{norm}_run"
@@ -362,6 +434,25 @@ def validate_artifacts(
         counts["llm_validator_output"] = output
         if not ok:
             errors.append(f"Ffion validator failed: {output}")
+    if markdown_path.exists():
+        previous_norm = (parse_init(init) - dt.timedelta(hours=6)).strftime("%Y%m%d_%H00Z")
+        previous_markdown = (
+            paths.case_work_root
+            / f"CASE_{previous_norm}"
+            / "llm_text"
+            / f"LLM-OUTLOOK-{previous_norm}.md"
+        )
+        if previous_markdown.exists():
+            prompt_text = read_text_if_exists(prompt_path)
+            if previous_norm not in prompt_text:
+                errors.append(
+                    f"missing immediate previous outlook reference in prompt: {previous_norm} "
+                    f"(expected from {previous_markdown})"
+                )
+            if previous_norm not in read_text_if_exists(markdown_path):
+                counts["previous_outlook_reference_warning"] = (
+                    f"final outlook does not explicitly mention {previous_norm}"
+                )
 
     return {
         "init": init,
@@ -377,6 +468,7 @@ def validate_artifacts(
             "export_dir": str(paths.export_dir),
             "figure_root": str(paths.fig_root),
             "case_dir": str(case_dir),
+            "prompt": str(prompt_path),
             "markdown": str(markdown_path),
             "pdf": str(pdf_path),
         },
@@ -385,7 +477,7 @@ def validate_artifacts(
 
 def archive_case(init: str, paths: ReplayPaths) -> Path:
     norm = normalise_init(init)
-    source = REPO_ROOT / "data" / "json_tests" / f"CASE_{norm}"
+    source = paths.case_work_root / f"CASE_{norm}"
     dest = paths.case_archive_root / f"CASE_{norm}"
     if not source.exists():
         raise FileNotFoundError(f"CASE source not found: {source}")
@@ -395,9 +487,64 @@ def archive_case(init: str, paths: ReplayPaths) -> Path:
     return dest
 
 
-def prune_temp_llm_attempts(init: str) -> dict[str, int]:
+def copy_matching_files(source_dir: Path, dest_dir: Path, pattern: str) -> list[Path]:
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    copied: list[Path] = []
+    if not source_dir.exists():
+        return copied
+    for source in sorted(source_dir.glob(pattern)):
+        if source.is_file():
+            dest = dest_dir / source.name
+            shutil.copy2(source, dest)
+            copied.append(dest)
+    return copied
+
+
+def archive_runtime_outputs(init: str, paths: ReplayPaths) -> dict[str, Any]:
     norm = normalise_init(init)
-    llm_dir = REPO_ROOT / "data" / "json_tests" / f"CASE_{norm}" / "llm_text"
+    figure_key = init_for_figure_glob(init)
+    case_dest = archive_case(init, paths)
+    heatmaps = copy_matching_files(
+        paths.fig_root / "heatmap",
+        paths.archive_fig_heatmap_dir,
+        f"*{figure_key}*.png",
+    )
+    meteograms = copy_matching_files(
+        paths.fig_root / "meteograms",
+        paths.archive_fig_meteogram_dir,
+        f"*{figure_key}*.png",
+    )
+    exports = copy_matching_files(paths.export_dir, paths.archive_export_dir, f"*{norm}.json")
+    return {
+        "case_archive": str(case_dest),
+        "archive_heatmaps": [str(path) for path in heatmaps],
+        "archive_meteograms": [str(path) for path in meteograms],
+        "archive_export_json": [str(path) for path in exports],
+    }
+
+
+def archive_metadata(paths: ReplayPaths, manifest_path: Path, quicklook_path: Path) -> dict[str, str]:
+    manifest_dest = paths.archive_manifest_dir / manifest_path.name
+    quicklook_dest = paths.archive_quicklook_dir / quicklook_path.name
+    quicklook_json = quicklook_path.with_suffix(".json")
+    quicklook_json_dest = paths.archive_quicklook_dir / quicklook_json.name
+    shutil.copy2(manifest_path, manifest_dest)
+    shutil.copy2(quicklook_path, quicklook_dest)
+    if quicklook_json.exists():
+        shutil.copy2(quicklook_json, quicklook_json_dest)
+    if paths.ledger_path.exists():
+        shutil.copy2(paths.ledger_path, paths.archive_ledger_path)
+    return {
+        "manifest_archive": str(manifest_dest),
+        "quicklook_archive": str(quicklook_dest),
+        "quicklook_json_archive": str(quicklook_json_dest),
+        "ledger_archive": str(paths.archive_ledger_path),
+    }
+
+
+def prune_temp_llm_attempts(init: str, paths: ReplayPaths) -> dict[str, int]:
+    norm = normalise_init(init)
+    llm_dir = paths.case_work_root / f"CASE_{norm}" / "llm_text"
     victims: list[Path] = []
     if llm_dir.exists():
         victims.extend(path for path in llm_dir.glob("archive/.*.attempt*.tmp") if path.is_file())
@@ -568,10 +715,14 @@ def process_init(
         expected_members=expected_members,
         skip_validator=skip_validator,
     )
-    llm_prune = prune_temp_llm_attempts(init) if validation["status"] == "SUCCESS" else {"files": 0, "bytes": 0}
+    llm_prune = (
+        prune_temp_llm_attempts(init, paths)
+        if validation["status"] == "SUCCESS"
+        else {"files": 0, "bytes": 0}
+    )
     if validation["status"] == "SUCCESS":
-        archive_dest = archive_case(init, paths)
-        validation["paths"]["case_archive"] = str(archive_dest)
+        archive_paths = archive_runtime_outputs(init, paths)
+        validation["paths"].update(archive_paths)
 
     cache_cleanup = (
         clean_cache(paths, allow_shared_cache_cleanup=allow_shared_cache_cleanup)
@@ -625,6 +776,9 @@ def process_init(
             "notes": "; ".join(validation["errors"]),
         },
     )
+    if validation["status"] == "SUCCESS":
+        metadata_archive = archive_metadata(paths, manifest_path, quicklook_path)
+        validation["paths"].update(metadata_archive)
     if validation["status"] != "SUCCESS":
         raise RuntimeError(f"[{init}] validation failed: {'; '.join(validation['errors'])}")
 
@@ -635,7 +789,21 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--start", default=DEFAULT_START, help="First init YYYYMMDDHH.")
     parser.add_argument("--end", default=DEFAULT_END, help="Last init YYYYMMDDHH.")
-    parser.add_argument("--root", type=Path, default=default_replay_root(), help="Replay archive root.")
+    parser.add_argument(
+        "--root",
+        type=Path,
+        help="Deprecated alias for --work-root. Defaults to CHPC scratch replay root.",
+    )
+    parser.add_argument(
+        "--work-root",
+        type=Path,
+        help="Scratch replay work root for active GEFS/cache/export/figure/log I/O.",
+    )
+    parser.add_argument(
+        "--archive-root",
+        type=Path,
+        help="Durable group archive root for reviewed replay outputs.",
+    )
     parser.add_argument("--cpus", type=int, default=16, help="Slurm CPUs per task.")
     parser.add_argument("--mem", default="48G", help="Slurm memory request.")
     parser.add_argument("--time", default="01:00:00", help="Slurm walltime request.")
@@ -664,16 +832,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    paths = build_paths(args.root)
-    ensure_dirs(paths)
+    work_root = args.work_root or args.root or default_replay_root()
+    archive_root = args.archive_root or default_archive_root()
+    paths = build_paths(work_root, archive_root)
+    validate_mounts(paths)
     inits = build_init_list(args.start, args.end)
     if args.max_inits is not None:
         inits = inits[: args.max_inits]
     if args.resume:
         done = successful_inits_from_ledger(paths.ledger_path)
+        done.update(successful_inits_from_ledger(paths.archive_ledger_path))
         inits = [init for init in inits if init not in done]
 
-    print(f"Replay root: {paths.root}")
+    print(f"Replay work root: {paths.root}")
+    print(f"Replay archive root: {paths.archive_root}")
     print(f"Inits: {len(inits)} ({inits[0] if inits else 'none'} -> {inits[-1] if inits else 'none'})")
     print("Uploads: disabled via CLYFAR_ENABLE_UPLOAD=0 and LLM_SKIP_UPLOAD=1")
 
@@ -693,6 +865,8 @@ def main() -> None:
             print("First sbatch command:")
             print(" ".join(cmd))
         return
+
+    ensure_dirs(paths)
 
     for init in inits:
         process_init(
