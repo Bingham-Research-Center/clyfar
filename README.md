@@ -213,8 +213,14 @@ https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.
 ./scripts/run_winter_replay.py --resume --ffion-version 1.1.3
 ```
 - Default window is `2025120100` through `2026031518`, inclusive and 6-hourly.
-- The driver submits one Slurm job, validates artifacts, writes a manifest/ledger/quicklook, archives CASE output, cleans the isolated Herbie cache, then advances.
+- The driver submits one Slurm job, validates artifacts, writes a manifest/ledger/quicklook, archives reviewed outputs, cleans the isolated Herbie cache, then advances.
 - Uploads are forced off with `CLYFAR_ENABLE_UPLOAD=0` and `LLM_SKIP_UPLOAD=1`.
+- Replay active work root on CHPC: `/scratch/general/vast/u0737349/clyfar_replay/winter_2025_2026`
+- Replay durable archive root on CHPC: `/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026`
+- These are hard-coded CHPC absolute paths because raw replay artifacts and images are not stored in GitHub.
+- Archived heatmap PNGs: `/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026/figures/heatmap/`
+- Archived meteogram PNGs: `/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026/figures/meteograms/`
+- Numerical evaluation artifacts live under the archive root in `basinwx_export/`, `cases/CASE_*/possibilities/`, `cases/CASE_*/percentiles/`, `cases/CASE_*/probs/`, and `cases/CASE_*/weather/`; scratch parquets live under `/scratch/general/vast/u0737349/clyfar_replay/winter_2025_2026/data/*_run/parquets/`.
 
 **Generated-artifact pruning:**
 ```bash

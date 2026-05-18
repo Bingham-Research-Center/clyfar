@@ -4,9 +4,9 @@
 
 Point to a folder containing:
 ```
-forecast_exceedance_probabilities_YYYYMMDD_HHMMZ.json   (1 file)
-forecast_possibility_heatmap_clyfar*_YYYYMMDD_HHMMZ.json (31 files)
-forecast_percentile_scenarios_clyfar*_YYYYMMDD_HHMMZ.json (31 files)
+forecast_exceedance_probabilities_YYYYMMDD_HHMMZ.json      (1 file)
+forecast_possibility_heatmap_clyfarNNN_YYYYMMDD_HHMMZ.json (31 files)
+forecast_percentile_scenarios_clyfarNNN_YYYYMMDD_HHMMZ.json (31 files)
 ```
 
 ---
@@ -21,15 +21,15 @@ Read all JSON files from: {FOLDER_PATH}
 
 ## Data Structure
 
-1. **forecast_exceedance_probabilities_*.json** (1 file)
+1. **forecast_exceedance_probabilities_YYYYMMDD_HHMMZ.json** (1 file)
    - Ensemble probability of exceeding ozone thresholds (30, 50, 60, 75 ppb)
    - Use for: headline probabilities, public-facing risk levels
 
-2. **forecast_possibility_heatmap_clyfar*.json** (31 files, one per ensemble member)
+2. **forecast_possibility_heatmap_clyfarNNN_YYYYMMDD_HHMMZ.json** (31 files, one per ensemble member)
    - Fuzzy membership values (0-1) for categories: background, moderate, elevated, extreme
    - Use for: category-based forecasts, aggregate across members for ensemble mean
 
-3. **forecast_percentile_scenarios_clyfar*.json** (31 files, one per ensemble member)
+3. **forecast_percentile_scenarios_clyfarNNN_YYYYMMDD_HHMMZ.json** (31 files, one per ensemble member)
    - Ozone concentrations (ppb) at p10, p50, p90 percentiles
    - Use for: specific values, ensemble spread, worst-case scenarios
 
