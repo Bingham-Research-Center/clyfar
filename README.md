@@ -1,239 +1,100 @@
 # clyfar
-Bingham Research Center's (Utah State University) Ozone Prediction Model Clyfar
 
-> **AI-Assisted Development:** See `AGENTS.md` for canonical contributor/agent workflow guidance. This repo uses clean package boundaries across clyfar, brc-tools, and ubair-website.
-> **Seasonal operations runbook:** See `HIBERNATION.md` for cron pause/resume/tweak procedures, restart testing, and dev-mode priorities.
+Clyfar is the Bingham Research Center ozone prediction workflow: GEFS ingest, preprocessing, fuzzy inference, plots, BasinWx export, and Ffion LLM outlook generation.
 
-Written for Python 3.11.9. Using anaconda with conda-forge. Package requirements information should be updated in `requirements.txt`.
+Active repo guidance:
+- [`AGENTS.md`](AGENTS.md) - agent/developer operating rules.
+- [`HIBERNATION.md`](HIBERNATION.md) - current seasonal ops state, cron pause/resume, and dev priorities.
+- [`docs/README.md`](docs/README.md) - documentation index.
+- [`docs/setup_conda.md`](docs/setup_conda.md) - portable Miniforge/Conda setup.
+- [`docs/TESTING.md`](docs/TESTING.md) - pytest conventions.
+- [`docs/replay_resource_profiles.md`](docs/replay_resource_profiles.md) - winter replay Slurm resource profiles.
+- [`docs/archive/root_notes/LLM-SOP.md`](docs/archive/root_notes/LLM-SOP.md) - Ffion/LLM operating notes.
 
-Lawson, Lyman, Davies, 2024 
+`docs/ops_runbook.md` is still a template, not the current source of truth; use `HIBERNATION.md` and `AGENTS.md` for active operations.
 
-> **Clyfar release source:** [`__init__.__version__`](__init__.py) (should match `v*` git tags)  
-> **Ffion release source:** [`utils/versioning.py`](utils/versioning.py) (`FFION_VERSION`, should match `ffion-v*` git tags)  
-> **Ffion bundle registry:** [`templates/llm/ffion_registry.json`](templates/llm/ffion_registry.json)
+## Environment
 
-## Environment setup
-1. Install/initialize Miniforge or Conda (see [docs/setup_conda.md](docs/setup_conda.md) for platform specifics).
-2. Create the env: `conda create -n clyfar python=3.11.9 -y` then `conda activate clyfar`.
-3. Install packages: `pip install -r requirements.txt`.
-4. Run the smoke test to validate: `python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures -t`.
+Python target: 3.11.9.
 
-## CLI Usage
+Local setup:
+```bash
+conda create -n clyfar python=3.11.9 -y
+conda activate clyfar
+pip install -r requirements.txt
+```
+
+CHPC operational setup uses Miniforge at `~/software/pkg/miniforge3` and the `clyfar-nov2025` environment. `scripts/submit_clyfar.sh` activates it automatically for Slurm jobs; interactive shells may inherit it, but check first:
 
 ```bash
-python run_gefs_clyfar.py -i YYYYMMDDHH -n NCPUS -m NMEMBERS -d DATA_ROOT -f FIG_ROOT [options]
+echo "$CONDA_DEFAULT_ENV"
+source ~/software/pkg/miniforge3/etc/profile.d/conda.sh
+conda activate clyfar-nov2025
 ```
 
-**Required arguments:**
-| Flag | Description |
-|------|-------------|
-| `-i`, `--inittime` | Initialization time (YYYYMMDDHH format) |
-| `-n`, `--ncpus` | Number of CPUs for parallel processing |
-| `-m`, `--nmembers` | Number of ensemble members (1-31) or `all` for full GEFS ensemble |
-| `-d`, `--data-root` | Root directory for data output |
-| `-f`, `--fig-root` | Root directory for figure output |
+## Common Runs
 
-**Optional flags:**
-| Flag | Description |
-|------|-------------|
-| `-v`, `--verbose` | Enable verbose logging |
-| `-t`, `--testing` | Enable testing/smoke mode |
-| `-nc`, `--no-clyfar` | Skip Clyfar processing |
-| `-ng`, `--no-gefs` | Skip GEFS download |
-| `--log-fis` | Log fuzzy inference system diagnostics |
-| `--serial-debug` | Disable multiprocessing for debugging |
-
-**Examples:**
+Smoke test:
 ```bash
-# Smoke test (2 members, testing mode)
-python run_gefs_clyfar.py -i 2025112806 -n 4 -m 2 -d ./data -f ./figures -t
-
-# Full operational run (all 31 GEFS members)
-python run_gefs_clyfar.py -i 2025112806 -n 16 -m all -d ~/basinwx-data/clyfar -f ~/basinwx-data/clyfar/figures --log-fis
-
-# SLURM submission (uses submit_clyfar.sh)
-sbatch scripts/submit_clyfar.sh 2025112806
+python run_gefs_clyfar.py -i 2024010100 -n 2 -m 2 -d ./data -f ./figures --testing
 ```
 
-For example scenario/cluster visualisations from existing JSON (quantities, probabilities, possibilities), see `docs/CODEX-SCENARIO-POSSIBILITIES.md` and the demo scripts under `scripts/demo_*.py`.
-
-## Debugging guardrails
-
-- Avoid stacking silent workarounds. If a Herbie download fails, revisit the `Lookup` entry and cfgrib `filter_by_keys` using the official inventories (see `docs/external_data_references.md`) before dropping more coordinates or mutating datasets ad hoc.
-- Keep canonical working examples: each variable’s loader should reference a single helper/function so humans and AI agents know where to look. Make lookup tables explicit so adding future inventory entries is transparent.
-- Run with verbose logging/prints: helpers should log GRIB paths, filters, fallback usage, and NaN counts so a single smoke run surfaces issues.
-- Prune caches and sanity-check artifacts regularly: delete stale `data/herbie_cache/*` or old parquet files before reruns, verify outputs, and surface questions early rather than letting errors propagate between repos.
-- Document the high-value references (Herbie gallery, GEFS inventory) in AI agent lookup files and intro guides so token budgets aren’t burned rediscovering them.
-- Long-term goal: refine `Lookup` + Herbie `filter_by_keys` so every variable uses the structured loader (cfgrib/xarray) without the legacy fallback. Once those filter definitions are stable, we can upstream the helpers into `brc-tools` for reuse across repos.
-
-### Scope of Clyfar
-Clyfar is the name of the prediction system itself - at least the point-of-access label of information. The fuzzy inference system, coupled with the pre-processing of observation and numerical weather prediction (NWP) data, and some post-processing (TBD!) will be part of the Clyfar system. Future work, such as a larger-scale modular approach within which Clyfar is a part, will be put in a separate package and repository.
-
-## BasinWx Website Integration
-
-Clyfar predictions are intended to be pushed to the BasinWx website (`basinwx.com`).
-
-**Integration Status:** OPERATIONAL (as of 2025-11-28)
-- Model execution: ✓ Working (run_gefs_clyfar.py)
-- Output generation: ✓ Working (parquet + PNG figures)
-- Website upload: ✓ Working (JSON + PNG via export/to_basinwx.py)
-- Cron scheduling: Seasonal mode (as of 2026-03-30: observations active; Clyfar 6-hourly submit line paused/commented)
-
-**CHPC paths:**
-- Conda env: `clyfar-nov2025` via `~/software/pkg/miniforge3`
-- Clyfar repo: `~/gits/clyfar`
-- Data output: `~/basinwx-data/clyfar`
-- Logs: `~/logs/basinwx/clyfar_*.out`
-
-**Environment requirements (set in ~/.bashrc_basinwx):**
-- `DATA_UPLOAD_API_KEY`: 32-char hex key for BasinWx uploads
-- `BASINWX_API_URL`: https://basinwx.com (optional, defaults to this)
-
-**Operational notes (2026-03 hotfix):**
-- `scripts/submit_clyfar.sh` auto-init selection is anchored to Slurm `SubmitTime` to prevent queue-delay cycle skips (e.g., missing 12Z when a job starts late).
-- For interactive `./scripts/run_llm_outlook.sh ... --upload`, source `~/.bashrc_basinwx` first (or export upload vars manually) so API uploads use the production key context.
-- If you backfill a missed cycle outlook, regenerate the next cycle outlook with `--force` so previous-outlook comparisons reflect the repaired sequence.
-
-### Cron operations: pause/resume/tweak (plain language)
-
-The normal pattern is to keep both cronjobs in the same user crontab:
-- observations every 5 minutes
-- Clyfar forecast submit every 6 hours (`15 3,9,15,21 * * *`, local scheduler time)
-
-When you want to pause only forecasts for offseason, **comment out** the Clyfar line and leave observations alone.
-
-Example active lines:
-```cron
-# Observations - Every 5 minutes
-*/5 * * * * /bin/bash -c 'source ~/.bashrc_basinwx && source ~/software/pkg/miniforge3/etc/profile.d/conda.sh && conda activate clyfar-nov2025 && python ~/gits/brc-tools/brc_tools/download/get_map_obs.py >> ~/logs/obs.log 2>&1'
-
-# Clyfar 6-hourly submits
-15 3,9,15,21 * * * /bin/bash -c 'source ~/.bashrc_basinwx && export PATH=$PATH:/uufs/notchpeak.peaks/sys/installdir/slurm/std/bin && cd ~/gits/clyfar && sbatch scripts/submit_clyfar.sh >> ~/logs/clyfar_submit.log 2>&1'
-```
-
-Example paused-forecast state (what we use in hibernation):
-```cron
-# Observations - Every 5 minutes
-*/5 * * * * /bin/bash -c 'source ~/.bashrc_basinwx && source ~/software/pkg/miniforge3/etc/profile.d/conda.sh && conda activate clyfar-nov2025 && python ~/gits/brc-tools/brc_tools/download/get_map_obs.py >> ~/logs/obs.log 2>&1'
-
-# Clyfar 6-hourly submits (paused for offseason)
-# 15 3,9,15,21 * * * /bin/bash -c 'source ~/.bashrc_basinwx && export PATH=$PATH:/uufs/notchpeak.peaks/sys/installdir/slurm/std/bin && cd ~/gits/clyfar && sbatch scripts/submit_clyfar.sh >> ~/logs/clyfar_submit.log 2>&1'
-```
-
-Quick commands:
+Full local/ad hoc run:
 ```bash
-# Inspect current crontab with line numbers
-crontab -l | nl -ba
-
-# Edit safely
-crontab -e
+python run_gefs_clyfar.py -i 2024010100 -n 16 -m all -d ./data -f ./figures --log-fis
 ```
 
-To return to normal, remove the leading `#` from the Clyfar line. To tweak cadence, edit only the cron timing fields and keep the command body unchanged. See `HIBERNATION.md` for the full restart checklist and tested examples.
-
-> **TODO (Operations):** Herbie cache management needs improvement. Currently cached GRIB/idx files can become stale or corrupted, causing failures on retry. Options to implement:
-> 1. Add `--fresh-cache` CLI flag to clear cache before run
-> 2. Use per-job temp cache: `export CLYFAR_HERBIE_CACHE="/tmp/herbie_${SLURM_JOB_ID}"`
-> 3. Add cache validation/cleanup to `submit_clyfar.sh`
->
-> For now, manually clear before ad-hoc runs: `rm -rf ~/basinwx-data/clyfar/herbie_cache/*`
-
-## Related Repositories and Knowledge Base
-- Technical report (LaTeX, local path): `/Users/johnlawson/Documents/GitHub/preprint-clyfar-v0p9`
-- Knowledge base (local path): `/Users/johnlawson/Documents/GitHub/brc-knowledge`
-- BRC operational tools (local path): `../brc-tools` (sibling to this repo)
-- Website deployment: `../ubair-website` (Node.js website receiving predictions)
-
-Notes
-- These are referenced for documentation and operations; clone or mount as needed.
-- Keep them out of the token working set unless required for a task.
-
-## Live session logging
-- Append notes with `scripts/livelog` or `echo` to `docs/session_log.md`; PyCharm (or any editor) will follow that file as it changes.
-- Capture full terminal output (AI agents or CLI apps) with standard tools:
-  - Linux: `script -f docs/session_log.md`; macOS uses `script -F docs/session_log.md` because `/usr/bin/script` lacks `-f`.
-  - In tmux: `tmux pipe-pane -o 'cat >> docs/session_log.md'` (enable where you want streaming, disable afterward).
-  - Per-command: `yourcmd 2>&1 | tee -a docs/session_log.md` keeps the transcript on screen while persisting it.
-- For Vim tailing, install the dotfiles (`~/dotfiles/install.sh`) so `vim-dispatch` is available; then run `:Dispatch tail -f docs/session_log.md` or `<leader>tl` while editing to keep a live tail inside the editor (see `~/dotfiles/README.md` for more detail).
-
-## AI-Generated Outlook PDFs (Alpha)
-
-> **Status:** Operational, January 2026
-
-Clyfar generates AI-assisted ozone outlooks using the "Ffion" forecaster (Claude LLM). Each outlook is available as a professionally formatted PDF.
-
-The LLM prompt banner includes Clyfar and Ffion version metadata injected at generation time from `__init__.__version__` and `utils/versioning.py`.
-The editable Ffion surface is versioned under `FFION_VERSION` via [`templates/llm/ffion_registry.json`](templates/llm/ffion_registry.json), which resolves the prompt template, bias file, and optional QA/operator-notes file for fixed reforecasts.
-
-**Public access URL:**
-```
-https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
-```
-
-**Example (replace with current date/time):**
-```
-https://basinwx.com/api/static/llm_text/llm_outlooks/LLM-OUTLOOK-20260109_0600Z.pdf
-```
-
-**Local generation + upload:**
+Operational Slurm entrypoint:
 ```bash
-./LLM-GENERATE.sh 20260102_0600Z
-# Generates: forecast_prompt .md, LLM-OUTLOOK .md and .pdf
-# Uploads PDF to BasinWx if DATA_UPLOAD_API_KEY is set
+sbatch scripts/submit_clyfar.sh 2024010100
 ```
 
-**Preferred development test path (cron parity, repeatable):**
+Winter replay resume on CHPC:
 ```bash
-# Prerequisite check only (no generation)
-./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --check
+python scripts/run_winter_replay.py \
+  --start 2026010412 \
+  --end 2026031518 \
+  --resume
+```
 
-# Single init regeneration
+Replay defaults currently include `lawson-np`, 16 CPUs, 48G, 2h walltime, and 30s polling. The launcher can run from a login node in `tmux` or `screen`; Slurm runs each compute job.
+
+## Safety
+
+For winter replay, the durable restart checkpoint is a ledger `SUCCESS` row or the driver message `validated, ledger updated, cache cleanup complete`. Killing before that may cause `--resume` to rerun the current init.
+
+Use `squeue` for live state. If `sacct` fails, rely on logs, ledgers, manifests, quicklooks, and artifact trees before diagnosing a crash.
+
+## Outputs
+
+Operational outputs default under `~/basinwx-data/clyfar` and logs under `~/logs/basinwx/`.
+
+Winter replay active root:
+`/scratch/general/vast/u0737349/clyfar_replay/winter_2025_2026`
+
+Winter replay durable archive:
+`/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026`
+
+Important replay review paths under the archive root: `cases/`, `figures/heatmap/`, `figures/meteograms/`, `basinwx_export/`, `quicklooks/`, `manifests/`, and `ledger.csv`.
+
+## Ffion
+
+Ffion versioning is resolved through [`utils/versioning.py`](utils/versioning.py) and [`templates/llm/ffion_registry.json`](templates/llm/ffion_registry.json).
+
+Preferred dev path:
+```bash
 ./scripts/run_llm_outlook.sh 2026022400 --force
-
-# Serial 6-hourly regeneration window
 ./scripts/run_llm_outlook.sh --start 2026022000 --end 2026022400 --force
-
-# Fixed Ffion reforecast
-./scripts/run_llm_outlook.sh 2026022400 --ffion-version 1.1.2 --force
 ```
-- This mirrors the production post-forecast Ffion flow in `scripts/submit_clyfar.sh`.
-- Default is test-safe (`LLM_SKIP_UPLOAD=1`); add `--upload` only when intentional.
-- For interactive `--upload` runs, source `~/.bashrc_basinwx` first to ensure valid API credentials are loaded.
-- For versioned QA notes, use `source scripts/set_llm_qa.sh --ffion-version <VERSION>` or pass `--qa-file` directly.
 
-**Winter 2025-2026 replay harness:**
+Default is upload-safe (`LLM_SKIP_UPLOAD=1`); use `--upload` intentionally after sourcing `~/.bashrc_basinwx`.
+
+## Tests
+
 ```bash
-# Inspect the serial Slurm plan without submitting jobs
-./scripts/run_winter_replay.py --dry-run
-
-# Pilot first two 6-hourly inits, local-only uploads, isolated cache
-./scripts/run_winter_replay.py --max-inits 2 --ffion-version 1.1.3
-
-# Resume the full default window, skipping successful ledger rows
-./scripts/run_winter_replay.py --resume --ffion-version 1.1.3
-```
-- Default window is `2025120100` through `2026031518`, inclusive and 6-hourly.
-- The driver submits one Slurm job, validates artifacts, writes a manifest/ledger/quicklook, archives reviewed outputs, cleans the isolated Herbie cache, then advances.
-- Uploads are forced off with `CLYFAR_ENABLE_UPLOAD=0` and `LLM_SKIP_UPLOAD=1`.
-- Replay active work root on CHPC: `/scratch/general/vast/u0737349/clyfar_replay/winter_2025_2026`
-- Replay durable archive root on CHPC: `/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026`
-- These are hard-coded CHPC absolute paths because raw replay artifacts and images are not stored in GitHub.
-- Archived heatmap PNGs: `/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026/figures/heatmap/`
-- Archived meteogram PNGs: `/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay/winter_2025_2026/figures/meteograms/`
-- Numerical evaluation artifacts live under the archive root in `basinwx_export/`, `cases/CASE_*/possibilities/`, `cases/CASE_*/percentiles/`, `cases/CASE_*/probs/`, and `cases/CASE_*/weather/`; scratch parquets live under `/scratch/general/vast/u0737349/clyfar_replay/winter_2025_2026/data/*_run/parquets/`.
-
-**Generated-artifact pruning:**
-```bash
-# Inspect old llm_text archive/temp files
-python scripts/prune_llm_case_artifacts.py --dry-run
-
-# Delete old generated artifacts once reviewed
-python scripts/prune_llm_case_artifacts.py --apply
+env PYTHONPATH=. pytest -q
+env PYTHONPATH=. pytest -q tests/test_winter_replay.py
+python -m py_compile run_gefs_clyfar.py scripts/run_winter_replay.py
 ```
 
-**Local path (CHPC):**
-```
-~/gits/clyfar/data/json_tests/CASE_YYYYMMDD_HHMMZ/llm_text/LLM-OUTLOOK-YYYYMMDD_HHMMZ.pdf
-```
-
-See `docs/archive/root_notes/LLM-SOP.md` for operational procedures, `templates/llm/ffion_registry.json` for Ffion bundle selection, and `templates/llm/prompt_body.md` for the active prompt path.
+Keep large generated artifacts out of GitHub.
