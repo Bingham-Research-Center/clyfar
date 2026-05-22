@@ -30,6 +30,7 @@ import datetime
 import platform
 import shutil
 import sys
+import time
 
 import numpy as np
 import pandas as pd
@@ -838,28 +839,40 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
     )
 
     results = None
+    phase_timings = {}
+
+    def record_phase(name: str, phase_started: float) -> None:
+        elapsed = time.perf_counter() - phase_started
+        phase_timings[name] = elapsed
+        print(f"PHASE_TIMING {name}={elapsed:.2f}s")
 
     if not no_gefs:
         print("Downloading GEFS data for", init_dt_dict['naive'])
         workflow_fn = (parallel_forecast_workflow
                         if verbose else parallel_forecast_workflow.__wrapped__)
+        phase_started = time.perf_counter()
         results = workflow_fn(
             init_dt_dict['naive'], masks, member_names, variables, ncpus=ncpus,
             testing=testing, serial=args.serial_debug)
+        record_phase("gefs_processing_seconds", phase_started)
 
         print(f"{init_dt_dict['naive']=}, {masks=}, {member_names=}, "
               f"{ncpus=}, {testing=}")
 
         if save:
             print("Saving GEFS data for", init_dt_dict['naive'])
+            phase_started = time.perf_counter()
             for variable, dfs in results.items():
                 save_forecast_data(
                     dfs, variable, init_dt_dict, dataroot=gefs_data_root)
+            record_phase("gefs_save_seconds", phase_started)
 
         if visualise:
             print("Visualizing GEFS data for", init_dt_dict['naive'])
             # Generate visualization suite
+            phase_started = time.perf_counter()
             visualize_results(results, clyfar_fig_root, init_dt_dict)
+            record_phase("gefs_visualize_seconds", phase_started)
 
     # Run Clyfar here - GEFS time series already exists if everything went well
     # Go member by member to compute Clyfar
@@ -874,6 +887,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
 
         clyfar_df_dict = {}
         dailymax_df_dict = {}
+        phase_started = time.perf_counter()
         for nm, member in enumerate(member_names):
             clyfar_member = gefs_to_clyfar_membername(member)
             # TODO - no dicts; just save members in a folder for the run?
@@ -886,6 +900,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             dailymax_df_dict[clyfar_member] = utils.compute_local_daily_max(
                 member_df, target_tz=LOCAL_TIMEZONE)
             pass
+        record_phase("clyfar_inference_seconds", phase_started)
 
         print("Clyfar inference complete for", init_dt_dict['naive'])
 
@@ -894,6 +909,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
         # then with third dimension of ensemble members.
 
         if save:
+            phase_started = time.perf_counter()
             # subfolder for this run
             # Root gets us to subdir with date
             # subdir = os.path.join(clyfar_data_root,
@@ -916,6 +932,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             archive_clyfar_parquets_to_run(
                 clyfar_data_root, init_dt_dict['naive'], clyfar_df_dict,
                 dailymax_df_dict=dailymax_df_dict)
+            record_phase("clyfar_save_archive_seconds", phase_started)
 
         if log_fis and fis_diagnostics:
             diag_df = pd.DataFrame(fis_diagnostics)
@@ -931,6 +948,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
             # TODO - create folders by run date and GEFS v Clyfar output
 
             print("Visualizing Clyfar data for", init_dt_dict['naive'])
+            phase_started = time.perf_counter()
             if do_optim_pessim:
                 for clyfar_member in clyfar_df_dict.keys():
                     fig, ax = plot_percentile_meteogram(
@@ -990,6 +1008,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                     except Exception as e:
                         logger.error(f"Failed to create daily-max heatmap for {clyfar_member}: {e}")
                 print(f"Saved {dailymax_count} daily-max heatmaps of O3 categories to {subdir}")
+            record_phase("clyfar_visualize_seconds", phase_started)
 
     # Export to BasinWx website.
     # submit_clyfar.sh can disable this internal pass and run one central export stage
@@ -1001,6 +1020,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                 "Skipping internal BasinWx export in run_gefs_clyfar "
                 "(CLYFAR_SKIP_INTERNAL_EXPORT=1)"
             )
+            phase_timings["internal_export_seconds"] = 0.0
         else:
             try:
                 from export.to_basinwx import export_all_products, export_figures_to_basinwx
@@ -1009,16 +1029,17 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                 print(f"Upload mode (run_gefs_clyfar): {'ENABLED' if upload_enabled else 'DISABLED'}")
                 export_dir = os.path.join(clyfar_data_root, "basinwx_export")
                 utils.try_create(export_dir)
+                phase_started = time.perf_counter()
 
                 # Export JSON products (63 ozone + 1 clustering + 32 weather = 96 files)
-                results = export_all_products(
+                export_results = export_all_products(
                     dailymax_df_dict=dailymax_df_dict,
                     init_dt=init_dt_dict['naive'],
                     output_dir=export_dir,
                     clyfar_df_dict=clyfar_df_dict,  # Full-resolution for weather export
                     upload=upload_enabled
                 )
-                total = sum(len(v) for v in results.values())
+                total = sum(len(v) for v in export_results.values())
                 print(f"Exported {total} JSON files to {export_dir}")
 
                 # Export PNG figures (heatmaps + meteograms) and PDF outlooks
@@ -1032,6 +1053,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                     print(f"Exported {len(fig_results.get('heatmaps', []))} heatmaps, "
                           f"{len(fig_results.get('meteograms', []))} meteograms, "
                           f"{len(fig_results.get('outlooks', []))} outlook PDFs")
+                record_phase("internal_export_seconds", phase_started)
 
             except ImportError as e:
                 logger.warning("Could not import export module: %s", e)
@@ -1039,7 +1061,7 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                 logger.error("Export to BasinWx failed: %s", e)
 
     print("Forecast workflow complete for", init_dt_dict['naive'])
-    return
+    return {"phase_timings": phase_timings}
 
 if __name__ == "__main__":
     # Ensure Matplotlib caches land in a writable path to avoid warnings
@@ -1119,15 +1141,22 @@ if __name__ == "__main__":
                     if args.testing else args.data_root)
     started_utc = datetime.datetime.utcnow()
     run_failed = False
+    workflow_result = None
     try:
-        main(dt=args.inittime,
-             clyfar_fig_root=args.fig_root, clyfar_data_root=args.data_root,
-             ncpus=args.ncpus, nmembers=args.nmembers,
-             visualise=True, save=True,
-             verbose=args.verbose, testing=args.testing,
-             no_clyfar=args.no_clyfar, no_gefs=args.no_gefs,
-             log_fis=args.log_fis,
-             )
+        workflow_result = main(
+            dt=args.inittime,
+            clyfar_fig_root=args.fig_root,
+            clyfar_data_root=args.data_root,
+            ncpus=args.ncpus,
+            nmembers=args.nmembers,
+            visualise=True,
+            save=True,
+            verbose=args.verbose,
+            testing=args.testing,
+            no_clyfar=args.no_clyfar,
+            no_gefs=args.no_gefs,
+            log_fis=args.log_fis,
+        )
     except requests.exceptions.HTTPError as e:
         # Check if this is a 404 "data not available yet" error
         if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
@@ -1238,6 +1267,11 @@ if __name__ == "__main__":
                     "started_utc": started_utc.isoformat() + "Z",
                     "finished_utc": finished_utc.isoformat() + "Z",
                     "duration_seconds": (finished_utc - started_utc).total_seconds(),
+                    "phase_seconds": (
+                        workflow_result.get("phase_timings", {})
+                        if isinstance(workflow_result, dict)
+                        else {}
+                    ),
                 },
                 "artifacts": artifacts,
                 "environment": env_info,
