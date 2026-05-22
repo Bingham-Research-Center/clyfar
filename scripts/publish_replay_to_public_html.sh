@@ -214,6 +214,9 @@ def render_summary(manifest: dict[str, object], quicklook: dict[str, object]) ->
         ("Slurm state", slurm.get("state", "n/a")),
         ("Exit code", slurm.get("exit_code", "n/a")),
         ("Duration", fmt_duration(timings.get("duration_seconds"))),
+        ("Slurm elapsed", timings.get("slurm_elapsed", slurm.get("elapsed", "n/a"))),
+        ("Driver wait", fmt_duration(timings.get("driver_wait_seconds"))),
+        ("Postprocess", fmt_duration(timings.get("postprocess_seconds"))),
         ("Git commit", manifest.get("git_commit", "n/a")),
         ("Heatmaps", counts.get("figure_heatmaps", counts.get("figure_files", "n/a"))),
         ("Meteograms", counts.get("figure_meteograms", "n/a")),
@@ -564,6 +567,11 @@ def render_case_page() -> None:
                 f"<tr><th>Slurm state</th><td>{esc(slurm.get('state', 'n/a'))}</td></tr>",
                 f"<tr><th>Slurm exit</th><td>{esc(slurm.get('exit_code', 'n/a'))}</td></tr>",
                 f"<tr><th>Duration</th><td>{esc(fmt_duration(timings.get('duration_seconds')))}</td></tr>",
+                f"<tr><th>Submitted UTC</th><td>{esc(timings.get('submitted_utc', 'n/a'))}</td></tr>",
+                f"<tr><th>Slurm finished UTC</th><td>{esc(timings.get('slurm_finished_utc', 'n/a'))}</td></tr>",
+                f"<tr><th>Slurm elapsed</th><td>{esc(timings.get('slurm_elapsed', slurm.get('elapsed', 'n/a')))}</td></tr>",
+                f"<tr><th>Driver wait</th><td>{esc(fmt_duration(timings.get('driver_wait_seconds')))}</td></tr>",
+                f"<tr><th>Postprocess</th><td>{esc(fmt_duration(timings.get('postprocess_seconds')))}</td></tr>",
                 f"<tr><th>Git commit</th><td><code>{esc(manifest.get('git_commit', 'n/a'))}</code></td></tr>",
                 f"<tr><th>Replay source</th><td><code>{esc(source_root)}</code></td></tr>",
                 f"<tr><th>Replay case</th><td><code>{esc(case_dir)}</code></td></tr>",
@@ -629,6 +637,7 @@ def render_root_page() -> None:
         counts = validation.get("counts", {}) if isinstance(validation, dict) else {}
         status = validation.get("status", quicklook.get("status", "n/a")) if isinstance(validation, dict) else quicklook.get("status", "n/a")
         slurm = manifest.get("slurm", {}) if isinstance(manifest.get("slurm", {}), dict) else {}
+        timings = manifest.get("timings", {}) if isinstance(manifest.get("timings", {}), dict) else {}
         init_label = path.name.replace("CASE_", "")
         rows.append(
             "<a class=\"case-card\" href=\"cases/{case}/index.html\">"
@@ -639,6 +648,7 @@ def render_root_page() -> None:
             "<div class=\"case-card__meta\">"
             "<span>Job {job}</span>"
             "<span>Slurm {state}</span>"
+            "<span>{duration} total</span>"
             "<span>{heatmaps} heatmaps</span>"
             "<span>{meteograms} meteograms</span>"
             "<span>{jsons} JSON</span>"
@@ -648,6 +658,7 @@ def render_root_page() -> None:
                 status=esc(status),
                 job=esc(manifest.get("job_id", "n/a")),
                 state=esc(slurm.get("state", "n/a")),
+                duration=esc(fmt_duration(timings.get("duration_seconds"))),
                 heatmaps=esc(counts.get("figure_heatmaps", counts.get("figure_files", "n/a"))),
                 meteograms=esc(counts.get("figure_meteograms", "n/a")),
                 jsons=esc(counts.get("export_json_files", "n/a")),

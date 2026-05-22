@@ -1,3 +1,4 @@
+import csv
 import importlib.util
 import sys
 from pathlib import Path
@@ -46,6 +47,22 @@ def test_sbatch_command_disables_uploads(tmp_path):
     ]
 
 
+def test_poll_seconds_default_is_30(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["run_winter_replay.py"])
+    assert replay.parse_args().poll_seconds == 30
+
+
+def test_replay_slurm_defaults_match_winter_profile(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["run_winter_replay.py"])
+    args = replay.parse_args()
+
+    assert args.cpus == 16
+    assert args.mem == "48G"
+    assert args.time == "02:00:00"
+    assert args.account == "lawson-np"
+    assert args.partition == "lawson-np"
+
+
 def test_wait_for_job_accepts_slurm_derived_job_ids(monkeypatch):
     calls = {"squeue": 0, "sacct": 0, "sleep": []}
 
@@ -68,7 +85,10 @@ def test_wait_for_job_accepts_slurm_derived_job_ids(monkeypatch):
 
     result = replay.wait_for_job("12869709", poll_seconds=1)
 
-    assert result == {"state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:10:00"}
+    assert result["state"] == "COMPLETED"
+    assert result["exit_code"] == "0:0"
+    assert result["elapsed"] == "00:10:00"
+    assert result["observed_finished_utc"].endswith("Z")
     assert calls["squeue"] == 1
     assert calls["sacct"] == 1
     assert calls["sleep"] == []
@@ -92,10 +112,115 @@ def test_wait_for_job_retries_sacct_before_falling_back(monkeypatch):
 
     result = replay.wait_for_job("12869709", poll_seconds=1)
 
-    assert result == {"state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:10:00"}
+    assert result["state"] == "COMPLETED"
+    assert result["exit_code"] == "0:0"
+    assert result["elapsed"] == "00:10:00"
+    assert result["observed_finished_utc"].endswith("Z")
     assert calls["squeue"] == 1
     assert calls["sacct"] == 3
     assert calls["sleep"] == [5, 5]
+
+
+def test_quicklook_records_replay_timings(tmp_path):
+    paths = replay.build_paths(tmp_path / "replay")
+    replay.ensure_dirs(paths)
+    timings = {
+        "started_utc": "2026-05-21T00:00:00Z",
+        "submitted_utc": "2026-05-21T00:00:01Z",
+        "slurm_finished_utc": "2026-05-21T00:10:01Z",
+        "finished_utc": "2026-05-21T00:11:01Z",
+        "slurm_elapsed": "00:10:00",
+        "driver_wait_seconds": 600.0,
+        "postprocess_seconds": 60.0,
+        "duration_seconds": 661.0,
+    }
+    manifest_path = paths.manifest_dir / "20251201_0000Z.json"
+    manifest_path.write_text("{}")
+
+    quicklook_path = replay.write_quicklook(
+        "2025120100",
+        paths,
+        validation={
+            "status": "SUCCESS",
+            "counts": {
+                "full_parquets": 0,
+                "dailymax_parquets": 0,
+                "gefs_representative_files": 0,
+                "export_json_files": 0,
+                "figure_files": 0,
+                "case_files": 0,
+            },
+            "errors": [],
+            "paths": {},
+        },
+        manifest_path=manifest_path,
+        timings=timings,
+    )
+
+    text = quicklook_path.read_text()
+    assert "Submitted UTC: 2026-05-21T00:00:01Z" in text
+    assert "Slurm elapsed: 00:10:00" in text
+    assert "Postprocess seconds: 60.0" in text
+
+
+def test_ledger_appends_replay_timing_fields(tmp_path):
+    paths = replay.build_paths(tmp_path / "replay")
+    replay.ensure_dirs(paths)
+
+    replay.append_ledger(
+        paths,
+        {
+            "init": "2025120100",
+            "job_id": "12345",
+            "status": "SUCCESS",
+            "slurm_state": "COMPLETED",
+            "slurm_exit_code": "0:0",
+            "started_utc": "2026-05-21T00:00:00Z",
+            "finished_utc": "2026-05-21T00:11:01Z",
+            "duration_seconds": 661.0,
+            "submitted_utc": "2026-05-21T00:00:01Z",
+            "slurm_finished_utc": "2026-05-21T00:10:01Z",
+            "slurm_elapsed": "00:10:00",
+            "driver_wait_seconds": 600.0,
+            "postprocess_seconds": 60.0,
+        },
+    )
+
+    with paths.ledger_path.open(newline="") as f:
+        row = next(csv.DictReader(f))
+    assert row["submitted_utc"] == "2026-05-21T00:00:01Z"
+    assert row["slurm_elapsed"] == "00:10:00"
+    assert row["postprocess_seconds"] == "60.0"
+
+
+def test_append_ledger_upgrades_existing_header_for_timing_fields(tmp_path):
+    paths = replay.build_paths(tmp_path / "replay")
+    replay.ensure_dirs(paths)
+    paths.ledger_path.write_text(
+        "init,job_id,status,slurm_state,slurm_exit_code,started_utc,finished_utc,duration_seconds\n"
+        "2025120100,111,SUCCESS,COMPLETED,0:0,old-start,old-finish,10.0\n"
+    )
+
+    replay.append_ledger(
+        paths,
+        {
+            "init": "2025120106",
+            "job_id": "222",
+            "status": "SUCCESS",
+            "slurm_state": "COMPLETED",
+            "slurm_exit_code": "0:0",
+            "submitted_utc": "new-submit",
+            "slurm_elapsed": "00:10:00",
+        },
+    )
+
+    with paths.ledger_path.open(newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert "submitted_utc" in rows[0]
+    assert rows[0]["init"] == "2025120100"
+    assert rows[0]["submitted_utc"] == ""
+    assert rows[1]["submitted_utc"] == "new-submit"
+    assert rows[1]["slurm_elapsed"] == "00:10:00"
 
 
 def test_validate_artifacts_accepts_complete_fixture(tmp_path):

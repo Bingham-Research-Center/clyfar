@@ -26,6 +26,12 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_START = "2025120100"
 DEFAULT_END = "2026031518"
+DEFAULT_CPUS = 16
+DEFAULT_MEM = "48G"
+DEFAULT_WALLTIME = "02:00:00"
+DEFAULT_POLL_SECONDS = 30
+DEFAULT_SLURM_ACCOUNT = os.environ.get("CLYFAR_REPLAY_ACCOUNT", "lawson-np")
+DEFAULT_SLURM_PARTITION = os.environ.get("CLYFAR_REPLAY_PARTITION", DEFAULT_SLURM_ACCOUNT)
 VARIABLES = ("snow", "wind", "solar", "mslp", "temp")
 LEDGER_FIELDS = (
     "init",
@@ -36,6 +42,11 @@ LEDGER_FIELDS = (
     "started_utc",
     "finished_utc",
     "duration_seconds",
+    "submitted_utc",
+    "slurm_finished_utc",
+    "slurm_elapsed",
+    "driver_wait_seconds",
+    "postprocess_seconds",
     "full_parquets",
     "dailymax_parquets",
     "gefs_representative_files",
@@ -47,6 +58,14 @@ LEDGER_FIELDS = (
     "quicklook",
     "notes",
 )
+
+
+def utc_now() -> dt.datetime:
+    return dt.datetime.utcnow()
+
+
+def iso_utc(timestamp: dt.datetime) -> str:
+    return timestamp.isoformat() + "Z"
 
 
 @dataclass(frozen=True)
@@ -292,6 +311,7 @@ def wait_for_job(job_id: str, poll_seconds: int) -> dict[str, str]:
         if result.returncode != 0:
             raise RuntimeError(f"squeue failed for job {job_id}: {result.stderr.strip()}")
         if not result.stdout.strip():
+            observed_finished_utc = iso_utc(utc_now())
             break
         time.sleep(poll_seconds)
 
@@ -309,8 +329,14 @@ def wait_for_job(job_id: str, poll_seconds: int) -> dict[str, str]:
             continue
         record = parse_sacct_record(sacct.stdout, job_id)
         if record is not None:
+            record["observed_finished_utc"] = observed_finished_utc
             return record
-    return {"state": "UNKNOWN", "exit_code": "UNKNOWN", "elapsed": "UNKNOWN"}
+    return {
+        "state": "UNKNOWN",
+        "exit_code": "UNKNOWN",
+        "elapsed": "UNKNOWN",
+        "observed_finished_utc": observed_finished_utc,
+    }
 
 
 def count_files(path: Path, pattern: str) -> int:
@@ -622,6 +648,7 @@ def write_quicklook(
     *,
     validation: dict[str, Any],
     manifest_path: Path,
+    timings: dict[str, str | float],
 ) -> Path:
     norm = normalise_init(init)
     quicklook_path = paths.quicklook_dir / f"{norm}.md"
@@ -632,6 +659,12 @@ def write_quicklook(
         "",
         f"- Status: {validation['status']}",
         f"- Manifest: {manifest_path}",
+        f"- Submitted UTC: {timings.get('submitted_utc', 'n/a')}",
+        f"- Slurm finished UTC: {timings.get('slurm_finished_utc', 'n/a')}",
+        f"- Slurm elapsed: {timings.get('slurm_elapsed', 'n/a')}",
+        f"- Driver wait seconds: {timings.get('driver_wait_seconds', 'n/a')}",
+        f"- Postprocess seconds: {timings.get('postprocess_seconds', 'n/a')}",
+        f"- Total duration seconds: {timings.get('duration_seconds', 'n/a')}",
         f"- Full parquets: {counts.get('full_parquets', 0)}",
         f"- Dailymax parquets: {counts.get('dailymax_parquets', 0)}",
         f"- Representative GEFS files: {counts.get('gefs_representative_files', 0)}",
@@ -650,12 +683,27 @@ def write_quicklook(
     quicklook_path.write_text("\n".join(lines) + "\n")
 
     json_path = paths.quicklook_dir / f"{norm}.json"
-    json_path.write_text(json.dumps(validation, indent=2, sort_keys=True))
+    quicklook_payload = dict(validation)
+    quicklook_payload["timings"] = timings
+    json_path.write_text(json.dumps(quicklook_payload, indent=2, sort_keys=True))
     return quicklook_path
 
 
 def append_ledger(paths: ReplayPaths, row: dict[str, Any]) -> None:
     exists = paths.ledger_path.exists()
+    if exists:
+        with paths.ledger_path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            existing_fields = tuple(reader.fieldnames or ())
+            existing_rows = list(reader)
+        if existing_fields != LEDGER_FIELDS:
+            tmp_path = paths.ledger_path.with_suffix(paths.ledger_path.suffix + ".tmp")
+            with tmp_path.open("w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=LEDGER_FIELDS)
+                writer.writeheader()
+                for existing_row in existing_rows:
+                    writer.writerow({field: existing_row.get(field, "") for field in LEDGER_FIELDS})
+            tmp_path.replace(paths.ledger_path)
     with paths.ledger_path.open("a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=LEDGER_FIELDS)
         if not exists:
@@ -691,7 +739,7 @@ def process_init(
     allow_shared_cache_cleanup: bool,
     skip_validator: bool,
 ) -> None:
-    started = dt.datetime.utcnow()
+    started = utc_now()
     command = build_sbatch_command(
         init,
         paths,
@@ -704,8 +752,10 @@ def process_init(
         ffion_manifest=ffion_manifest,
     )
     job_id = submit_job(command)
+    submitted = utc_now()
     print(f"[{init}] submitted Slurm job {job_id}", flush=True)
     slurm = wait_for_job(job_id, poll_seconds)
+    slurm_finished = dt.datetime.fromisoformat(slurm["observed_finished_utc"].removesuffix("Z"))
     print(f"[{init}] Slurm state={slurm['state']} exit={slurm['exit_code']}", flush=True)
 
     validation = validate_artifacts(
@@ -729,10 +779,15 @@ def process_init(
         if clean_after_success and validation["status"] == "SUCCESS"
         else {"files": 0, "dirs": 0, "bytes": 0}
     )
-    finished = dt.datetime.utcnow()
+    finished = utc_now()
     timings = {
-        "started_utc": started.isoformat() + "Z",
-        "finished_utc": finished.isoformat() + "Z",
+        "started_utc": iso_utc(started),
+        "submitted_utc": iso_utc(submitted),
+        "slurm_finished_utc": iso_utc(slurm_finished),
+        "finished_utc": iso_utc(finished),
+        "slurm_elapsed": slurm.get("elapsed", "UNKNOWN"),
+        "driver_wait_seconds": (slurm_finished - submitted).total_seconds(),
+        "postprocess_seconds": (finished - slurm_finished).total_seconds(),
         "duration_seconds": (finished - started).total_seconds(),
     }
     manifest_path = write_manifest(
@@ -751,6 +806,7 @@ def process_init(
         paths,
         validation=validation,
         manifest_path=manifest_path,
+        timings=timings,
     )
     counts = validation["counts"]
     append_ledger(
@@ -764,6 +820,11 @@ def process_init(
             "started_utc": timings["started_utc"],
             "finished_utc": timings["finished_utc"],
             "duration_seconds": timings["duration_seconds"],
+            "submitted_utc": timings["submitted_utc"],
+            "slurm_finished_utc": timings["slurm_finished_utc"],
+            "slurm_elapsed": timings["slurm_elapsed"],
+            "driver_wait_seconds": timings["driver_wait_seconds"],
+            "postprocess_seconds": timings["postprocess_seconds"],
             "full_parquets": counts.get("full_parquets", 0),
             "dailymax_parquets": counts.get("dailymax_parquets", 0),
             "gefs_representative_files": counts.get("gefs_representative_files", 0),
@@ -785,7 +846,8 @@ def process_init(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the winter 2025-2026 Clyfar/Ffion replay serially via Slurm."
+        description="Run the winter 2025-2026 Clyfar/Ffion replay serially via Slurm.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--start", default=DEFAULT_START, help="First init YYYYMMDDHH.")
     parser.add_argument("--end", default=DEFAULT_END, help="Last init YYYYMMDDHH.")
@@ -804,14 +866,14 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Durable group archive root for reviewed replay outputs.",
     )
-    parser.add_argument("--cpus", type=int, default=16, help="Slurm CPUs per task.")
-    parser.add_argument("--mem", default="48G", help="Slurm memory request.")
-    parser.add_argument("--time", default="01:00:00", help="Slurm walltime request.")
-    parser.add_argument("--account", help="Optional Slurm account override.")
-    parser.add_argument("--partition", help="Optional Slurm partition override.")
+    parser.add_argument("--cpus", type=int, default=DEFAULT_CPUS, help="Slurm CPUs per task.")
+    parser.add_argument("--mem", default=DEFAULT_MEM, help="Slurm memory request.")
+    parser.add_argument("--time", default=DEFAULT_WALLTIME, help="Slurm walltime request.")
+    parser.add_argument("--account", default=DEFAULT_SLURM_ACCOUNT, help="Slurm account.")
+    parser.add_argument("--partition", default=DEFAULT_SLURM_PARTITION, help="Slurm partition.")
     parser.add_argument("--ffion-version", help="Fixed Ffion version to export for all replay jobs.")
     parser.add_argument("--ffion-manifest", help="Fixed Ffion manifest path to export for all replay jobs.")
-    parser.add_argument("--poll-seconds", type=int, default=60, help="Slurm polling interval.")
+    parser.add_argument("--poll-seconds", type=int, default=DEFAULT_POLL_SECONDS, help="Slurm polling interval.")
     parser.add_argument("--expected-members", type=int, default=31, help="Expected Clyfar/GEFS member count.")
     parser.add_argument("--max-inits", type=int, help="Limit the number of inits, useful for pilot runs.")
     parser.add_argument("--resume", action="store_true", help="Skip successful inits already in the ledger.")
