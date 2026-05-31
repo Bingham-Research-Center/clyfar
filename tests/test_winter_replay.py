@@ -37,6 +37,7 @@ def test_sbatch_command_disables_uploads(tmp_path):
     assert "CLYFAR_ENABLE_UPLOAD=0" in joined
     assert "LLM_SKIP_UPLOAD=1" in joined
     assert "CLYFAR_SKIP_INTERNAL_EXPORT=1" in joined
+    assert "CLYFAR_ALLOW_INCOMPLETE_ON_FINAL_RETRY=0" in joined
     assert "CLYFAR_GEFS_DATA_ROOT=" in joined
     assert "CLYFAR_JSON_TESTS_ROOT=" in joined
     assert "FFION_VERSION=1.1.3" in joined
@@ -61,6 +62,64 @@ def test_replay_slurm_defaults_match_winter_profile(monkeypatch):
     assert args.time == "02:00:00"
     assert args.account == "lawson-np"
     assert args.partition == "lawson-np"
+    assert args.replay_retries == 2
+    assert args.retry_delay_seconds == 60
+
+
+def test_retryable_slurm_exit_detection():
+    assert replay.parse_slurm_exit_status("78:0") == 78
+    assert replay.is_retryable_slurm_result({"exit_code": "78:0"})
+    assert not replay.is_retryable_slurm_result({"exit_code": "1:0"})
+    assert not replay.is_retryable_slurm_result({"exit_code": "UNKNOWN"})
+
+
+def test_run_sbatch_with_retries_resubmits_retryable_exit(monkeypatch, tmp_path):
+    paths = replay.build_paths(tmp_path / "replay")
+    submissions = []
+    sleeps = []
+    slurm_results = [
+        {
+            "state": "FAILED",
+            "exit_code": "78:0",
+            "elapsed": "01:30:00",
+            "observed_finished_utc": "2026-05-21T01:30:00Z",
+        },
+        {
+            "state": "COMPLETED",
+            "exit_code": "0:0",
+            "elapsed": "00:12:00",
+            "observed_finished_utc": "2026-05-21T01:43:00Z",
+        },
+    ]
+
+    def fake_submit(cmd):
+        submissions.append(cmd)
+        return f"job{len(submissions)}"
+
+    monkeypatch.setattr(replay, "submit_job", fake_submit)
+    monkeypatch.setattr(replay, "wait_for_job", lambda job_id, poll_seconds: slurm_results.pop(0))
+    monkeypatch.setattr(replay.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    result = replay.run_sbatch_with_retries(
+        "2025120100",
+        paths,
+        cpus=16,
+        mem="48G",
+        walltime="01:00:00",
+        account="lawson-np",
+        partition="lawson-np",
+        ffion_version=None,
+        ffion_manifest=None,
+        poll_seconds=1,
+        replay_retries=1,
+        retry_delay_seconds=5,
+    )
+
+    assert result.job_id == "job2"
+    assert result.slurm["exit_code"] == "0:0"
+    assert [attempt["job_id"] for attempt in result.attempts] == ["job1", "job2"]
+    assert len(submissions) == 2
+    assert sleeps == [5]
 
 
 def test_wait_for_job_accepts_slurm_derived_job_ids(monkeypatch):

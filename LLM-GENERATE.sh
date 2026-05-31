@@ -223,14 +223,21 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
   echo ""
   echo "=== LLM attempt $attempt of $MAX_RETRIES ==="
   ATTEMPT_OUTPUT="$ARCHIVE_DIR/.$(basename "$OUTPUT_PATH").attempt${attempt}.tmp"
+  ATTEMPT_STDERR="$ARCHIVE_DIR/.$(basename "$OUTPUT_PATH").attempt${attempt}.stderr.tmp"
   rm -f "$ATTEMPT_OUTPUT"
+  rm -f "$ATTEMPT_STDERR"
 
   # Invoke LLM CLI
   CLI_OK=true
+  CLI_STATUS=0
   if [[ -n "$CLI_COMMAND" ]]; then
     echo "Running custom CLI command: $CLI_COMMAND"
-    if ! bash -lc "cd '$JSON_TESTS_ROOT' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$ATTEMPT_OUTPUT"; then
-      echo "LLM CLI command failed (attempt $attempt)." >&2
+    set +e
+    bash -lc "cd '$JSON_TESTS_ROOT' && $CLI_COMMAND --add-dir ." < "$PROMPT_PATH" > "$ATTEMPT_OUTPUT" 2> "$ATTEMPT_STDERR"
+    CLI_STATUS=$?
+    set -e
+    if [[ $CLI_STATUS -ne 0 ]]; then
+      echo "LLM CLI command failed (attempt $attempt, exit $CLI_STATUS)." >&2
       CLI_OK=false
     fi
   else
@@ -239,21 +246,37 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
     # Timeout prevents hangs in batch environments (10 min should be plenty)
     LLM_TIMEOUT="${LLM_TIMEOUT:-600}"
     echo "Running ${CLI_BIN} -p --model opus --allowedTools Read,Glob,Grep --permission-mode default --add-dir $JSON_TESTS_ROOT ${CLI_EXTRA[*]} (timeout ${LLM_TIMEOUT}s)"
-    if ! timeout "$LLM_TIMEOUT" "$CLI_BIN" -p --model opus \
+    set +e
+    timeout "$LLM_TIMEOUT" "$CLI_BIN" -p --model opus \
         --allowedTools "Read,Glob,Grep" \
         --permission-mode default \
         --add-dir "$JSON_TESTS_ROOT" \
-        "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$ATTEMPT_OUTPUT"; then
-      echo "LLM CLI invocation failed (attempt $attempt)." >&2
+        "${CLI_EXTRA[@]}" < "$PROMPT_PATH" > "$ATTEMPT_OUTPUT" 2> "$ATTEMPT_STDERR"
+    CLI_STATUS=$?
+    set -e
+    if [[ $CLI_STATUS -ne 0 ]]; then
+      if [[ $CLI_STATUS -eq 124 ]]; then
+        echo "LLM CLI invocation timed out after ${LLM_TIMEOUT}s (attempt $attempt)." >&2
+      else
+        echo "LLM CLI invocation failed (attempt $attempt, exit $CLI_STATUS)." >&2
+      fi
       CLI_OK=false
     fi
   fi
 
   if [[ "$CLI_OK" == false ]]; then
+    if [[ -s "$ATTEMPT_STDERR" ]]; then
+      echo "LLM CLI stderr (attempt $attempt):" >&2
+      sed -n '1,80p' "$ATTEMPT_STDERR" >&2
+    fi
     if [[ -s "$ATTEMPT_OUTPUT" ]]; then
       archive_attempt_output "$ATTEMPT_OUTPUT" "cli_failed"
     fi
+    if [[ -s "$ATTEMPT_STDERR" ]]; then
+      archive_attempt_output "$ATTEMPT_STDERR" "cli_stderr"
+    fi
     rm -f "$ATTEMPT_OUTPUT"
+    rm -f "$ATTEMPT_STDERR"
     if [[ $attempt -lt $MAX_RETRIES ]]; then
       echo "Retrying in ${RETRY_DELAY}s..."
       sleep "$RETRY_DELAY"
@@ -295,6 +318,7 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
     archive_attempt_output "$ATTEMPT_OUTPUT" "validation_failed"
   fi
   rm -f "$ATTEMPT_OUTPUT"
+  rm -f "$ATTEMPT_STDERR"
 
   if [[ $attempt -lt $MAX_RETRIES ]]; then
     echo "Retrying in ${RETRY_DELAY}s..."

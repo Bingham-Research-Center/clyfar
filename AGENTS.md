@@ -1,5 +1,5 @@
 # Repository Guidelines
-Date updated: 2026-05-22
+Date updated: 2026-05-31
 
 This is the top-level operating guide for Clyfar agents.
 
@@ -49,6 +49,7 @@ This is the top-level operating guide for Clyfar agents.
 - Before major changes, run the smoke workflow with `--testing` and reduced members.
 
 ## Safety
+- Be token-prudent on large replay trees: search exact logs, ledger, manifests, and quicklooks first; avoid broad recursive `rg` over replay roots or `herbie_cache` unless narrowly filtered by file type/path.
 - Multiprocessing uses `spawn`; guard entry points with `if __name__ == "__main__":`.
 - Treat `nwp/` cache and locking edits carefully.
 - `.out` is the orchestration stream; `.err` usually has the traceback.

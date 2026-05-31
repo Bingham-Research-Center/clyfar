@@ -522,6 +522,12 @@ def do_nwpval_mslp(init_dt_naive, lat, lon, delta_h,
     def _collect_hours(hours, product):
         records = []
         for fxx in hours:
+            logger.info(
+                "MSLP fetch f%03d member=%s product=%s",
+                fxx,
+                member,
+                product,
+            )
             try:
                 ds = GEFSData.fetch_pressure(
                     init_dt_naive,

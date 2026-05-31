@@ -92,10 +92,16 @@ CLYFAR_ENABLE_UPLOAD="${CLYFAR_ENABLE_UPLOAD:-1}"
 #   0                -> run_gefs_clyfar may also export/upload (can duplicate uploads).
 CLYFAR_SKIP_INTERNAL_EXPORT="${CLYFAR_SKIP_INTERNAL_EXPORT:-1}"
 
+# In normal operations, the last internal retry may proceed with incomplete
+# GEFS data. Replay/evaluation drivers can disable that and let an external
+# retry supervisor handle retryable failures instead.
+CLYFAR_ALLOW_INCOMPLETE_ON_FINAL_RETRY="${CLYFAR_ALLOW_INCOMPLETE_ON_FINAL_RETRY:-1}"
+
 # Ensure child processes (run_gefs_clyfar.py, inline Python export block) receive
 # upload-control flags from this orchestrator.
 export CLYFAR_ENABLE_UPLOAD
 export CLYFAR_SKIP_INTERNAL_EXPORT
+export CLYFAR_ALLOW_INCOMPLETE_ON_FINAL_RETRY
 export CLYFAR_JSON_TESTS_ROOT="$JSON_TESTS_ROOT"
 
 # Create directories if needed
@@ -217,8 +223,12 @@ set +e
 # On final retry, allow incomplete data (fill with NaNs)
 INCOMPLETE_FLAG=""
 if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    echo "Final retry attempt - will proceed with incomplete data if needed"
-    INCOMPLETE_FLAG="--allow-incomplete"
+    if [ "$CLYFAR_ALLOW_INCOMPLETE_ON_FINAL_RETRY" = "1" ]; then
+        echo "Final retry attempt - will proceed with incomplete data if needed"
+        INCOMPLETE_FLAG="--allow-incomplete"
+    else
+        echo "Final retry attempt - incomplete-data fallback disabled"
+    fi
 fi
 
 python3 run_gefs_clyfar.py \
@@ -260,8 +270,9 @@ if [ $CLYFAR_EXIT_CODE -ge $EXIT_CODE_RETRY_MIN ] && [ $CLYFAR_EXIT_CODE -le $EX
         echo "ERROR: Max retries ($MAX_RETRIES) exceeded."
         echo "GEFS data still not available after $((MAX_RETRIES * RETRY_DELAY_MINUTES)) minutes."
         echo "Manual intervention may be required."
+        echo "Exiting with retryable code $CLYFAR_EXIT_CODE for external retry supervisors."
         echo "================================================================"
-        exit 1
+        exit $CLYFAR_EXIT_CODE
     fi
 elif [ $CLYFAR_EXIT_CODE -ne 0 ]; then
     echo "ERROR: Clyfar forecast failed with exit code $CLYFAR_EXIT_CODE"
@@ -420,8 +431,10 @@ if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
         export LLM_SKIP_UPLOAD=1
     fi
 
-    # Enable retry for meta-response resilience in batch jobs
-    export LLM_MAX_RETRIES=3
+    # Enable retry for meta-response resilience in batch jobs.
+    # Replay drivers may override these to prefer fewer, longer LLM attempts.
+    export LLM_MAX_RETRIES="${LLM_MAX_RETRIES:-3}"
+    export LLM_TIMEOUT="${LLM_TIMEOUT:-600}"
 
     echo "Running LLM-GENERATE.sh for init $INIT_TIME..."
     LLM_EXIT=0

@@ -30,8 +30,12 @@ DEFAULT_CPUS = 16
 DEFAULT_MEM = "48G"
 DEFAULT_WALLTIME = "02:00:00"
 DEFAULT_POLL_SECONDS = 30
+DEFAULT_REPLAY_RETRIES = 2
+DEFAULT_RETRY_DELAY_SECONDS = 60
 DEFAULT_SLURM_ACCOUNT = os.environ.get("CLYFAR_REPLAY_ACCOUNT", "lawson-np")
 DEFAULT_SLURM_PARTITION = os.environ.get("CLYFAR_REPLAY_PARTITION", DEFAULT_SLURM_ACCOUNT)
+RETRYABLE_EXIT_MIN = 75
+RETRYABLE_EXIT_MAX = 79
 VARIABLES = ("snow", "wind", "solar", "mslp", "temp")
 LEDGER_FIELDS = (
     "init",
@@ -88,6 +92,16 @@ class ReplayPaths:
     herbie_cache: Path
     ledger_path: Path
     archive_ledger_path: Path
+
+
+@dataclass(frozen=True)
+class SlurmAttemptResult:
+    job_id: str
+    command: list[str]
+    submitted: dt.datetime
+    slurm: dict[str, str]
+    slurm_finished: dt.datetime
+    attempts: list[dict[str, Any]]
 
 
 def parse_init(init: str) -> dt.datetime:
@@ -247,7 +261,10 @@ def build_sbatch_command(
         "LOG_DIR": str(paths.log_dir),
         "CLYFAR_ENABLE_UPLOAD": "0",
         "CLYFAR_SKIP_INTERNAL_EXPORT": "1",
+        "CLYFAR_ALLOW_INCOMPLETE_ON_FINAL_RETRY": "0",
         "LLM_SKIP_UPLOAD": "1",
+        "LLM_MAX_RETRIES": "2",
+        "LLM_TIMEOUT": "1200",
         "CLYFAR_HERBIE_CACHE": str(paths.herbie_cache),
         "CLYFAR_GEFS_DATA_ROOT": str(paths.data_root / "gefs_representative"),
         "CLYFAR_JSON_TESTS_ROOT": str(paths.case_work_root),
@@ -337,6 +354,91 @@ def wait_for_job(job_id: str, poll_seconds: int) -> dict[str, str]:
         "elapsed": "UNKNOWN",
         "observed_finished_utc": observed_finished_utc,
     }
+
+
+def parse_slurm_exit_status(exit_code: str) -> int | None:
+    """Return the shell exit status from a Slurm ExitCode field like ``78:0``."""
+    status = str(exit_code).split(":", 1)[0]
+    try:
+        return int(status)
+    except ValueError:
+        return None
+
+
+def is_retryable_slurm_result(slurm: dict[str, str]) -> bool:
+    status = parse_slurm_exit_status(slurm.get("exit_code", ""))
+    return status is not None and RETRYABLE_EXIT_MIN <= status <= RETRYABLE_EXIT_MAX
+
+
+def run_sbatch_with_retries(
+    init: str,
+    paths: ReplayPaths,
+    *,
+    cpus: int,
+    mem: str,
+    walltime: str,
+    account: str | None,
+    partition: str | None,
+    ffion_version: str | None,
+    ffion_manifest: str | None,
+    poll_seconds: int,
+    replay_retries: int,
+    retry_delay_seconds: int,
+) -> SlurmAttemptResult:
+    max_attempts = replay_retries + 1
+    attempts: list[dict[str, Any]] = []
+    for attempt_index in range(max_attempts):
+        command = build_sbatch_command(
+            init,
+            paths,
+            cpus=cpus,
+            mem=mem,
+            walltime=walltime,
+            account=account,
+            partition=partition,
+            ffion_version=ffion_version,
+            ffion_manifest=ffion_manifest,
+        )
+        job_id = submit_job(command)
+        submitted = utc_now()
+        print(
+            f"[{init}] submitted Slurm job {job_id} "
+            f"(attempt {attempt_index + 1}/{max_attempts})",
+            flush=True,
+        )
+        slurm = wait_for_job(job_id, poll_seconds)
+        slurm_finished = dt.datetime.fromisoformat(slurm["observed_finished_utc"].removesuffix("Z"))
+        print(f"[{init}] Slurm state={slurm['state']} exit={slurm['exit_code']}", flush=True)
+        attempts.append(
+            {
+                "attempt": attempt_index + 1,
+                "job_id": job_id,
+                "submitted_utc": iso_utc(submitted),
+                "slurm_finished_utc": iso_utc(slurm_finished),
+                "slurm_state": slurm["state"],
+                "slurm_exit_code": slurm["exit_code"],
+                "slurm_elapsed": slurm.get("elapsed", "UNKNOWN"),
+            }
+        )
+        if is_retryable_slurm_result(slurm) and attempt_index < replay_retries:
+            remaining = replay_retries - attempt_index
+            print(
+                f"[{init}] retryable Slurm exit {slurm['exit_code']}; "
+                f"resubmitting same init ({remaining} retries left)",
+                flush=True,
+            )
+            if retry_delay_seconds > 0:
+                time.sleep(retry_delay_seconds)
+            continue
+        return SlurmAttemptResult(
+            job_id=job_id,
+            command=command,
+            submitted=submitted,
+            slurm=slurm,
+            slurm_finished=slurm_finished,
+            attempts=attempts,
+        )
+    raise RuntimeError(f"[{init}] retry loop exhausted without a final Slurm result")
 
 
 def count_files(path: Path, pattern: str) -> int:
@@ -614,6 +716,7 @@ def write_manifest(
     cache_cleanup: dict[str, int],
     llm_prune: dict[str, int],
     command: list[str],
+    attempts: list[dict[str, Any]] | None = None,
 ) -> Path:
     norm = normalise_init(init)
     manifest_path = paths.manifest_dir / f"{norm}.json"
@@ -632,6 +735,7 @@ def write_manifest(
             "llm_temp_attempts": llm_prune,
         },
         "command": command,
+        "attempts": attempts or [],
         "upload_control": {
             "CLYFAR_ENABLE_UPLOAD": "0",
             "LLM_SKIP_UPLOAD": "1",
@@ -738,9 +842,11 @@ def process_init(
     clean_after_success: bool,
     allow_shared_cache_cleanup: bool,
     skip_validator: bool,
+    replay_retries: int,
+    retry_delay_seconds: int,
 ) -> None:
     started = utc_now()
-    command = build_sbatch_command(
+    attempt_result = run_sbatch_with_retries(
         init,
         paths,
         cpus=cpus,
@@ -750,13 +856,15 @@ def process_init(
         partition=partition,
         ffion_version=ffion_version,
         ffion_manifest=ffion_manifest,
+        poll_seconds=poll_seconds,
+        replay_retries=replay_retries,
+        retry_delay_seconds=retry_delay_seconds,
     )
-    job_id = submit_job(command)
-    submitted = utc_now()
-    print(f"[{init}] submitted Slurm job {job_id}", flush=True)
-    slurm = wait_for_job(job_id, poll_seconds)
-    slurm_finished = dt.datetime.fromisoformat(slurm["observed_finished_utc"].removesuffix("Z"))
-    print(f"[{init}] Slurm state={slurm['state']} exit={slurm['exit_code']}", flush=True)
+    job_id = attempt_result.job_id
+    command = attempt_result.command
+    submitted = attempt_result.submitted
+    slurm = attempt_result.slurm
+    slurm_finished = attempt_result.slurm_finished
 
     validation = validate_artifacts(
         init,
@@ -800,6 +908,7 @@ def process_init(
         cache_cleanup=cache_cleanup,
         llm_prune=llm_prune,
         command=command,
+        attempts=attempt_result.attempts,
     )
     quicklook_path = write_quicklook(
         init,
@@ -874,6 +983,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ffion-version", help="Fixed Ffion version to export for all replay jobs.")
     parser.add_argument("--ffion-manifest", help="Fixed Ffion manifest path to export for all replay jobs.")
     parser.add_argument("--poll-seconds", type=int, default=DEFAULT_POLL_SECONDS, help="Slurm polling interval.")
+    parser.add_argument(
+        "--replay-retries",
+        type=int,
+        default=DEFAULT_REPLAY_RETRIES,
+        help="Times to resubmit the same init after submit_clyfar exits with retryable code 75-79.",
+    )
+    parser.add_argument(
+        "--retry-delay-seconds",
+        type=int,
+        default=DEFAULT_RETRY_DELAY_SECONDS,
+        help="Seconds to wait before replay-driver retry submissions.",
+    )
     parser.add_argument("--expected-members", type=int, default=31, help="Expected Clyfar/GEFS member count.")
     parser.add_argument("--max-inits", type=int, help="Limit the number of inits, useful for pilot runs.")
     parser.add_argument("--resume", action="store_true", help="Skip successful inits already in the ledger.")
@@ -894,6 +1015,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.replay_retries < 0:
+        raise ValueError("--replay-retries must be non-negative")
+    if args.retry_delay_seconds < 0:
+        raise ValueError("--retry-delay-seconds must be non-negative")
     work_root = args.work_root or args.root or default_replay_root()
     archive_root = args.archive_root or default_archive_root()
     paths = build_paths(work_root, archive_root)
@@ -946,6 +1071,8 @@ def main() -> None:
             clean_after_success=not args.no_clean_cache,
             allow_shared_cache_cleanup=args.allow_shared_cache_cleanup,
             skip_validator=args.skip_validator,
+            replay_retries=args.replay_retries,
+            retry_delay_seconds=args.retry_delay_seconds,
         )
         print(f"[{init}] validated, ledger updated, cache cleanup complete", flush=True)
 
