@@ -514,7 +514,7 @@ def main() -> None:
     lines.append("")
     lines.append("## Local File Index")
     lines.append("")
-    lines.append("> Canonical local paths for this run context. Reference these in Data Logger output.")
+    lines.append("> Canonical local paths for this run context. Copy these exact paths into Data Logger output; do not abbreviate them to bare filenames.")
     lines.append(f"- Current CASE root: `{case_root}`")
     if clustering_file.exists():
         lines.append(f"- Clustering summary: `{clustering_file}`")

@@ -195,7 +195,34 @@ def _path_exists(raw: str, outlook_path: Path) -> bool:
                 return True
         return False
 
-    return any(_matches(candidate) for candidate in candidates)
+    if any(_matches(candidate) for candidate in candidates):
+        return True
+
+    # Some generated Data Logger entries cite a file by basename only even when
+    # the real file lives in a sibling CASE directory or a subdirectory such as
+    # ``weather/``. Allow that style only when the basename resolves to exactly
+    # one real file in the replay tree, which keeps the check strict while
+    # avoiding false failures on unique artifacts from prior cycles.
+    if "/" not in raw and "\\" not in raw and path.suffix:
+        json_tests_root = None
+        for ancestor in outlook_path.parents:
+            if ancestor.name == "json_tests":
+                json_tests_root = ancestor
+                break
+        if json_tests_root is not None and json_tests_root.exists():
+            matches: list[Path] = []
+            for match in json_tests_root.rglob(path.name):
+                if not match.is_file():
+                    continue
+                resolved = match.resolve()
+                if resolved not in matches:
+                    matches.append(resolved)
+                    if len(matches) > 1:
+                        return False
+            if len(matches) == 1:
+                return True
+
+    return False
 
 
 def validate_outlook(

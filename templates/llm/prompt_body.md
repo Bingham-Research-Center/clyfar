@@ -6,6 +6,7 @@ You have Read/Glob/Grep tool access to the CASE directory. Start with `forecast_
 **DATA LOGGER REQUIREMENT:**
 End your outlook with a "Data Logger" section listing the exact files read. Use "...and N similar" only in prose for bulk reads, and do not use glob syntax (`*`, `?`, `[]`, `{}`), invisible characters, or directory-only placeholders in the paths themselves.
 List each file as a plain local path on its own bullet line so replay validation can parse it deterministically.
+If a file is mentioned elsewhere in the prompt by basename or label only, copy its full canonical path from the Local File Index above into Data Logger.
 
 ---
 
