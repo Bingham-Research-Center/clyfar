@@ -110,7 +110,7 @@ Current label set (GitHub issues/PR labels):
 
 Current git tags include:
 - Clyfar tags through `v1.0.6`
-- Ffion tags through `ffion-v1.1.3`
+- Ffion tags through `ffion-v1.1.4`
 - LLM/pipeline milestone tags (`ai-llm-v*`, `llm-v*`)
 
 If you want to signal this hibernation milestone without changing Ffion:

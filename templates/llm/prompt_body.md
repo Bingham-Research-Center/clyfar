@@ -4,8 +4,10 @@
 You have Read/Glob/Grep tool access to the CASE directory. Start with `forecast_clustering_summary_*.json` for ensemble structure, then read files as needed.
 
 **DATA LOGGER REQUIREMENT:**
-End your outlook with a "Data Logger" section listing the exact files read. Use "...and N similar" only in prose for bulk reads, and do not use glob syntax (`*`, `?`, `[]`, `{}`), invisible characters, or directory-only placeholders in the paths themselves.
-List each file as a plain local path on its own bullet line so replay validation can parse it deterministically.
+End your outlook with a "Data Logger" section listing only the exact files read for this run.
+Use one bullet line per file so replay validation can parse it deterministically.
+Keep prior-outlook comparisons and other narrative references out of Data Logger; put those in the comparison sections instead.
+Use "...and N similar" only in prose for bulk reads, and do not use glob syntax (`*`, `?`, `[]`, `{}`), invisible characters, or directory-only placeholders in the paths themselves.
 If a file is mentioned elsewhere in the prompt by basename or label only, copy its full canonical path from the Local File Index above into Data Logger.
 
 ---

@@ -60,6 +60,24 @@ def test_extract_local_paths_handles_plain_absolute_data_logger_bullets(tmp_path
     assert extract_local_paths(outlook.read_text(encoding="utf-8")) == [str(referenced)]
 
 
+def test_extract_local_paths_ignores_narrative_references_in_data_logger(tmp_path):
+    referenced = tmp_path / "source.json"
+    referenced.write_text("{}", encoding="utf-8")
+    outlook = _write_outlook(
+        tmp_path / "LLM-OUTLOOK-test.md",
+        _valid_outlook_body(referenced)
+        + "\nPrevious outlooks were `LLM-OUTLOOK-20260315_0600Z.md` and `LLM-OUTLOOK-20260315_0000Z.md`.\n",
+    )
+
+    ok, errors = validate_outlook(
+        outlook,
+        expected_clyfar=get_clyfar_version(),
+        expected_ffion=get_ffion_version(),
+    )
+    assert ok
+    assert errors == []
+
+
 def test_validate_outlook_fails_on_version_mismatch(tmp_path):
     referenced = tmp_path / "source.json"
     referenced.write_text("{}", encoding="utf-8")

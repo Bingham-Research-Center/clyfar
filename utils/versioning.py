@@ -14,7 +14,7 @@ from pathlib import Path
 _VERSION_RE = re.compile(r"__version__\s*=\s*['\"](?P<version>[^'\"]+)['\"]")
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _INIT_PATH = _REPO_ROOT / "__init__.py"
-FFION_VERSION = "1.1.3"
+FFION_VERSION = "1.1.4"
 
 
 def _normalise_version(raw: str) -> str:

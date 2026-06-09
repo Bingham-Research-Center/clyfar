@@ -139,6 +139,10 @@ def extract_local_paths(text: str) -> List[str]:
     abs_pattern = re.compile(r"(?<![A-Za-z0-9_])(/[^\s,;`'\"\\)]+)")
 
     for line in section:
+        stripped = line.lstrip()
+        if not re.match(r"^[-*]\s+", stripped):
+            continue
+
         for match in backtick_pattern.findall(line):
             item = _normalise_path_text(match.strip().rstrip(".,;:)]}"))
             if item.startswith(("http://", "https://")):

@@ -7,6 +7,10 @@
     "1.1.3": {
       "manifest": "templates/llm/ffion/ffion_v1.1.3.json",
       "notes": "Ffion bundle keyed directly to FFION_VERSION; no separate science-version axis."
+    },
+    "1.1.4": {
+      "manifest": "templates/llm/ffion/ffion_v1.1.4.json",
+      "notes": "Prompt hotfix bundle that keeps Data Logger limited to files read while retaining the 1.1.3 bias and QA files."
     }
   }
 }
