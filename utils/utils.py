@@ -6,6 +6,7 @@ import datetime
 import pickle
 import time
 import functools
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
@@ -353,7 +354,9 @@ def configurable_timer(threshold_ms: float = None, log_file: str = None):
                       f"({execution_time:.2f} ms > {threshold_ms} ms)")
 
             if log_file:
-                with open(log_file, 'a') as f:
+                output_log = os.environ.get("CLYFAR_PERFORMANCE_LOG", log_file)
+                Path(output_log).expanduser().parent.mkdir(parents=True, exist_ok=True)
+                with open(output_log, 'a') as f:
                     f.write(f"{func.__name__},{execution_time:.2f}\n")
 
             return result

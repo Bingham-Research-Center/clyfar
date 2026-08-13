@@ -30,20 +30,15 @@ Writerside/
 performance_log.txt
 diagnostic-*.txt
 
-# Local data & figures
-data/
+# Local data & figures. The six small, tracked geography tables are the only
+# in-repo data contract; all generated data remains ignored.
+data/*
+!data/geog/
+!data/geog/**
 data_seth/
 figures/
 figures_parallel/
 docs/session_log.md
-
-# LLM fixture sample (keep other data ignored)
-!data/
-data/*
-!data/json_tests/
-data/json_tests/*
-!data/json_tests/CASE_20260208_1200Z/
-!data/json_tests/CASE_20260208_1200Z/**
 
 # Misc
 *.swp
@@ -71,3 +66,7 @@ export/__pycache__/
 
 # Matplotlib cache
 .mplconfig/
+
+# Exploratory notebooks and generated notebook products live outside this
+# frozen source tree.
+notebooks/

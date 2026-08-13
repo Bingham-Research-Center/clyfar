@@ -22,6 +22,31 @@ _GRIB_MAGIC = b'GRIB'
 # Minimum valid GRIB file size (bytes) - subset files are typically 100KB+
 _MIN_GRIB_SIZE = 1000
 
+
+def _default_herbie_cache_dir() -> Path:
+    configured = os.environ.get("CLYFAR_HERBIE_CACHE")
+    if configured:
+        return Path(configured).expanduser()
+
+    user = os.environ.get("USER")
+    if user:
+        scratch_user = Path("/scratch/general/vast") / user
+        if scratch_user.exists():
+            return scratch_user / "clyfar" / "herbie_cache"
+
+    return Path(tempfile.gettempdir()) / "clyfar_herbie"
+
+
+def _ensure_herbie_cache_dir(cache_dir: Path) -> Path:
+    cache_dir = cache_dir.expanduser()
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir
+    except OSError:
+        fallback = Path(tempfile.gettempdir()) / "clyfar_herbie"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
 # At the top of the file, enforce spawn context
 if mp.get_start_method() != 'spawn':
     try:
@@ -32,18 +57,7 @@ if mp.get_start_method() != 'spawn':
 class GEFSData(DataFile):
     _LATLON_CACHE = {}
     LOCK_DIR = os.getenv("CLYFAR_TMPDIR") or tempfile.gettempdir()
-    _HERBIE_CACHE_DIR = Path(
-        os.environ.get(
-            "CLYFAR_HERBIE_CACHE",
-            Path(__file__).resolve().parents[1] / "data" / "herbie_cache"
-        )
-    ).expanduser()
-    try:
-        _HERBIE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        # Directory creation can fail on read-only filesystems; fall back to tmp.
-        _HERBIE_CACHE_DIR = Path(tempfile.gettempdir()) / "clyfar_herbie"
-        _HERBIE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _HERBIE_CACHE_DIR = _ensure_herbie_cache_dir(_default_herbie_cache_dir())
     _PRESSURE_VAR_NAME = "prmsl"
     _PRESSURE_STANDARD_NAME = "air_pressure_at_mean_sea_level"
     _PRESSURE_QUERY = ":PRMSL:"

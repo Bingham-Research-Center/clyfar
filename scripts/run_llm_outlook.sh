@@ -22,6 +22,7 @@
 # Key defaults for test safety:
 #   - Upload disabled (LLM_SKIP_UPLOAD=1). Use --upload to enable.
 #   - Cron parity enabled by default.
+#   - CASE data defaults outside the repo; set CLYFAR_JSON_TESTS_ROOT for replay roots.
 #####################################################################
 
 set -euo pipefail
@@ -35,9 +36,12 @@ NC='\033[0m'
 
 # Paths
 CLYFAR_DIR="${CLYFAR_DIR:-$HOME/gits/clyfar}"
-EXPORT_DIR="${EXPORT_DIR:-$HOME/basinwx-data/clyfar/basinwx_export}"
-DATA_ROOT="${CLYFAR_JSON_TESTS_ROOT:-$CLYFAR_DIR/data/json_tests}"
+OUTPUT_BASE="${CLYFAR_OUTPUT_BASE:-$HOME/basinwx-data/clyfar}"
+EXPORT_DIR="${EXPORT_DIR:-$OUTPUT_BASE/basinwx_export}"
+DATA_ROOT="${CLYFAR_JSON_TESTS_ROOT:-${JSON_TESTS_ROOT:-$OUTPUT_BASE/json_tests}}"
 export CLYFAR_JSON_TESTS_ROOT="$DATA_ROOT"
+export JSON_TESTS_ROOT="$DATA_ROOT"
+export MPLCONFIGDIR="${MPLCONFIGDIR:-$OUTPUT_BASE/mplconfig}"
 
 usage() {
     local exit_code="${1:-1}"
@@ -60,6 +64,10 @@ Options:
   --start YYYYMMDDHH      First init in serial run (inclusive, 6-hour spacing)
   --end YYYYMMDDHH        Last init in serial run (inclusive, 6-hour spacing)
   --help                  Show this help
+
+Environment:
+  CLYFAR_JSON_TESTS_ROOT  CASE root; default: $HOME/basinwx-data/clyfar/json_tests
+  EXPORT_DIR              BasinWx export JSON root; default: $HOME/basinwx-data/clyfar/basinwx_export
 EOF
     exit "$exit_code"
 }
@@ -338,6 +346,7 @@ main() {
     fi
 
     cd "$CLYFAR_DIR"
+    mkdir -p "$DATA_ROOT" "$MPLCONFIGDIR"
 
     local -a inits=()
     if [[ -n "$start_init" ]]; then

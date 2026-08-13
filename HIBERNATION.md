@@ -1,158 +1,76 @@
-# Clyfar Hibernation Runbook (Ops Pause -> Dev Mode)
-Date updated: 2026-03-30
+# Clyfar Freeze and Hibernation Runbook
+Date updated: 2026-08-07
 
-This file is the durable handoff for seasonal operations pause. It explains what was changed, how to restore production cron behavior, how to test restarts safely, and what to prioritize in dev mode.
+This repository is the maintenance-frozen Clyfar implementation. It preserves
+the accepted forecast, replay, export, and Ffion paths without serving as a home
+for new experiments, event studies, generated artifacts, or broad roadmaps.
 
-## What was changed today (plain language)
+## Frozen baseline
 
-The user crontab was checked and it contained two active jobs:
-- observation downloader every 5 minutes
-- Clyfar 6-hourly forecast submit job
+- Clyfar source version: `1.0.7`.
+- Current Ffion bundle/tag line: `ffion-v1.1.4`.
+- The exact checked-out revision is always `git rev-parse HEAD`; do not copy a
+  mutable SHA into operational data without also recording the working-tree
+  state.
+- Maintenance fixes should be narrow, tested, and behavior-preserving. Science
+  or feature work requires explicit authorization and belongs on a separate
+  branch or in the appropriate sibling repository.
 
-Only the Clyfar submit line was commented out. The observation job stayed active.
+## Seasonal operations state
 
-### Current intended state
+The last verified snapshot, on 2026-03-30, had the observation downloader
+active and the six-hourly Clyfar submit cron commented out. This is historical
+evidence, not proof of current crontab state.
 
-```cron
-# Observations - Every 5 minutes (ACTIVE)
-*/5 * * * * /bin/bash -c 'source ~/.bashrc_basinwx && source ~/software/pkg/miniforge3/etc/profile.d/conda.sh && conda activate clyfar-nov2025 && python ~/gits/brc-tools/brc_tools/download/get_map_obs.py >> ~/logs/obs.log 2>&1'
-
-# Clyfar 6-hourly submits (PAUSED)
-# 15 3,9,15,21 * * * /bin/bash -c 'source ~/.bashrc_basinwx && export PATH=$PATH:/uufs/notchpeak.peaks/sys/installdir/slurm/std/bin && cd ~/gits/clyfar && sbatch scripts/submit_clyfar.sh >> ~/logs/clyfar_submit.log 2>&1'
-```
-
-## How to inspect and confirm (safe checks)
+Check live state before any operations decision:
 
 ```bash
-# Show crontab with line numbers
 crontab -l | nl -ba
-
-# Optional quick sanity checks
 rg -n "Observations|submit_clyfar.sh" <(crontab -l)
 ```
 
-Operational check interpretation:
-- Observation line should be uncommented.
-- Clyfar line should be present but commented out during hibernation.
-
-## Return to normal (resume 6-hourly forecasts)
-
-1. Edit crontab:
-```bash
-crontab -e
-```
-
-2. Remove the leading `#` from the Clyfar line.
-
-3. Re-check:
-```bash
-crontab -l | nl -ba
-```
-
-4. Optional smoke submit before waiting for cron:
-```bash
-cd ~/gits/clyfar
-sbatch scripts/submit_clyfar.sh
-```
-
-5. Verify first resumed cycle:
-```bash
-rg -n "Running Clyfar forecast for init time|STATUS_FORECAST_EXPORT|STATUS_LLM_STAGE" ~/logs/basinwx/clyfar_*.out ~/logs/basinwx/clyfar_*.err
-```
-
-## Tweak behavior without breaking commands
-
-Keep command bodies unchanged whenever possible. Only edit cron schedule fields.
-
-Examples:
+Expected hibernation pattern:
 
 ```cron
-# Every 6 hours at :15 local scheduler time (current operational style)
-15 3,9,15,21 * * *
-
-# Every 12 hours at :15
-15 3,15 * * *
-
-# Daily at 03:15
-15 3 * * *
+# Observations remain active.
+# The line invoking sbatch scripts/submit_clyfar.sh remains present but commented.
 ```
 
-If you change cadence, keep `scripts/submit_clyfar.sh` as the invoked entrypoint so init anchoring and downstream behavior remain consistent.
+Do not rewrite command bodies when changing cadence. Keep
+`scripts/submit_clyfar.sh` as the operational entrypoint so init anchoring and
+downstream markers remain consistent.
 
-## Backup/rollback pattern (recommended)
+## Safe resume
 
-Before manual edits:
+1. Verify the checkout, environment, storage roots, and live crontab.
+2. Run the smoke command in `README.md` with upload disabled.
+3. Uncomment the existing Clyfar cron line with `crontab -e`.
+4. Re-check `crontab -l | nl -ba`.
+5. Verify the first cycle using Slurm state, `.out`/`.err`, forecast-export
+   markers, and explicit LLM-stage markers.
+
+Before editing cron, a recoverable local backup can be written under `/tmp`:
+
 ```bash
 crontab -l > /tmp/clyfar_crontab.backup.$(date +%Y%m%d_%H%M%S)
 ```
 
-Rollback:
-```bash
-crontab /tmp/clyfar_crontab.backup.YYYYMMDD_HHMMSS
-```
+## Frozen-repo boundaries
 
-## Repo state snapshot for milestone planning
+- Runtime output and caches follow `docs/STORAGE-GUIDE.md`; none belong in this
+  checkout.
+- During checkout cleanup, separate derived outputs from regenerable caches.
+  Move reviewed outputs to an explicit recovery/archive root, but do not copy a
+  deep Herbie cache across filesystems merely to preserve it; use the bounded
+  cleanup procedure in `docs/STORAGE-GUIDE.md`.
+- Durable run reports and task cards belong in `../ceidwad`.
+- Manuscript material belongs in `../preprint-clyfar-v0p9`.
+- Research notes and event context belong in `../brc-knowledge`.
+- Historical repository material remains recoverable from Git history and
+  should not be reintroduced as an in-tree archive.
 
-Current repo version:
-- `__init__.__version__`: `1.0.6`
-
-Current label set (GitHub issues/PR labels):
-- `bug`
-- `documentation`
-- `duplicate`
-- `enhancement`
-- `good first issue`
-- `help wanted`
-- `invalid`
-- `question`
-- `wontfix`
-- `potential bug`
-
-Current git tags include:
-- Clyfar tags through `v1.0.6`
-- Ffion tags through `ffion-v1.1.4`
-- LLM/pipeline milestone tags (`ai-llm-v*`, `llm-v*`)
-
-If you want to signal this hibernation milestone without changing Ffion:
-- bump only `__init__.__version__` (Clyfar axis)
-- create a matching git tag (`vX.Y.Z`) after merge
-- keep `utils/versioning.py` unchanged unless Ffion bundle changes
-
-## Dev-mode roadmap (prioritized micro-items)
-
-Scoring word: **Leverage** (10 = highest leverage)
-
-### Important / urgent
-- **Leverage 10/10** — Freeze operational runtime into a pinned deployment path (non-mutable checkout) and run ops from that path only.
-- **Leverage 10/10** — Split “ops” and “dev” trees (worktree or clone) so development cannot perturb live scheduling environments.
-- **Leverage 9.5/10** — Create a one-command replay harness for historical cycles (download, run, export, validate markers) for deterministic retrospective evaluation.
-- **Leverage 9.5/10** — Add automated scorecard generation (event-based precision/recall, calibration curves, regime slices) from archived forecasts/obs.
-- **Leverage 9/10** — Build a baseline-vs-candidate comparison runner for `v0p9` versus `v1.1+` rule sets with standardized metrics and artifact paths.
-- **Leverage 9/10** — Harden cache lifecycle controls (fresh-cache option, per-job cache isolation, corruption detection, and cleanup hooks).
-- **Leverage 8.5/10** — Add a strict “no upload” dev profile and CI-like local gate checks for export/LLM paths to avoid accidental production side effects.
-- **Leverage 8.5/10** — Create a reproducible data manifest per run (inputs, hashes, versions, run config) for exact reruns and science traceability.
-- **Leverage 8/10** — Define and enforce objective promotion criteria for version bumps (`v1.0.x -> v1.1.0`) tied to measurable gains.
-- **Leverage 8/10** — Consolidate operational triage commands into one script with clear pass/fail output and suggested remediations.
-
-### Cool / useful / fruitful
-- **Leverage 7.5/10** — Add lightweight dashboard notebooks/scripts that summarize seasonal skill by episode type (stagnation, frontal clearing, snowpack states).
-- **Leverage 7.5/10** — Introduce parameter sweep tooling for membership-function/rule tuning with reproducible experiment manifests.
-- **Leverage 7/10** — Build a “known-bad cases” benchmark suite to stress-test logic changes before merging.
-- **Leverage 7/10** — Add changelog automation that groups operational, science, and LLM/Ffion impacts per release.
-- **Leverage 6.5/10** — Standardize failure taxonomy and marker vocabulary so postmortems and trend analysis are machine-queryable.
-- **Leverage 6.5/10** — Add synthetic dry-run fixtures for upstream outage simulation (GEFS missing files, upload auth failures, delayed scheduler starts).
-- **Leverage 6/10** — Produce concise architecture diagrams for dataflow and failure domains to speed onboarding of new contributors/agents.
-- **Leverage 6/10** — Create “season startup checklist” and “season shutdown checklist” scripts to reduce manual drift each year.
-
-## Suggested milestone next step
-
-If this hibernation handoff is accepted, consider:
-- keep Clyfar at `1.0.6` as the hibernation baseline
-- run 2025/2026 reforecast evaluation with this baseline for the preprint
-- start a `v1.1` project board keyed to the top 10 leverage items above
-
-## AI-agent note
-
-For AI agents entering this repo:
-- read `AGENTS.md` and `docs/README.md` first
-- then read this file for current operational state before proposing schedule or deployment changes
+Approved evaluation, extraction, or tuning work starts in a separate branch
+and worktree from one exact, annotated baseline tag. Keep one scientific
+treatment per branch and keep its generated data outside the checkout. The
+stable ownership, compatibility, and provenance contracts for those lanes are
+summarised in `docs/project_overview.md`.

@@ -1,87 +1,106 @@
 # Clyfar Project Overview
-Date updated: 2025-10-05
+Date updated: 2026-08-07
 
-## What Clyfar Does
-Clyfar is an ozone-forecasting system built for the Uinta Basin. It ingests GEFS ensemble weather forecasts, engineers representative features (wind, snow, solar, pressure, temperature), feeds them into a fuzzy inference system (FIS), and outputs:
-- Possibility distributions for ozone categories (background → extreme).
-- Percentile curves (10th/50th/90th) for expected ozone concentration.
-- Visual artefacts such as meteograms and heatmaps.
-The codebase targets reproducible daily runs and controlled experiments across multiple FIS versions (v0.9 baseline, hotfixes, future 1.x releases).
+Clyfar produces wintertime ozone guidance for the Uinta Basin from GEFS
+forecast inputs. It reduces ensemble weather fields to basin-representative
+predictors, applies a fuzzy inference system, renders forecast products, exports
+BasinWx JSON, and can generate a Ffion narrative outlook.
 
-## High-Level Architecture
-1. **Entry Point** (`run_gefs_clyfar.py`)
-   - Parses CLI arguments (init time, CPU count, member count, data/figure dirs, testing flags).
-   - Forces the multiprocessing `spawn` context for macOS/Linux compatibility.
-   - Sets up a `Lookup` helper, instantiates the active FIS version (`fis.v0p9.Clyfar`).
-   - Orchestrates the full workflow (download → preprocess → save → visualise → FIS inference).
+## Runtime flow
 
-2. **Data Acquisition** (`nwp/`)
-   - `download_funcs.py` handles GEFS downloads using `Herbie`/`GEFSData` wrappers.
-   - Lat/lon grids are cached as parquet with helper `check_and_create_latlon_files`.
+1. `run_gefs_clyfar.py` parses the run contract and coordinates the pipeline.
+2. `nwp/` retrieves and caches the required GEFS fields. Herbie caches live
+   outside the checkout; the small lookup tables in `data/geog/` are the only
+   versioned data files.
+3. `preprocessing/` converts gridded ensemble fields into representative basin
+   time series for snow depth, pressure, wind, solar radiation, and related
+   predictors.
+4. `fis/` evaluates the accepted fuzzy membership functions and rules. The
+   maintained production baseline is implemented in `fis/v0p9.py`.
+5. `viz/` creates heatmaps, meteograms, and diagnostic figures.
+6. `export/` writes the BasinWx-compatible forecast representation.
+7. `scripts/run_llm_outlook.sh` assembles the versioned Ffion bundle and invokes
+   the LLM path with uploads disabled by default.
 
-3. **Preprocessing** (`preprocessing/representative_nwp_values.py`)
-   - Functions like `do_nwpval_wind`, `do_nwpval_snow`, etc., compute representative values (quantiles, masks) across spatial domains for each ensemble member.
-   - Temperature currently outputs a median as a placeholder; roadmap points toward pseudo-lapse-rate support.
+## Main contracts
 
-4. **Utilities & Shared Logic** (`utils/`)
-   - `utils.py` handles filenames, forecast-init calculations, timing decorators, system info.
-   - `lookups.py` maps variable aliases across GEFS, observations, and plotting labels.
-   - `geog_funcs.py` fetches elevation information used for masking low/high terrain.
+- Multiprocessing uses `spawn`; executable paths must retain main guards.
+- Run and cache roots are externalized according to `docs/STORAGE-GUIDE.md`.
+- `scripts/submit_clyfar.sh` is the operational Slurm entrypoint and anchors the
+  forecast initialization time.
+- `scripts/run_winter_replay.py` owns replay manifests, quicklooks, ledger
+  updates, validation, and durable resume behavior.
+- Ffion prompt, bias, QA, and bundle selection are versioned under
+  `templates/llm/`; `utils/versioning.py` and `utils/ffion_bundle.py` resolve the
+  active contract.
 
-5. **Fuzzy Inference System** (`fis/`)
-   - `fis/fis.py` defines the base `FIS` class (control system + shared machinery).
-   - `fis/v0p9.py` stores the current configuration: universes of discourse, membership functions for snow/mslp/wind/solar/ozone, fuzzy rules, and `compute_ozone` method.
-   - `compute_ozone` fuzzifies inputs, runs the rule base, aggregates category curves, and defuzzifies percentiles.
+## New-work boundaries
 
-6. **Post-processing & Visualisation** (`postprocessing/`, `viz/`)
-   - `viz/plotting.py` and `viz/possibility_funcs.py` render meteograms, percentile plots, possibility heatmaps.
-   - `postprocessing/possibility_funcs.ipynb` (now under `notebooks/postprocessing`) explores additional ideas.
+New work must not turn the frozen operational checkout into a mixed research
+tree. Use one branch and external worktree per lane.
 
-7. **Testing** (`tests/`)
-   - Focused unit tests cover utilities, lookups, and preprocessing behaviours to guard edge cases (nearest-neighbour selection, tick spacing, etc.).
+| Lane | Owner and stable interface | Boundary |
+|---|---|---|
+| Ffion | A future `brc-ffion` owns prompting, bundle resolution, narrative validation, and LLM/PDF execution. Clyfar owns the versioned CASE inputs and forecast provenance. | During migration, `FFION_MANIFEST` is the compatibility seam. Do not remove the bundled Ffion path until an external bundle produces parity on fixed CASE fixtures. |
+| Evaluation | `../brc-knowledge` owns the scorecard mathematics; a scoring package owns its implementation; Clyfar supplies member-preserving raw possibilities, observations, and provenance. | Do not depend on the current `../possverif` prototype. Follow `verif/README.md` and pin the exact scorecard source used. |
+| Optimisation | Treatment branches may change rules, membership functions, add a pseudo-lapse-rate input, or correct upstream predictors. | Preserve `fis/v0p9.py` as the control. Each treatment must emit the same forecast contract and retain raw plus transformed predictors. |
 
-8. **Notebooks** (`notebooks/`)
-   - Reorganised into domain folders (FIS, NWP, obs, preprocessing, postprocessing, operations, viz, sandbox, reference) with `notebooks/README.md` giving per-notebook context and maturity.
+Scenario clustering remains a Clyfar-side forecast product: it converts the
+GEFS/Clyfar ensemble into deterministic context. Ffion may consume that context
+but should not own or silently alter the meteorological calculation.
 
-## Typical Execution Flow
-```
-python run_gefs_clyfar.py \
-    -i 2024010100 \
-    -n 8 \
-    -m 10 \
-    -d ./data \
-    -f ./figures
-```
-Steps internally:
-1. Determine valid forecast init (can backtrack if GEFS data lag behind real time).
-2. Download/cached GEFS grids for each required resolution (0.25°/0.5°) and member.
-3. Compute representative time series per variable and member (parallelised across CPUs).
-4. Save parquet outputs under date-stamped directories and generate quicklook figures.
-5. Run Clyfar FIS member by member to obtain ozone possibility distributions and percentile estimates.
-6. Save FIS outputs and heatmaps per ensemble member and relevant views.
+### Ffion migration map
 
-## Possibility Theory in Clyfar
-- Each ozone category (background, moderate, elevated, extreme) is represented by a fuzzy set (membership function) defined in `fis/v0p9.py`.
-- When the FIS fires, rule activations clip these membership functions; the system aggregates them with the max operator, producing a possibility distribution across ozone categories.
-- Percentiles (10/50/90) are derived by defuzzifying the aggregated curve (`defuzzify_percentiles`).
-- If all category peaks fall below 1, the distribution is *subnormal*; the missing mass (`1 - max(π)`) indicates ignorance—aligning with Dubois & Prade’s interpretation where possibility measures express plausibility and the complement to 1 captures lack of knowledge.
-- Visualisations layer category bars/heatmaps so analysts can see which ozone category is most plausible and how confident the system is.
+Move the consumer side first: `templates/llm/`, bundle resolution, prompt
+rendering, outlook extraction/validation, LLM invocation, and PDF production.
+Keep the producer side here: Clyfar/GEFS inference, export and CASE schemas,
+scenario clustering, replay bookkeeping, and the Slurm integration adapter.
+`scripts/run_case_pipeline.py` currently crosses that boundary and should be
+split at the completed CASE/clustering-summary contract rather than copied
+whole into both repositories.
 
-## Interpretation & Fit to Dubois & Prade
-- Clyfar follows the classic possibility framework: rules map meteorological situations to plausibility levels rather than probabilities.
-- The max-based aggregation and optional normalisation mirror Dubois & Prade’s treatment of possibility distributions derived from fuzzy rules.
-- Current plots show raw membership heights; planned enhancements (see `docs/ml_ideas.md`) include highlighting ignorance explicitly and supporting subnormal outputs in dashboards.
+Perform the extraction from a clone or filtered history, not by deleting the
+live Clyfar path first. The migration gate is parity on fixed external CASE
+fixtures for resolved bundle identity and hashes, rendered prompt, validator
+result, exit codes, and stage markers. Generated LLM prose is not a byte-stable
+parity target. Keep the bundled implementation until the external CLI passes
+that gate and the operational wrapper can select it explicitly.
 
-## Key Concepts to Know (Junior Undergraduate Level)
-- **Fuzzy sets:** Instead of yes/no categories, membership functions assign grades (0–1) indicating how well a condition is met.
-- **Fuzzy rules:** IF (snow is sufficient AND wind is calm AND solar is high) THEN ozone is extreme.
-- **Possibility vs probability:** Possibility tells us what is plausible; multiple categories can be highly possible at once. Lack of information is expressed by subnormal distributions.
-- **Preprocessing masks:** Elevation masks and temporal smoothing ensure the FIS receives representative local inputs.
-- **Parallel processing:** Python’s `multiprocessing.Pool` speeds up member-variable extraction but requires cautious setup (spawn start method).
+## Versions, tags, and experiment identity
 
-## Current Gaps & Roadmap Hooks
-- Temperature remains a placeholder; pseudo-lapse-rate integration is pending (see notebooks + roadmap).
-- Possibility heatmaps exist but daily max aggregation is incomplete (`plot_dailymax_heatmap` TODO).
-- Experiment automation, registries, and CLI refactors are planned in `docs/roadmap.md`.
+- Clyfar releases use annotated `vX.Y.Z` tags. While Ffion remains bundled,
+  its compatibility releases retain annotated `ffion-vX.Y.Z` tags.
+- An independent `brc-ffion` should be created by history-preserving extraction,
+  then use its own annotated `vX.Y.Z` tags. Clyfar records the Ffion version,
+  manifest path, and component hashes; the two projects do not share a version
+  number.
+- Never move an existing tag. A maintenance fix gets a new patch tag; a bundle
+  or prompt change gets a new Ffion patch tag even when the Clyfar version is
+  unchanged.
+- Experiment branches start from one exact annotated Clyfar baseline. Prefer
+  `eval/<name>` and `exp/<factor>/<name>` branch names; tag only durable
+  checkpoints, using a namespaced tag such as `exp/rules-ga/v0.1.0`.
+- Every comparison records the baseline and treatment commits, dirty-tree
+  state, Clyfar/FIS/Ffion identities, input-data identifier, scorecard source
+  path and hash, random seeds, and output root. Run reports belong in
+  `../ceidwad`, not this repository.
 
-Use this overview alongside `docs/README.md`, `AGENTS.md`, and `docs/ml_ideas.md` for a fuller orientation.
+## Possibility output
+
+The fuzzy system maps meteorological inputs onto linguistic memberships and
+combines rule activations into categorical ozone possibilities. These values
+are possibilities, not calibrated probabilities. Downstream products retain
+the category distribution and percentile-like ozone summaries without
+silently converting the semantics to probability.
+
+## Frozen scope
+
+This repository preserves the accepted implementation and its automated tests.
+Exploratory notebooks, event analyses, proposal figures, session notes, and
+research roadmaps are intentionally excluded from the current tree. Use Git
+history or the sibling repositories named in `AGENTS.md` when that context is
+needed.
+
+For execution, start with `README.md`. For safe modification, follow
+`AGENTS.md`, `HIBERNATION.md`, `docs/TESTING.md`, and
+`docs/STORAGE-GUIDE.md`.

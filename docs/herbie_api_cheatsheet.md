@@ -13,6 +13,9 @@ inv[inv["search_this"].str.contains(":PRMSL:", case=False, na=False)]
 
 ## Structured download
 ```python
+import os
+
+cache_root = os.environ["CLYFAR_HERBIE_CACHE"]
 ds = H.xarray(
     ":PRMSL:",
     backend_kwargs={
@@ -24,7 +27,7 @@ ds = H.xarray(
             "parameterNumber": 1,
             "stepType": "instant",
         },
-        "indexpath": "data/herbie_cache/cfgrib_indexes/gefs_c00_atmos25_2025012500_f024.idx",
+        "indexpath": f"{cache_root}/cfgrib_indexes/gefs_c00_atmos25_2025012500_f024.idx",
         "errors": "raise",
     },
 )
@@ -39,8 +42,10 @@ value_hpa = (field.values * units.pascal).to(units.hectopascal).magnitude
 
 ## Diagnostics
 - `scripts/check_mslp.py -i <init> -f 0 6 12 24 48 -m c00 -p atmos.25` prints per-hour min/max/NaN counts and surfaces cfgrib vs pygrib usage.
-- `data/herbie_cache/gefs/<init>/` holds the GRIB/idx files; delete between tests to force fresh downloads.
+- `$CLYFAR_HERBIE_CACHE/gefs/<init>/` holds the GRIB/idx files; use a
+  disposable scratch cache when a test requires a fresh download.
 
 ## When editing
 - Only PRMSL uses this helper today—other variables still load via `load_variable`. Don’t rip out the legacy path until each variable has a structured equivalent.
-- Keep regression guard in `save_forecast_data` intact whenever touching MSLP: parquet writes must fail if `prmsl` is all NaN (operational safety net).
+- Keep the all-NaN warning and fallback contract in `save_forecast_data` intact
+  whenever touching MSLP.

@@ -10,8 +10,6 @@ import pytz
 from astral import LocationInfo
 from astral.sun import sun
 
-from obs.download_winters import download_most_recent
-
 MOUNTAIN_TIMEZONE = "America/Denver"
 
 
@@ -348,6 +346,10 @@ def do_repval_ozone(df, stids, vrbl_col="ozone_concentration", stid_col="stid"):
 def get_representative_obs(vrbl, n_days, stids, timezone=MOUNTAIN_TIMEZONE):
     """Helper function to download and process obs in one function.
     """
+    # Synoptic validates credentials at import time in some installed versions.
+    # Keep that network-capable dependency out of ordinary preprocessing imports.
+    from obs.download_winters import download_most_recent
+
     repr_funcs = {
         "mslp": do_repval_mslp,
         "wind": do_repval_wind,

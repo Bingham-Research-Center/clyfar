@@ -33,19 +33,41 @@ if [[ "${1:-}" == "--clean" ]]; then
     CLEAN_MODE=true
 fi
 
+default_herbie_cache() {
+    if [[ -n "${CLYFAR_HERBIE_CACHE:-}" ]]; then
+        printf "%s\n" "$CLYFAR_HERBIE_CACHE"
+    elif [[ -n "${USER:-}" && -d "/scratch/general/vast/${USER}" ]]; then
+        printf "/scratch/general/vast/%s/clyfar/herbie_cache\n" "$USER"
+    else
+        printf "%s/clyfar_herbie\n" "${TMPDIR:-/tmp}"
+    fi
+}
+
 # Storage locations
-HERBIE_CACHE="${CLYFAR_HERBIE_CACHE:-$HOME/gits/clyfar/data/herbie_cache}"
+CLYFAR_DIR="${CLYFAR_DIR:-$HOME/gits/clyfar}"
+HERBIE_CACHE="$(default_herbie_cache)"
+LEGACY_REPO_HERBIE_CACHE="$CLYFAR_DIR/data/herbie_cache"
 SCRATCH_TEST="/scratch/general/vast/clyfar_test"
 SCRATCH_PROD="/scratch/general/vast/clyfar"
 HOME_DATA="$HOME/basinwx-data/clyfar"
 TMP_CACHE="/tmp/clyfar_herbie"
-ARCHIVE_BASE="/uufs/chpc.utah.edu/common/home/lawson-group5/clyfar"
+ARCHIVE_BASE="/uufs/chpc.utah.edu/common/home/lawson-group6/clyfar/replay"
 
-# Helper: Get directory size (returns "0" if doesn't exist)
+# Keep recursive metadata walks bounded on shared filesystems. Deep Herbie
+# caches can otherwise make a cold-start inventory look hung.
+SIZE_SCAN_SECONDS="${CLYFAR_SIZE_SCAN_SECONDS:-15}"
+
+# Helper: Get directory size with a bounded scan.
 get_size() {
     local path="$1"
     if [[ -d "$path" ]]; then
-        du -sh "$path" 2>/dev/null | cut -f1
+        local result
+        result=$(timeout "${SIZE_SCAN_SECONDS}s" du -sh -- "$path" 2>/dev/null | cut -f1 || true)
+        if [[ -n "$result" ]]; then
+            echo "$result"
+        else
+            echo "scan timed out"
+        fi
     else
         echo "N/A"
     fi
@@ -80,7 +102,8 @@ oldest_run() {
 days_since_access() {
     local path="$1"
     if [[ -d "$path" ]]; then
-        local oldest_file=$(find "$path" -type f -printf '%A@\n' 2>/dev/null | sort -n | head -1)
+        local oldest_file
+        oldest_file=$(timeout "${SIZE_SCAN_SECONDS}s" find "$path" -type f -printf '%A@\n' 2>/dev/null | sort -n | head -1 || true)
         if [[ -n "$oldest_file" ]]; then
             local now=$(date +%s)
             local days=$(( (now - ${oldest_file%.*}) / 86400 ))
@@ -161,12 +184,17 @@ if [[ -d "$HERBIE_CACHE" ]]; then
     fi
 
     # Warning if large
-    size_bytes=$(du -sb "$HERBIE_CACHE" 2>/dev/null | cut -f1)
+    size_bytes=$(timeout "${SIZE_SCAN_SECONDS}s" du -sb -- "$HERBIE_CACHE" 2>/dev/null | cut -f1 || true)
     if [[ -n "$size_bytes" && "$size_bytes" -gt 1073741824 ]]; then  # >1GB
         echo -e "    ${RED}[!] Cache >1GB - consider clearing after successful run${NC}"
     fi
 else
     echo "  $HERBIE_CACHE    (not present)"
+fi
+if [[ "$LEGACY_REPO_HERBIE_CACHE" != "$HERBIE_CACHE" && -d "$LEGACY_REPO_HERBIE_CACHE" ]]; then
+    echo -e "  ${RED}[!] Legacy repo-local cache present:${NC} $LEGACY_REPO_HERBIE_CACHE"
+    echo "      Size: $(get_size "$LEGACY_REPO_HERBIE_CACHE")"
+    echo "      Handle separately: do not bundle this deep cache into a cross-filesystem output move."
 fi
 echo ""
 
@@ -199,9 +227,10 @@ echo ""
 
 # RECOMMENDATIONS
 echo -e "${BLUE}RECOMMENDATIONS:${NC}"
-echo "  1. Archive valuable runs to Cottonwood before 60-day scratch purge"
-echo "  2. Clear Herbie cache after successful runs: rm -rf $HERBIE_CACHE/*"
-echo "  3. Check quota: df -h ~"
+echo "  1. Archive valuable runs to group storage before 60-day scratch purge"
+echo "  2. Clear Herbie cache after successful runs: CLYFAR_HERBIE_CACHE='$HERBIE_CACHE' scripts/storage_inventory.sh --clean"
+echo "  3. Keep legacy cache cleanup separate from derived-output relocation"
+echo "  4. Check quota: df -h ~"
 echo ""
 echo -e "${YELLOW}[!] AUTOMATION NOT YET ENABLED - manual cleanup only${NC}"
 echo ""
@@ -217,7 +246,7 @@ if [[ "$CLEAN_MODE" == true ]]; then
         read -p "Clear Herbie cache ($size)? [y/N] " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf "$HERBIE_CACHE"/*
+            find "$HERBIE_CACHE" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
             echo -e "${GREEN}Herbie cache cleared${NC}"
         fi
     fi

@@ -1,10 +1,12 @@
-## Numerical Weather Prediction data
-We focus mainly on GEFS 0.25 degree (about 25km) grid spacing. We can obtain the cells over the Basin and combine them with methods in `preprocessing` and generate representative forecast values similarly to those created by representative observations (e.g., 99th percentile of all stations' median value for a given day).
+# Numerical Weather Prediction Boundary
 
-### Preprocessing
-To get the forecast values into the best proxy for observations, we error-correct. The method of this error correction is a topic of research (e.g., neural networks). 
+`nwp/` retrieves the GEFS fields required by the accepted forecast and keeps
+cache/locking behavior isolated from inference. `preprocessing/` owns the
+conversion from gridded fields to basin-representative predictors; `fis/` owns
+their interpretation.
 
-### Future
-* Most efficient way of downloading GEFS data for each ensemble member without storing huge files on disk.
-* Might consider RRFS and HRRR data for higher resolution forecasts.
-* 
+Keep Herbie data and indexes outside the checkout according to
+`docs/STORAGE-GUIDE.md`. Source changes and learned bias correction require an
+experiment branch and must preserve source, cycle, member, lead, units, raw
+value, transformed value, and model-artifact identity. Do not hide a data-source
+change inside an FIS treatment.

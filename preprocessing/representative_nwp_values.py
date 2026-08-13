@@ -14,7 +14,6 @@ from metpy.units import units
 
 from nwp.download_funcs import load_variable
 from nwp.gefsdata import GEFSData
-from obs.download_winters import download_most_recent
 from utils.lookups import Lookup, snow_stids
 from preprocessing.representative_obs import do_repval_snow, \
     get_representative_obs
@@ -356,6 +355,10 @@ def do_nwpval_snow(init_dt_naive: datetime.datetime,
                     )
 
     if initialise_with_obs:
+        # Defer Synoptic import so offline inference/test imports do not perform
+        # credential validation or network access.
+        from obs.download_winters import download_most_recent
+
         # TODO - fully test and also turn off if zero depth is reachef
         # Also we need to return the offset amount so it can be be displayed
         # TODO consider a log file with things like this?

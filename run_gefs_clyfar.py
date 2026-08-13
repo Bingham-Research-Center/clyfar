@@ -18,12 +18,14 @@ TODO - "temp" to become numerous further variables in branch testing v1.1+
 """
 import argparse
 import multiprocessing as mp
+import os
+import tempfile
+from pathlib import Path
 
 from scipy import ndimage
 
 # mp.set_start_method('spawn', force=True)
 print("Current start method:", mp.get_start_method())
-import os
 from typing import Dict, List, Tuple, Optional
 import logging
 import datetime
@@ -35,6 +37,22 @@ import time
 import numpy as np
 import pandas as pd
 import requests
+
+
+def _default_runtime_root(name: str) -> Path:
+    user = os.environ.get("USER")
+    if user:
+        scratch_user = Path("/scratch/general/vast") / user
+        if scratch_user.exists():
+            return scratch_user / "clyfar" / name
+    return Path(tempfile.gettempdir()) / "clyfar" / name
+
+
+if "MPLCONFIGDIR" not in os.environ:
+    default_mplconfig = _default_runtime_root("mplconfig")
+    default_mplconfig.mkdir(parents=True, exist_ok=True)
+    os.environ["MPLCONFIGDIR"] = str(default_mplconfig)
+
 from matplotlib import pyplot as plt
 
 # Special exit codes for retryable failures
@@ -428,7 +446,6 @@ def save_forecast_data(
         if variable == "mslp":
             series = df[mslp_col]
             if series.isna().all():
-                # TODO: Fix in Herbie refactor (see docs/archive/root_notes/TODO-HERBIE-REFACTOR.md)
                 logger.warning(
                     "MSLP dataframe for %s contains only NaNs; writing anyway. "
                     "Forecast will use fallback MSLP values.", member
@@ -1064,12 +1081,6 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
     return {"phase_timings": phase_timings}
 
 if __name__ == "__main__":
-    # Ensure Matplotlib caches land in a writable path to avoid warnings
-    if "MPLCONFIGDIR" not in os.environ:
-        default_mplconfig = os.path.join(os.getcwd(), ".mplconfig")
-        os.makedirs(default_mplconfig, exist_ok=True)
-        os.environ["MPLCONFIGDIR"] = default_mplconfig
-
     # TODO - add data & figure paths (set by environment variables at runtime)
     parser = argparse.ArgumentParser(
             description="Run the parallel operational forecast workflow.")
@@ -1133,6 +1144,11 @@ if __name__ == "__main__":
     print(f"Do GEFS: {not args.no_gefs}")
     print("Saving data to root directory:", args.data_root)
     print("Saving figures to root:", args.fig_root)
+
+    if "CLYFAR_PERFORMANCE_LOG" not in os.environ:
+        performance_log = os.path.join(args.data_root, "performance_log.txt")
+        os.makedirs(os.path.dirname(performance_log), exist_ok=True)
+        os.environ["CLYFAR_PERFORMANCE_LOG"] = performance_log
 
     run_label = args.inittime.strftime('%Y%m%d_%H%MZ')
     run_suffix = "smoke" if args.testing else "run"
@@ -1246,7 +1262,9 @@ if __name__ == "__main__":
                 "figures_dir": os.path.join(
                     args.fig_root, args.inittime.strftime("%Y%m%d_%HZ")),
                 "log_file": None,
-                "performance_log": os.path.abspath("performance_log.txt"),
+                "performance_log": os.path.abspath(
+                    os.environ["CLYFAR_PERFORMANCE_LOG"]
+                ),
             }
             if args.testing:
                 smoke_log = os.path.join(

@@ -1,38 +1,28 @@
-# Documentation Hub
-Date updated: 2026-03-30
+# Maintained Documentation
+Date updated: 2026-08-07
 
-Use this page as the jumping-off point for orientation, planning, and deeper research. Follow the "Quick start" list first, then dive into the topical docs as needed.
+The frozen fork keeps only current operational, testing, storage, and core
+method references. Historical plans, session handoffs, event studies, and
+generated artifacts remain available through Git history rather than an
+in-tree archive.
 
-Historical planning docs may reference pre-v1 tags (for provenance). Treat `README.md`, `AGENTS.md`, `HIBERNATION.md`, and `docs/TODO_PRIORITIZED.md` as the active operational truth set.
+Read `README.md`, `AGENTS.md`, and `HIBERNATION.md` before using this index.
 
-## Quick start
-- [`README.md`](../README.md#environment-setup) — Project summary, prerequisites, and the canonical smoke test (mirrored in [`AGENTS.md`](../AGENTS.md#testing-guidelines)).
-- [`AGENTS.md`](../AGENTS.md#testing-guidelines) — Collaboration guardrails, coding conventions, day-to-day workflows, and the same smoke command under Testing Guidelines (points back to the README entry above for consistency).
-- [`HIBERNATION.md`](../HIBERNATION.md) — Seasonal ops runbook: cron pause/resume/tweak guidance, restart checklist, and prioritized dev-mode roadmap.
-- `docs/archive/AI_AGENT_ONBOARDING.md` — **AI agents start here:** efficient protocol to minimize token usage and respect team conventions.
-- `docs/project_overview.md` — Narrative tour of the architecture and possibility-theory framing.
-- `docs/TODO_PRIORITIZED.md` — Active TODO list ranked by likelihood and effort.
-- `docs/roadmap.md` — Historical refactor roadmap context (pre-v1 planning archive).
+## Operations and reproducibility
 
-## Topical references
-- `docs/setup_conda.md` — Step-by-step Miniforge/Conda environment setup.
-- `docs/experiments/multi_version_winter.md` — Multi-version winter experiment playbook.
-- `docs/ml_ideas.md` — Machine-learning and optimisation concepts for evolving the FIS.
-- `docs/patches_table.md` — Table of tactical fixes with notes on future relevance.
-- `docs/cross_repo_workflow.md` — Guidance for coordinating with adjacent knowledge-base repositories.
-- `docs/repo_review.md` — Snapshot of code structure, risks, and improvement opportunities.
-- `docs/validation.md` — Local smoke test command and SLURM submission template.
-- `docs/chpc-v106-dry-run.md` — CHPC v1.0.6 storage-safe smoke and winter-rerun handoff.
-- `docs/TESTING.md` — Pytest primer and conventions.
-- `docs/science-questions.md` — Concise, high‑impact questions driving MF calibration and science changes.
+- `docs/STORAGE-GUIDE.md` — CHPC scratch/archive/cache policy and non-repo defaults.
+- `docs/TESTING.md` — pytest conventions and focused test commands.
+- `docs/setup_conda.md` — Miniforge/Conda environment setup.
+- `docs/replay_resource_profiles.md` — winter replay Slurm profiles.
+- `docs/slurm/clyfar_test.sbatch` — bounded CHPC smoke template.
 
-## Optional deep dives
-- `notebooks/README.md` — Notebook index with purpose and maturity signals.
-- `notebooks/reference/clyfar_explained.ipynb` — Narrative walkthrough for stakeholders.
-- `filetree.txt` — Auto-generated view of the current repository layout.
+## Implementation and method
 
-## Maintenance checklist
-- Update this hub whenever docs are added, renamed, or relocated.
-- Refresh the "Date updated" stamp and key links after significant content edits.
-- Archive or delete pointers to documents that move out of the repository.
-- Keep `HIBERNATION.md` current whenever seasonal operational mode changes.
+- `docs/project_overview.md` — architecture, new-work boundaries, and version/provenance policy.
+- `docs/external_data_references.md` — authoritative GEFS/Herbie data references.
+- `docs/herbie_api_cheatsheet.md` — maintained GEFS/Herbie query patterns.
+- `verif/README.md` — live scorecard authority and evaluation data contract.
+
+When changing this set, update this index in the same change. New dated
+handoffs, roadmaps, case reports, and notebook outputs belong outside the
+frozen repository.
