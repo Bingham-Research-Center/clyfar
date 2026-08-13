@@ -33,7 +33,11 @@ from utils.versioning import get_clyfar_version
 
 # Import from brc-tools (installed as editable package)
 try:
-    from brc_tools.download.push_data import send_json_to_server
+    from brc_tools.download.push_data import (
+        load_config_urls,
+        send_json_to_all,
+        send_json_to_server,
+    )
 except ImportError as e:
     raise ImportError(
         "Cannot import brc_tools. Ensure it's installed: "
@@ -723,31 +727,47 @@ def export_all_products(
     return results
 
 
+def _resolve_api_urls() -> List[str]:
+    """Upload destinations: first URL is the primary, the rest are
+    best-effort mirrors (basinwx.com + basinwx.dev in production).
+
+    Resolution: BASINWX_API_URLS env (comma-separated) ->
+    ~/.config/ubair-website/website_urls via brc_tools load_config_urls()
+    -> legacy singular BASINWX_API_URL -> https://basinwx.com. The
+    singular var used to be the only source, which is why forecasts,
+    images and llm_outlooks reached .com alone all last season.
+    """
+    env_urls = os.getenv('BASINWX_API_URLS', '').strip()
+    if env_urls:
+        return [u.strip().rstrip('/') for u in env_urls.split(',') if u.strip()]
+    try:
+        _, urls = load_config_urls()
+        return urls
+    except Exception:
+        return [os.getenv('BASINWX_API_URL', 'https://basinwx.com').rstrip('/')]
+
+
 def _upload_to_basinwx(filepath: str, data_type: str) -> bool:
-    """Upload JSON file to BasinWx API.
+    """Upload JSON file to every configured BasinWx site.
 
     Args:
         filepath: Path to JSON file
         data_type: Data type for API endpoint (e.g., 'forecasts')
 
     Returns:
-        True if upload succeeded, False otherwise
+        True if the primary upload succeeded, False otherwise. Mirror
+        failures are logged by send_json_to_all and do not fail the job.
     """
     api_key = os.getenv('DATA_UPLOAD_API_KEY')
     if not api_key:
         logger.warning("DATA_UPLOAD_API_KEY not set, skipping upload")
         return False
 
-    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
+    api_urls = _resolve_api_urls()
 
     try:
-        send_json_to_server(
-            server_address=api_url,
-            fpath=filepath,
-            file_data=data_type,  # data_type is 'forecasts', not JSON content
-            API_KEY=api_key
-        )
-        logger.debug(f"Uploaded {os.path.basename(filepath)} to {api_url}")
+        send_json_to_all(api_urls, filepath, data_type, api_key)
+        logger.debug(f"Uploaded {os.path.basename(filepath)} to {', '.join(api_urls)}")
         return True
 
     except Exception as e:
@@ -833,13 +853,20 @@ def upload_png_to_basinwx(png_path: str) -> bool:
         logger.warning("DATA_UPLOAD_API_KEY not set, skipping PNG upload")
         return False
 
-    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-    upload_url = f"{api_url}/api/upload/images"
+    api_urls = _resolve_api_urls()
     hostname = socket.getfqdn()
     headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
 
+    ok = False
     with requests.Session() as session:
-        return _upload_single_png(png_path, session, upload_url, headers)
+        for i, api_url in enumerate(api_urls):
+            result = _upload_single_png(
+                png_path, session, f"{api_url}/api/upload/images", headers)
+            if i == 0:
+                ok = result
+            elif not result:
+                logger.warning(f"Mirror PNG upload failed: {api_url}")
+    return ok
 
 
 def upload_pdf_to_basinwx(pdf_path: str) -> bool:
@@ -871,8 +898,7 @@ def upload_outlook_to_basinwx(file_path: str) -> bool:
         logger.warning("DATA_UPLOAD_API_KEY not set, skipping outlook upload")
         return False
 
-    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-    upload_url = f"{api_url}/api/upload/llm_outlooks"
+    api_urls = _resolve_api_urls()
     hostname = socket.getfqdn()
     headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
 
@@ -881,22 +907,33 @@ def upload_outlook_to_basinwx(file_path: str) -> bool:
     mime_types = {'.pdf': 'application/pdf', '.md': 'text/markdown'}
     mime_type = mime_types.get(ext, 'application/octet-stream')
 
-    try:
-        with requests.Session() as session:
-            with open(file_path, 'rb') as f:
-                files = {'file': (os.path.basename(file_path), f, mime_type)}
-                response = session.post(upload_url, files=files, headers=headers, timeout=60)
+    ok = False
+    with requests.Session() as session:
+        for i, api_url in enumerate(api_urls):
+            upload_url = f"{api_url}/api/upload/llm_outlooks"
+            try:
+                with open(file_path, 'rb') as f:
+                    files = {'file': (os.path.basename(file_path), f, mime_type)}
+                    response = session.post(
+                        upload_url, files=files, headers=headers, timeout=60)
 
-            if response.status_code == 200:
-                logger.info(f"Uploaded outlook: {os.path.basename(file_path)}")
-                return True
-            else:
-                logger.error(f"Outlook upload failed ({response.status_code}): {response.text}")
-                return False
+                success = response.status_code == 200
+                if success:
+                    logger.info(
+                        f"Uploaded outlook to {api_url}: {os.path.basename(file_path)}")
+                else:
+                    logger.error(
+                        f"Outlook upload failed at {api_url} "
+                        f"({response.status_code}): {response.text}")
+            except Exception as e:
+                success = False
+                logger.error(f"Failed to upload outlook {file_path} to {api_url}: {e}")
 
-    except Exception as e:
-        logger.error(f"Failed to upload outlook {file_path}: {e}")
-        return False
+            if i == 0:
+                ok = success
+            elif not success:
+                logger.warning(f"Mirror outlook upload failed: {api_url}")
+    return ok
 
 
 def upload_json_to_basinwx(filepath: str, data_type: str = "forecasts") -> bool:
@@ -1018,26 +1055,32 @@ def export_figures_to_basinwx(
             logger.warning("DATA_UPLOAD_API_KEY not set, skipping PNG uploads")
             return results
 
-        api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-        upload_url = f"{api_url}/api/upload/images"
+        api_urls = _resolve_api_urls()
         hostname = socket.getfqdn()
         headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
 
-        logger.info(f"Uploading {len(all_pngs)} PNGs with {max_workers} workers...")
-
-        # Use a shared session for connection pooling and proper cleanup
+        # Primary first, then best-effort mirrors, sharing one session for
+        # connection pooling and proper cleanup.
         session = requests.Session()
         try:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(_upload_single_png, p, session, upload_url, headers): p
-                    for p in all_pngs
-                }
-                success = 0
-                for future in as_completed(futures):
-                    if future.result():
-                        success += 1
-            logger.info(f"Uploaded {success}/{len(all_pngs)} PNGs")
+            for i, api_url in enumerate(api_urls):
+                upload_url = f"{api_url}/api/upload/images"
+                role = "primary" if i == 0 else "mirror"
+                logger.info(
+                    f"Uploading {len(all_pngs)} PNGs to {api_url} ({role}) "
+                    f"with {max_workers} workers...")
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(_upload_single_png, p, session, upload_url, headers): p
+                        for p in all_pngs
+                    }
+                    success = 0
+                    for future in as_completed(futures):
+                        if future.result():
+                            success += 1
+                logger.info(f"Uploaded {success}/{len(all_pngs)} PNGs to {api_url}")
+                if i > 0 and success < len(all_pngs):
+                    logger.warning(f"Mirror PNG uploads incomplete at {api_url}")
         finally:
             # Explicitly close session to ensure all connections are cleaned up
             session.close()
