@@ -19,17 +19,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
-    from brc_tools.download.push_data import send_json_to_server
+    from brc_tools.download.push_data import send_json_to_all
 except ImportError:
     print("Error: brc_tools not found. Install with: pip install -e /path/to/brc-tools")
     sys.exit(1)
+
+from export.to_basinwx import _resolve_api_urls
 
 
 def main():
     parser = argparse.ArgumentParser(description="Batch upload forecast JSON to BasinWx")
     parser.add_argument('--json-dir', required=True, help="Directory containing JSON files")
     parser.add_argument('--data-type', default='forecasts', help="API data type (default: forecasts)")
-    parser.add_argument('--server', default='https://basinwx.com', help="Server URL")
+    parser.add_argument('--server', default=None,
+                        help="Server URL override (default: fan out to every configured site)")
     parser.add_argument('--dry-run', action='store_true', help="List files without uploading")
     args = parser.parse_args()
 
@@ -57,19 +60,15 @@ def main():
             print(f"  {f.name}")
         return
 
-    print(f"Uploading to {args.server}/api/upload/{args.data_type}...\n")
+    server_urls = [args.server.rstrip('/')] if args.server else _resolve_api_urls()
+    print(f"Uploading to {', '.join(server_urls)} (/api/upload/{args.data_type})...\n")
 
     success = 0
     failed = 0
 
     for f in files:
         try:
-            send_json_to_server(
-                server_address=args.server,
-                fpath=str(f),
-                file_data=args.data_type,
-                API_KEY=api_key
-            )
+            send_json_to_all(server_urls, str(f), args.data_type, api_key)
             success += 1
         except Exception as e:
             print(f"  Error uploading {f.name}: {e}")
