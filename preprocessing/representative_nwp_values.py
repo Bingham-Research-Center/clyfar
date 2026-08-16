@@ -20,6 +20,7 @@ from preprocessing.representative_obs import do_repval_snow, \
 
 LOCAL_SOLAR_TIMEZONE = "America/Denver"
 SOLAR_PERSISTENCE_CUTOFF_H = 240
+logger = logging.getLogger(__name__)
 
 
 def _to_utc_index(index_like) -> pd.DatetimeIndex:
@@ -375,12 +376,18 @@ def do_nwpval_snow(init_dt_naive: datetime.datetime,
         repr_val = 0
 
         # Load data via Synoptic Weather API (and SynopticPy)
-        recent_df = download_most_recent("snow", 7,
-                                            snow_stids).df
-        repr_snow = do_repval_snow(recent_df, snow_stids)
+        try:
+            recent_df = download_most_recent("snow", 7, snow_stids).df
+            repr_snow = do_repval_snow(recent_df, snow_stids)
 
-        # Use most recent value for "DA"
-        repr_val = float(repr_snow.loc[repr_snow.index[-1]].squeeze())
+            # Use most recent value for "DA"
+            repr_val = float(repr_snow.loc[repr_snow.index[-1]].squeeze())
+        except Exception as exc:
+            logger.warning(
+                "Falling back to zero snow offset because recent observations "
+                "could not be loaded: %s",
+                exc,
+            )
 
         # Offset the timeseries by the representative value vs original value
         offset = float(snow_ts.isel(time=0).sde.values.squeeze()) - repr_val
