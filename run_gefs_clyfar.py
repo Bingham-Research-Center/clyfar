@@ -915,7 +915,10 @@ def main(dt, clyfar_fig_root, clyfar_data_root,
                 forecast_data_root=gefs_data_root)
             clyfar_df_dict[clyfar_member] = member_df
             dailymax_df_dict[clyfar_member] = utils.compute_local_daily_max(
-                member_df, target_tz=LOCAL_TIMEZONE)
+                member_df,
+                target_tz=utils.MOUNTAIN_STANDARD_TIME,
+                display_tz=LOCAL_TIMEZONE,
+            )
             pass
         record_phase("clyfar_inference_seconds", phase_started)
 

@@ -12,6 +12,10 @@ import pandas as pd
 import numpy as np
 import pytz
 
+MOUNTAIN_STANDARD_TIME = datetime.timezone(
+    datetime.timedelta(hours=-7), name='MST'
+)
+
 def save_to_pickle(obj, fpath):
     with open(fpath, 'wb') as f:
         pickle.dump(obj, f)
@@ -173,19 +177,37 @@ def datetime_of_previous_run(dt, do_utc=True, do_naive=True, do_local=True,
     local_t0 = new_dt_utc.astimezone(pytz.timezone('US/Mountain'))
     return new_dt_utc, init_dt_naive, local_t0
 
-def compute_local_daily_max(df, columns=None, target_tz='America/Denver'):
-    """Aggregate a time-series dataframe to local-day maxima.
+def compute_local_daily_max(
+    df,
+    columns=None,
+    target_tz=MOUNTAIN_STANDARD_TIME,
+    anchor_column='ozone_50pc',
+    display_tz='America/Denver',
+):
+    """Select one coherent forecast row per fixed-standard-time day.
+
+    The anchor column alone is maximised.  Every other value, including the
+    possibility vector, is carried from the same valid time.  Ties select the
+    earliest valid time.  This avoids constructing a categorical vector from
+    componentwise maxima that occurred at different hours.
 
     Args:
         df (pd.DataFrame): Forecast dataframe with a DatetimeIndex (naive UTC or tz-aware).
         columns (list[str] | None): Optional subset of columns to retain; defaults to all.
-        target_tz (str): Olson tz name for the aggregation (e.g., 'America/Denver').
+        target_tz: Fixed standard timezone used to define verification days.
+        anchor_column (str): Scalar column defining the daily peak.
+        display_tz (str): Civil timezone retained for display and DST audit.
 
     Returns:
-        pd.DataFrame: Daily maxima indexed by local midnight (tz-naive for convenience).
+        pd.DataFrame: Coherent peak rows indexed by standard-time day, with the
+        selected valid time retained in UTC, fixed standard time, and civil
+        local time columns.
     """
     if df.empty:
         return df.copy()
+
+    if anchor_column not in df.columns:
+        raise KeyError(f"anchor column {anchor_column!r} is absent")
 
     if columns is None:
         columns = df.columns.tolist()
@@ -193,20 +215,48 @@ def compute_local_daily_max(df, columns=None, target_tz='America/Denver'):
         columns = [col for col in columns if col in df.columns]
         if not columns:
             return pd.DataFrame(index=pd.Index([], name=df.index.name))
+    if anchor_column not in columns:
+        columns = [anchor_column, *columns]
 
-    idx = pd.DatetimeIndex(df.index)
+    df_sorted = df.sort_index(kind='stable')
+    idx = pd.DatetimeIndex(df_sorted.index)
     if idx.tz is None:
         localized = idx.tz_localize('UTC')
     else:
         localized = idx
-    local_idx = localized.tz_convert(target_tz)
+    standard_idx = localized.tz_convert(target_tz)
 
-    df_local = df.copy()
-    df_local.index = local_idx
+    df_standard = df_sorted.copy()
+    df_standard.index = standard_idx
 
-    daily_max = df_local[columns].resample('D', label='left', closed='left').max()
-    daily_max.index = daily_max.index.tz_localize(None)
-    return daily_max
+    rows = []
+    days = []
+    for verification_day, group in df_standard.groupby(pd.Grouper(freq='D')):
+        anchor = pd.to_numeric(group[anchor_column], errors='coerce')
+        if anchor.notna().any():
+            selected_time = anchor.idxmax()
+            selected = group.loc[selected_time, columns]
+            if isinstance(selected, pd.DataFrame):
+                selected = selected.iloc[0]
+            selected = selected.copy()
+            selected['peak_valid_time_utc'] = selected_time.tz_convert('UTC')
+            selected['peak_valid_time_standard'] = selected_time
+            selected['peak_valid_time_local'] = selected_time.tz_convert(display_tz)
+        else:
+            selected = pd.Series({column: np.nan for column in columns})
+            selected['peak_valid_time_utc'] = pd.NaT
+            selected['peak_valid_time_standard'] = pd.NaT
+            selected['peak_valid_time_local'] = pd.NaT
+        selected['daily_forecast_operator'] = (
+            'earliest_time_of_member_p50_fixed_mst_day_max_v1'
+        )
+        rows.append(selected)
+        days.append(verification_day.tz_localize(None))
+
+    daily_peak = pd.DataFrame(
+        rows, index=pd.DatetimeIndex(days, name='verification_day')
+    )
+    return daily_peak
 
 def get_nice_tick_spacing(data_range, quantizations):
     """Calculate a nice tick spacing for a given data range.

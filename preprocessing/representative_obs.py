@@ -11,6 +11,10 @@ from astral import LocationInfo
 from astral.sun import sun
 
 MOUNTAIN_TIMEZONE = "America/Denver"
+MOUNTAIN_STANDARD_TIME = datetime.timezone(
+    datetime.timedelta(hours=-7), name="MST"
+)
+OZONE_NAAQS_LEVEL_PPB = 70.0
 
 
 def prepare_df(df, stids, vrbl_col, stid_col):
@@ -34,18 +38,24 @@ def prepare_df(df, stids, vrbl_col, stid_col):
 
     return df
 
-def convert_to_local_date(df):
-    """Convert UTC index to Mountain Time and add date column.
+def convert_to_local_date(df, timezone=MOUNTAIN_TIMEZONE):
+    """Convert a UTC-indexed frame to physical local dates.
 
     Args:
         df: DataFrame with UTC index
 
     Returns:
-        DataFrame with Mountain Time index and date column
+        DataFrame with a timezone-aware local index and a naive ``date``
+        column naming the physical local calendar day.
     """
     df_local = df.copy()
-    df_local.index = df.index.tz_convert(MOUNTAIN_TIMEZONE)
-    df_local['date'] = df_local.index.date + pd.Timedelta(days=1)  # Align all functions to next day
+    index = pd.DatetimeIndex(df_local.index)
+    if index.tz is None:
+        index = index.tz_localize("UTC")
+    else:
+        index = index.tz_convert("UTC")
+    df_local.index = index.tz_convert(timezone)
+    df_local['date'] = df_local.index.normalize().tz_localize(None)
     return df_local
 
 def do_repval_mslp(df, stids, vrbl_col="sea_level_pressure", stid_col="stid"):
@@ -295,8 +305,243 @@ def do_repval_solar(df, stids, vrbl_col="solar_radiation", stid_col="stid"):
 
     return repr_df
 
-def do_repval_ozone(df, stids, vrbl_col="ozone_concentration", stid_col="stid"):
-    """Create representative values of ozone concentration from set of stations.
+def station_ozone_mda8_windows(
+    df,
+    stids,
+    vrbl_col="ozone_concentration",
+    stid_col="stid",
+    minimum_ppb=5.0,
+    maximum_ppb=140.0,
+    standard_timezone=MOUNTAIN_STANDARD_TIME,
+    display_timezone=MOUNTAIN_TIMEZONE,
+    naaqs_level_ppb=OZONE_NAAQS_LEVEL_PPB,
+):
+    """Return the 17 EPA-aligned station MDA8 windows for each standard day.
+
+    The primary values retain the source precision.  Parallel audit values
+    apply Appendix U's whole-ppb equivalent truncation before and after the
+    moving average.  This is an EPA-aligned calculation from Synoptic data,
+    not a regulatory AQS or design-value calculation.
+    """
+    if minimum_ppb >= maximum_ppb:
+        raise ValueError("minimum_ppb must be less than maximum_ppb")
+
+    audit_columns = [vrbl_col, stid_col]
+    if "qc_flagged" in df.columns:
+        audit_columns.append("qc_flagged")
+    prepared = df.loc[df[stid_col].isin(stids), audit_columns].copy()
+    utc_index = pd.DatetimeIndex(prepared.index)
+    if utc_index.tz is None:
+        utc_index = utc_index.tz_localize("UTC")
+    else:
+        utc_index = utc_index.tz_convert("UTC")
+    numeric = pd.to_numeric(prepared[vrbl_col], errors="coerce")
+    prepared["_qc_flagged"] = (
+        prepared["qc_flagged"].fillna(False).astype(bool)
+        if "qc_flagged" in prepared
+        else False
+    )
+    in_range = numeric.between(minimum_ppb, maximum_ppb, inclusive="both")
+    prepared["_range_rejected"] = numeric.notna() & ~in_range
+    prepared["_valid_value"] = numeric.where(
+        ~prepared["_qc_flagged"] & in_range
+    )
+    prepared["_hour_standard"] = utc_index.tz_convert(
+        standard_timezone
+    ).floor("h")
+    hourly = (
+        prepared.groupby([stid_col, "_hour_standard"], observed=True)
+        .agg(
+            value=("_valid_value", "mean"),
+            raw_observation_count=(vrbl_col, "size"),
+            qc_flagged_count=("_qc_flagged", "sum"),
+            range_rejected_count=("_range_rejected", "sum"),
+        )
+        .sort_index()
+    )
+    if hourly.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for station in stids:
+        if station not in hourly.index.get_level_values(0):
+            continue
+        station_hourly = hourly.xs(station, level=0)
+        first_day = station_hourly.index.min().normalize()
+        last_day = station_hourly.index.max().normalize()
+        complete_index = pd.date_range(
+            first_day,
+            last_day + pd.Timedelta(days=1, hours=7),
+            freq="h",
+            tz=standard_timezone,
+        )
+        station_hourly = station_hourly.reindex(complete_index)
+        for day in pd.date_range(
+            first_day, last_day, freq="D", tz=standard_timezone
+        ):
+            for start_hour in range(7, 24):
+                start = day + pd.Timedelta(hours=start_hour)
+                window_hours = pd.date_range(start, periods=8, freq="h")
+                window = station_hourly.reindex(window_hours)
+                values = window["value"]
+                valid = values.dropna().astype(float)
+                valid_hour_count = int(valid.size)
+                if valid_hour_count >= 6:
+                    mda8_unrounded = float(valid.mean())
+                    epa_untruncated = float(np.floor(valid).mean())
+                    window_valid = True
+                    validity_reason = "six_or_more_hours"
+                else:
+                    mda8_unrounded = float(valid.sum() / 8.0)
+                    epa_untruncated = float(np.floor(valid).sum() / 8.0)
+                    window_valid = epa_untruncated > naaqs_level_ppb
+                    validity_reason = (
+                        "zero_fill_exceeds_standard"
+                        if window_valid
+                        else "fewer_than_six_hours"
+                    )
+                rows.append(
+                    {
+                        stid_col: station,
+                        "verification_day": day.tz_localize(None),
+                        "window_start_standard": start,
+                        "window_end_standard": start + pd.Timedelta(hours=8),
+                        "window_start_utc": start.tz_convert("UTC"),
+                        "window_end_utc": (
+                            start + pd.Timedelta(hours=8)
+                        ).tz_convert("UTC"),
+                        "window_start_local": start.tz_convert(display_timezone),
+                        "window_end_local": (
+                            start + pd.Timedelta(hours=8)
+                        ).tz_convert(display_timezone),
+                        "valid_hour_count": valid_hour_count,
+                        "raw_observation_count": int(
+                            window["raw_observation_count"].fillna(0).sum()
+                        ),
+                        "qc_flagged_count": int(
+                            window["qc_flagged_count"].fillna(0).sum()
+                        ),
+                        "range_rejected_count": int(
+                            window["range_rejected_count"].fillna(0).sum()
+                        ),
+                        "window_valid": window_valid,
+                        "window_validity_reason": validity_reason,
+                        "mda8_ppb_unrounded": (
+                            mda8_unrounded if window_valid else np.nan
+                        ),
+                        "mda8_ppb_epa_untruncated": (
+                            epa_untruncated if window_valid else np.nan
+                        ),
+                        "mda8_ppb_epa_truncated": (
+                            float(np.floor(epa_untruncated))
+                            if window_valid
+                            else np.nan
+                        ),
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
+def daily_station_ozone_mda8(
+    df,
+    stids,
+    vrbl_col="ozone_concentration",
+    stid_col="stid",
+    minimum_ppb=5.0,
+    maximum_ppb=140.0,
+    standard_timezone=MOUNTAIN_STANDARD_TIME,
+    display_timezone=MOUNTAIN_TIMEZONE,
+    naaqs_level_ppb=OZONE_NAAQS_LEVEL_PPB,
+):
+    """Return one eligible MDA8 value per station and fixed-MST day."""
+    windows = station_ozone_mda8_windows(
+        df,
+        stids,
+        vrbl_col=vrbl_col,
+        stid_col=stid_col,
+        minimum_ppb=minimum_ppb,
+        maximum_ppb=maximum_ppb,
+        standard_timezone=standard_timezone,
+        display_timezone=display_timezone,
+        naaqs_level_ppb=naaqs_level_ppb,
+    )
+    if windows.empty:
+        return windows
+
+    rows = []
+    for (station, day), group in windows.groupby(
+        [stid_col, "verification_day"], observed=True, sort=True
+    ):
+        eligible = group.loc[group["window_valid"]].sort_values(
+            "window_start_standard", kind="stable"
+        )
+        valid_window_count = int(len(eligible))
+        selected = None
+        if valid_window_count:
+            selected = eligible.loc[eligible["mda8_ppb_unrounded"].idxmax()]
+        exceeds_standard = bool(
+            selected is not None
+            and selected["mda8_ppb_epa_untruncated"] > naaqs_level_ppb
+        )
+        daily_valid = valid_window_count >= 13 or exceeds_standard
+        daily_reason = (
+            "thirteen_or_more_windows"
+            if valid_window_count >= 13
+            else "maximum_exceeds_standard"
+            if exceeds_standard
+            else "fewer_than_thirteen_windows"
+        )
+        row = {
+            stid_col: station,
+            "verification_day": day,
+            "valid_window_count": valid_window_count,
+            "daily_valid": daily_valid,
+            "daily_validity_reason": daily_reason,
+            "station_mda8_ppb": np.nan,
+            "station_mda8_epa_truncated_ppb": np.nan,
+            "unfiltered_station_mda8_ppb": (
+                selected["mda8_ppb_unrounded"]
+                if selected is not None
+                else np.nan
+            ),
+            "selected_window_start_standard": pd.NaT,
+            "selected_window_start_utc": pd.NaT,
+            "selected_window_start_local": pd.NaT,
+            "selected_window_valid_hour_count": pd.NA,
+        }
+        if daily_valid and selected is not None:
+            row.update(
+                {
+                    "station_mda8_ppb": selected["mda8_ppb_unrounded"],
+                    "station_mda8_epa_truncated_ppb": selected[
+                        "mda8_ppb_epa_truncated"
+                    ],
+                    "selected_window_start_standard": selected[
+                        "window_start_standard"
+                    ],
+                    "selected_window_start_utc": selected["window_start_utc"],
+                    "selected_window_start_local": selected["window_start_local"],
+                    "selected_window_valid_hour_count": selected[
+                        "valid_hour_count"
+                    ],
+                }
+            )
+        rows.append(row)
+    return pd.DataFrame(rows).sort_values(
+        ["verification_day", stid_col], kind="stable"
+    ).reset_index(drop=True)
+
+
+def do_repval_ozone(
+    df,
+    stids,
+    vrbl_col="ozone_concentration",
+    stid_col="stid",
+    spatial_quantile=0.99,
+    minimum_ppb=5.0,
+    maximum_ppb=140.0,
+):
+    """Create one Basin representative MDA8 value per fixed-MST day.
 
     Args:
         df (pd.DataFrame): The data frame with the ozone data where columns are
@@ -307,41 +552,27 @@ def do_repval_ozone(df, stids, vrbl_col="ozone_concentration", stid_col="stid"):
         stid_col (str): The column name for the station ID
 
     Returns:
-        result (pd.DataFrame): The representative values of ozone concentration
+        pandas.Series: Basin upper-representative station MDA8 values, indexed
+        by the fixed-MST verification day.
     """
-    # Subset to just the stids and the two columns for variable & station ID
-    df = df[df[stid_col].isin(stids)][[vrbl_col, stid_col]]
-
-    # Remove extreme values
-    df.loc[df[vrbl_col] > 140, vrbl_col] = np.nan
-    df.loc[df[vrbl_col] < 5, vrbl_col] = np.nan
-
-    # Ensure index is timezone-aware UTC if it isn't already
-    if df.index.tz is None:
-        df.index = pd.to_datetime(df.index, utc=True)
-
-    # Convert to local time zone from UTC (US/Mountain)
-    df_local = df.copy()
-    df_local.index = df.index.tz_convert(MOUNTAIN_TIMEZONE)
-
-    # Add a column for "next day" date
-    df_local['date'] = df_local.index.date + pd.Timedelta(days=1)
-
-    # First get the 99th percentile for each station and date
-    # If once an hour, 24 samples good for hazen
-    daily_max = (df_local.groupby([stid_col, 'date'])[vrbl_col]
-                 .max()
-                 .reset_index())
-
-    # Convert date back to datetime with timezone
-    daily_max['date'] = pd.to_datetime(daily_max['date'])
-    daily_max = daily_max.set_index('date')
-
-    # For each day, take the maximum from all stations
-    # As we add more stations via synoptic weather, we can take percentile.
-    repr_df = daily_max.groupby(level=0)[vrbl_col].quantile(0.99)
-
-    return repr_df
+    if not 0.0 <= spatial_quantile <= 1.0:
+        raise ValueError("spatial_quantile must lie in [0, 1]")
+    station_daily = daily_station_ozone_mda8(
+        df,
+        stids,
+        vrbl_col=vrbl_col,
+        stid_col=stid_col,
+        minimum_ppb=minimum_ppb,
+        maximum_ppb=maximum_ppb,
+    )
+    if station_daily.empty:
+        return pd.Series(dtype=float, name=vrbl_col)
+    eligible = station_daily.loc[station_daily["daily_valid"]]
+    representative = eligible.groupby("verification_day")[
+        "station_mda8_ppb"
+    ].quantile(spatial_quantile)
+    representative.name = vrbl_col
+    return representative.sort_index()
 
 def get_representative_obs(vrbl, n_days, stids, timezone=MOUNTAIN_TIMEZONE):
     """Helper function to download and process obs in one function.
