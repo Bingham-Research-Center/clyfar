@@ -477,11 +477,15 @@ def daily_station_ozone_mda8(
         )
         valid_window_count = int(len(eligible))
         selected = None
+        epa_selected = None
         if valid_window_count:
             selected = eligible.loc[eligible["mda8_ppb_unrounded"].idxmax()]
+            epa_selected = eligible.loc[
+                eligible["mda8_ppb_epa_untruncated"].idxmax()
+            ]
         exceeds_standard = bool(
-            selected is not None
-            and selected["mda8_ppb_epa_untruncated"] > naaqs_level_ppb
+            epa_selected is not None
+            and epa_selected["mda8_ppb_epa_untruncated"] > naaqs_level_ppb
         )
         daily_valid = valid_window_count >= 13 or exceeds_standard
         daily_reason = (
@@ -508,12 +512,15 @@ def daily_station_ozone_mda8(
             "selected_window_start_utc": pd.NaT,
             "selected_window_start_local": pd.NaT,
             "selected_window_valid_hour_count": pd.NA,
+            "epa_selected_window_start_standard": pd.NaT,
+            "epa_selected_window_start_utc": pd.NaT,
+            "epa_selected_window_start_local": pd.NaT,
         }
-        if daily_valid and selected is not None:
+        if daily_valid and selected is not None and epa_selected is not None:
             row.update(
                 {
                     "station_mda8_ppb": selected["mda8_ppb_unrounded"],
-                    "station_mda8_epa_truncated_ppb": selected[
+                    "station_mda8_epa_truncated_ppb": epa_selected[
                         "mda8_ppb_epa_truncated"
                     ],
                     "selected_window_start_standard": selected[
@@ -523,6 +530,15 @@ def daily_station_ozone_mda8(
                     "selected_window_start_local": selected["window_start_local"],
                     "selected_window_valid_hour_count": selected[
                         "valid_hour_count"
+                    ],
+                    "epa_selected_window_start_standard": epa_selected[
+                        "window_start_standard"
+                    ],
+                    "epa_selected_window_start_utc": epa_selected[
+                        "window_start_utc"
+                    ],
+                    "epa_selected_window_start_local": epa_selected[
+                        "window_start_local"
                     ],
                 }
             )

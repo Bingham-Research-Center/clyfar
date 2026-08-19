@@ -47,7 +47,9 @@ For observations, calculate the 17 station eight-hour means beginning
 station day ordinarily requires 13 valid windows.  Retain the standard's
 above-70-ppb completeness exceptions, an unrounded primary value, and a
 parallel whole-ppb truncation audit.  Select each station's earliest maximum
-window, then apply the declared spatial quantile across eligible stations.
+window in each precision stream, then apply the declared spatial quantile
+across eligible stations.  Retain both selected times when truncation changes
+the peak window.
 Never add one day to an observation timestamp.  Preserve every window, valid
 hour count, selected time, QC status, requested/returned station identity, and
 reducer parameter.  The Basin spatial quantile is an EPA-aligned verification

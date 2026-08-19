@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import preprocessing.representative_obs as representative_obs
 from preprocessing.representative_obs import (
     convert_to_local_date,
     daily_station_ozone_mda8,
@@ -161,6 +162,38 @@ def test_station_mda8_uses_earliest_window_on_tie():
     day = daily_station_ozone_mda8(frame, ["QRS"]).iloc[0]
 
     assert day["selected_window_start_standard"].hour == 7
+
+
+def test_epa_audit_selects_its_daily_maximum_independently(monkeypatch):
+    starts = pd.to_datetime(
+        ["2026-01-02 07:00-07:00", "2026-01-02 08:00-07:00"], utc=True
+    ).tz_convert("-07:00")
+    windows = pd.DataFrame(
+        {
+            "stid": ["QRS", "QRS"],
+            "verification_day": [pd.Timestamp("2026-01-02")] * 2,
+            "window_valid": [True, True],
+            "window_start_standard": starts,
+            "window_start_utc": starts.tz_convert("UTC"),
+            "window_start_local": starts.tz_convert("America/Denver"),
+            "valid_hour_count": [8, 8],
+            "mda8_ppb_unrounded": [71.99, 71.10],
+            "mda8_ppb_epa_untruncated": [70.99, 71.00],
+            "mda8_ppb_epa_truncated": [70.0, 71.0],
+        }
+    )
+    monkeypatch.setattr(
+        representative_obs,
+        "station_ozone_mda8_windows",
+        lambda *args, **kwargs: windows,
+    )
+
+    day = daily_station_ozone_mda8(pd.DataFrame(), ["QRS"]).iloc[0]
+
+    assert day["station_mda8_ppb"] == 71.99
+    assert day["selected_window_start_standard"].hour == 7
+    assert day["station_mda8_epa_truncated_ppb"] == 71.0
+    assert day["epa_selected_window_start_standard"].hour == 8
 
 
 def test_mda8_fixed_standard_clock_is_distinct_from_dst_display_clock():

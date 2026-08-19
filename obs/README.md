@@ -9,8 +9,11 @@ verification target is different from the other daily predictors: it uses
 fixed Mountain Standard Time (UTC-07:00), even after the civil clock changes
 to daylight time.  For each station it forms the 17 eight-hour windows
 beginning 07:00--23:00 standard time, applies the declared completeness rules,
-and retains the earliest maximum daily 8-hour average (MDA8) on a tie.  The
-Basin value is the declared cross-station quantile of eligible station MDA8
-values.  Window counts, selected times, truncation diagnostics, and absent
+and retains the earliest unrounded maximum daily 8-hour average (MDA8) on a
+tie.  An independent whole-ppb truncation audit likewise selects its own
+earliest maximum, so a precision-induced change of peak window remains
+visible.  The Basin value is the declared cross-station quantile of eligible
+station MDA8 values.  Window counts, selected times, truncation diagnostics,
+and absent
 requested stations remain audit data.  This is EPA-aligned data handling from
 Synoptic observations, not an AQS compliance or design-value calculation.
