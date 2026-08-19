@@ -89,15 +89,23 @@ def test_mda8_uses_available_hour_divisor_for_six_or_seven_hours():
 
 
 def test_fewer_than_six_hours_only_survive_zero_fill_exceedance():
-    high = hourly_ozone_frame({"QRS": [120.0] * 5 + [np.nan] * 19})
+    high = hourly_ozone_frame({"QRS": [114.0] * 5 + [np.nan] * 19})
+    truncated_to_standard = hourly_ozone_frame(
+        {"QRS": [113.8] * 5 + [np.nan] * 19}
+    )
     low = hourly_ozone_frame({"QRS": [40.0] * 5 + [np.nan] * 19})
 
     high_first = station_ozone_mda8_windows(high, ["QRS"]).iloc[0]
+    boundary_first = station_ozone_mda8_windows(
+        truncated_to_standard, ["QRS"]
+    ).iloc[0]
     low_first = station_ozone_mda8_windows(low, ["QRS"]).iloc[0]
 
     assert high_first["valid_hour_count"] == 5
     assert high_first["window_validity_reason"] == "zero_fill_exceeds_standard"
-    assert high_first["mda8_ppb_unrounded"] == 75.0
+    assert high_first["mda8_ppb_unrounded"] == 71.25
+    assert not boundary_first["window_valid"]
+    assert pd.isna(boundary_first["mda8_ppb_epa_untruncated"])
     assert not low_first["window_valid"]
     assert pd.isna(low_first["mda8_ppb_unrounded"])
 
@@ -194,6 +202,36 @@ def test_epa_audit_selects_its_daily_maximum_independently(monkeypatch):
     assert day["selected_window_start_standard"].hour == 7
     assert day["station_mda8_epa_truncated_ppb"] == 71.0
     assert day["epa_selected_window_start_standard"].hour == 8
+
+
+def test_epa_audit_applies_earliest_tie_after_window_truncation(monkeypatch):
+    starts = pd.to_datetime(
+        ["2026-01-02 07:00-07:00", "2026-01-02 08:00-07:00"], utc=True
+    ).tz_convert("-07:00")
+    windows = pd.DataFrame(
+        {
+            "stid": ["QRS", "QRS"],
+            "verification_day": [pd.Timestamp("2026-01-02")] * 2,
+            "window_valid": [True, True],
+            "window_start_standard": starts,
+            "window_start_utc": starts.tz_convert("UTC"),
+            "window_start_local": starts.tz_convert("America/Denver"),
+            "valid_hour_count": [8, 8],
+            "mda8_ppb_unrounded": [72.99, 72.10],
+            "mda8_ppb_epa_untruncated": [71.10, 71.99],
+            "mda8_ppb_epa_truncated": [71.0, 71.0],
+        }
+    )
+    monkeypatch.setattr(
+        representative_obs,
+        "station_ozone_mda8_windows",
+        lambda *args, **kwargs: windows,
+    )
+
+    day = daily_station_ozone_mda8(pd.DataFrame(), ["QRS"]).iloc[0]
+
+    assert day["station_mda8_epa_truncated_ppb"] == 71.0
+    assert day["epa_selected_window_start_standard"].hour == 7
 
 
 def test_mda8_fixed_standard_clock_is_distinct_from_dst_display_clock():

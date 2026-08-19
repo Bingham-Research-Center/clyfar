@@ -389,12 +389,14 @@ def station_ozone_mda8_windows(
                 if valid_hour_count >= 6:
                     mda8_unrounded = float(valid.mean())
                     epa_untruncated = float(np.floor(valid).mean())
+                    epa_truncated = float(np.floor(epa_untruncated))
                     window_valid = True
                     validity_reason = "six_or_more_hours"
                 else:
                     mda8_unrounded = float(valid.sum() / 8.0)
                     epa_untruncated = float(np.floor(valid).sum() / 8.0)
-                    window_valid = epa_untruncated > naaqs_level_ppb
+                    epa_truncated = float(np.floor(epa_untruncated))
+                    window_valid = epa_truncated > naaqs_level_ppb
                     validity_reason = (
                         "zero_fill_exceeds_standard"
                         if window_valid
@@ -433,9 +435,7 @@ def station_ozone_mda8_windows(
                             epa_untruncated if window_valid else np.nan
                         ),
                         "mda8_ppb_epa_truncated": (
-                            float(np.floor(epa_untruncated))
-                            if window_valid
-                            else np.nan
+                            epa_truncated if window_valid else np.nan
                         ),
                     }
                 )
@@ -481,11 +481,11 @@ def daily_station_ozone_mda8(
         if valid_window_count:
             selected = eligible.loc[eligible["mda8_ppb_unrounded"].idxmax()]
             epa_selected = eligible.loc[
-                eligible["mda8_ppb_epa_untruncated"].idxmax()
+                eligible["mda8_ppb_epa_truncated"].idxmax()
             ]
         exceeds_standard = bool(
             epa_selected is not None
-            and epa_selected["mda8_ppb_epa_untruncated"] > naaqs_level_ppb
+            and epa_selected["mda8_ppb_epa_truncated"] > naaqs_level_ppb
         )
         daily_valid = valid_window_count >= 13 or exceeds_standard
         daily_reason = (
