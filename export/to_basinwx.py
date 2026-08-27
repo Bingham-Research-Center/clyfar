@@ -736,12 +736,18 @@ def resolve_upload_urls() -> List[str]:
     best-effort mirrors. Resolution order, first hit wins:
 
       1. BASINWX_API_URLS  — comma-separated, the fan-out variable
-      2. BASINWX_API_URL   — singular legacy variable, kept so CHPC cron jobs
-                             that have not been updated keep working
-      3. brc_tools.load_config_urls() — ~/.config/ubair-website/website_urls
+      2. brc_tools.load_config_urls() — ~/.config/ubair-website/website_urls
+      3. BASINWX_API_URL   — singular legacy variable, last resort only
       4. https://basinwx.com
 
-    Historically this module only ever read (2), which is why `images` and
+    This mirrors brc_tools.load_config_urls() deliberately. The singular
+    variable ranks *below* the config file because it is a known trap: it was
+    retired from ~/.bashrc_basinwx on 2026-08-13 but survives in
+    ~/.bashrc_basinwx.bak as "https://basinwx.com". Were it to outrank the
+    config file, re-sourcing that backup would silently collapse the fan-out
+    to one host again — the very bug this function exists to fix.
+
+    Historically this module only ever read (3), which is why `images` and
     `llm_outlooks` reached basinwx.com alone and never appeared on basinwx.dev
     — the rehearsal mirror was blind to them. See clyfar#20.
     """
@@ -751,16 +757,20 @@ def resolve_upload_urls() -> List[str]:
         if urls:
             return urls
 
-    env_singular = os.getenv('BASINWX_API_URL', '').strip()
-    if env_singular:
-        return [env_singular.rstrip('/')]
-
     try:
         _, urls = load_config_urls()
         if urls:
             return urls
     except Exception as e:
-        logger.debug(f"load_config_urls() unavailable, falling back to default: {e}")
+        logger.debug(f"load_config_urls() unavailable, trying legacy env: {e}")
+
+    env_singular = os.getenv('BASINWX_API_URL', '').strip()
+    if env_singular:
+        logger.warning(
+            "Falling back to the retired singular BASINWX_API_URL (%s). "
+            "Uploads will reach that host alone. Prefer BASINWX_API_URLS or "
+            "~/.config/ubair-website/website_urls.", env_singular)
+        return [env_singular.rstrip('/')]
 
     return ['https://basinwx.com']
 
