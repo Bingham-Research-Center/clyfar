@@ -10,7 +10,13 @@ Generates 6 data products (up to 96 JSON files per forecast run):
 
 Environment variables required:
 - DATA_UPLOAD_API_KEY: API key for BasinWx upload endpoint
-- BASINWX_API_URL: Base URL for BasinWx API (default: https://basinwx.com)
+- BASINWX_API_URLS: Comma-separated BasinWx hosts. First is primary (its failure
+  fails the upload); the rest are best-effort mirrors that warn on failure.
+  e.g. "https://basinwx.com,https://basinwx.dev"
+- BASINWX_API_URL: Legacy singular form, still honoured as a fallback so
+  un-updated CHPC cron jobs keep working. Sends to that one host only.
+
+See resolve_upload_urls() for the full resolution order.
 
 Created by: John Lawson & Claude
 Note: Multi-agent development environment - verify changes across repos
@@ -33,7 +39,7 @@ from utils.versioning import get_clyfar_version
 
 # Import from brc-tools (installed as editable package)
 try:
-    from brc_tools.download.push_data import send_json_to_server
+    from brc_tools.download.push_data import send_json_to_all, load_config_urls
 except ImportError as e:
     raise ImportError(
         "Cannot import brc_tools. Ensure it's installed: "
@@ -723,6 +729,83 @@ def export_all_products(
     return results
 
 
+def resolve_upload_urls() -> List[str]:
+    """Resolve the list of BasinWx hosts to upload to.
+
+    First entry is the primary (its failure fails the upload); the rest are
+    best-effort mirrors. Resolution order, first hit wins:
+
+      1. BASINWX_API_URLS  — comma-separated, the fan-out variable
+      2. brc_tools.load_config_urls() — ~/.config/ubair-website/website_urls
+      3. BASINWX_API_URL   — singular legacy variable, last resort only
+      4. https://basinwx.com
+
+    This mirrors brc_tools.load_config_urls() deliberately. The singular
+    variable ranks *below* the config file because it is a known trap: it was
+    retired from ~/.bashrc_basinwx on 2026-08-13 but survives in
+    ~/.bashrc_basinwx.bak as "https://basinwx.com". Were it to outrank the
+    config file, re-sourcing that backup would silently collapse the fan-out
+    to one host again — the very bug this function exists to fix.
+
+    Historically this module only ever read (3), which is why `images` and
+    `llm_outlooks` reached basinwx.com alone and never appeared on basinwx.dev
+    — the rehearsal mirror was blind to them. See clyfar#20.
+    """
+    env_plural = os.getenv('BASINWX_API_URLS', '').strip()
+    if env_plural:
+        urls = [u.strip().rstrip('/') for u in env_plural.split(',') if u.strip()]
+        if urls:
+            return urls
+
+    try:
+        _, urls = load_config_urls()
+        if urls:
+            return urls
+    except Exception as e:
+        logger.debug(f"load_config_urls() unavailable, trying legacy env: {e}")
+
+    env_singular = os.getenv('BASINWX_API_URL', '').strip()
+    if env_singular:
+        logger.warning(
+            "Falling back to the retired singular BASINWX_API_URL (%s). "
+            "Uploads will reach that host alone. Prefer BASINWX_API_URLS or "
+            "~/.config/ubair-website/website_urls.", env_singular)
+        return [env_singular.rstrip('/')]
+
+    return ['https://basinwx.com']
+
+
+def _upload_file_to_basinwx(filepath: str, data_type: str, *, label: str = 'file') -> bool:
+    """Upload one file to every configured BasinWx host.
+
+    Delegates to brc_tools.send_json_to_all, which posts multipart with the MIME
+    type inferred from the extension — so this carries JSON, PNG and PDF/markdown
+    equally. It raises if the *primary* host fails and warns if a mirror does.
+
+    Returns True/False rather than propagating, preserving the contract the
+    callers in this module already rely on.
+    """
+    api_key = os.getenv('DATA_UPLOAD_API_KEY')
+    if not api_key:
+        logger.warning(f"DATA_UPLOAD_API_KEY not set, skipping {label} upload")
+        return False
+
+    urls = resolve_upload_urls()
+
+    try:
+        send_json_to_all(urls, filepath, data_type, api_key)
+        logger.debug(
+            f"Uploaded {os.path.basename(filepath)} to {len(urls)} host(s): {', '.join(urls)}"
+        )
+        return True
+
+    except Exception as e:
+        # send_json_to_all raises only when the PRIMARY host fails; mirror
+        # failures are warned about internally and do not reach here.
+        logger.error(f"Failed to upload {label} {filepath} to primary host: {e}")
+        return False
+
+
 def _upload_to_basinwx(filepath: str, data_type: str) -> bool:
     """Upload JSON file to BasinWx API.
 
@@ -733,26 +816,7 @@ def _upload_to_basinwx(filepath: str, data_type: str) -> bool:
     Returns:
         True if upload succeeded, False otherwise
     """
-    api_key = os.getenv('DATA_UPLOAD_API_KEY')
-    if not api_key:
-        logger.warning("DATA_UPLOAD_API_KEY not set, skipping upload")
-        return False
-
-    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-
-    try:
-        send_json_to_server(
-            server_address=api_url,
-            fpath=filepath,
-            file_data=data_type,  # data_type is 'forecasts', not JSON content
-            API_KEY=api_key
-        )
-        logger.debug(f"Uploaded {os.path.basename(filepath)} to {api_url}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Failed to upload {filepath}: {e}")
-        return False
+    return _upload_file_to_basinwx(filepath, data_type, label='JSON')
 
 
 def _parallel_upload_jsons(filepaths: List[str], data_type: str, max_workers: int = 8) -> int:
@@ -819,27 +883,17 @@ def _upload_single_png(png_path: str, session, upload_url: str, headers: dict) -
 def upload_png_to_basinwx(png_path: str) -> bool:
     """Upload a PNG image to BasinWx API (standalone version).
 
+    Fans out to every configured host — see resolve_upload_urls(). Previously
+    this posted to the singular BASINWX_API_URL only, so images never reached
+    basinwx.dev (clyfar#20).
+
     Args:
         png_path: Path to PNG file
 
     Returns:
         True if upload succeeded, False otherwise
     """
-    import requests
-    import socket
-
-    api_key = os.getenv('DATA_UPLOAD_API_KEY')
-    if not api_key:
-        logger.warning("DATA_UPLOAD_API_KEY not set, skipping PNG upload")
-        return False
-
-    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-    upload_url = f"{api_url}/api/upload/images"
-    hostname = socket.getfqdn()
-    headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
-
-    with requests.Session() as session:
-        return _upload_single_png(png_path, session, upload_url, headers)
+    return _upload_file_to_basinwx(png_path, 'images', label='PNG')
 
 
 def upload_pdf_to_basinwx(pdf_path: str) -> bool:
@@ -857,46 +911,20 @@ def upload_pdf_to_basinwx(pdf_path: str) -> bool:
 def upload_outlook_to_basinwx(file_path: str) -> bool:
     """Upload an LLM outlook file (PDF or markdown) to BasinWx API.
 
+    Fans out to every configured host — see resolve_upload_urls(). Previously
+    this posted to the singular BASINWX_API_URL only, so llm_outlooks never
+    reached basinwx.dev (clyfar#20).
+
+    MIME type is inferred from the extension inside brc_tools, which is the same
+    path the outlook .md files already travel from push_outlook.py.
+
     Args:
         file_path: Path to PDF or markdown file
 
     Returns:
         True if upload succeeded, False otherwise
     """
-    import requests
-    import socket
-
-    api_key = os.getenv('DATA_UPLOAD_API_KEY')
-    if not api_key:
-        logger.warning("DATA_UPLOAD_API_KEY not set, skipping outlook upload")
-        return False
-
-    api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-    upload_url = f"{api_url}/api/upload/llm_outlooks"
-    hostname = socket.getfqdn()
-    headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
-
-    # Detect MIME type from extension
-    ext = os.path.splitext(file_path)[1].lower()
-    mime_types = {'.pdf': 'application/pdf', '.md': 'text/markdown'}
-    mime_type = mime_types.get(ext, 'application/octet-stream')
-
-    try:
-        with requests.Session() as session:
-            with open(file_path, 'rb') as f:
-                files = {'file': (os.path.basename(file_path), f, mime_type)}
-                response = session.post(upload_url, files=files, headers=headers, timeout=60)
-
-            if response.status_code == 200:
-                logger.info(f"Uploaded outlook: {os.path.basename(file_path)}")
-                return True
-            else:
-                logger.error(f"Outlook upload failed ({response.status_code}): {response.text}")
-                return False
-
-    except Exception as e:
-        logger.error(f"Failed to upload outlook {file_path}: {e}")
-        return False
+    return _upload_file_to_basinwx(file_path, 'llm_outlooks', label='outlook')
 
 
 def upload_json_to_basinwx(filepath: str, data_type: str = "forecasts") -> bool:
@@ -1018,29 +1046,51 @@ def export_figures_to_basinwx(
             logger.warning("DATA_UPLOAD_API_KEY not set, skipping PNG uploads")
             return results
 
-        api_url = os.getenv('BASINWX_API_URL', 'https://basinwx.com')
-        upload_url = f"{api_url}/api/upload/images"
+        # Fan out to every configured host. This is the bulk images path — the
+        # one a forecast run actually exercises — and it read the singular
+        # BASINWX_API_URL, which is why basinwx.dev never saw any images
+        # (clyfar#20). One session per host preserves connection pooling.
+        urls = resolve_upload_urls()
         hostname = socket.getfqdn()
         headers = {'x-api-key': api_key, 'x-client-hostname': hostname}
 
-        logger.info(f"Uploading {len(all_pngs)} PNGs with {max_workers} workers...")
+        for idx, base_url in enumerate(urls):
+            role = "PRIMARY" if idx == 0 else "MIRROR"
+            upload_url = f"{base_url}/api/upload/images"
 
-        # Use a shared session for connection pooling and proper cleanup
-        session = requests.Session()
-        try:
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(_upload_single_png, p, session, upload_url, headers): p
-                    for p in all_pngs
-                }
-                success = 0
-                for future in as_completed(futures):
-                    if future.result():
-                        success += 1
-            logger.info(f"Uploaded {success}/{len(all_pngs)} PNGs")
-        finally:
-            # Explicitly close session to ensure all connections are cleaned up
-            session.close()
+            logger.info(
+                f"[{role} {base_url}] Uploading {len(all_pngs)} PNGs "
+                f"with {max_workers} workers..."
+            )
+
+            # Use a shared session for connection pooling and proper cleanup
+            session = requests.Session()
+            try:
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = {
+                        executor.submit(_upload_single_png, p, session, upload_url, headers): p
+                        for p in all_pngs
+                    }
+                    success = 0
+                    for future in as_completed(futures):
+                        if future.result():
+                            success += 1
+                logger.info(f"[{role} {base_url}] Uploaded {success}/{len(all_pngs)} PNGs")
+
+                # Primary failures are loud; mirror failures must never fail the run.
+                if success < len(all_pngs):
+                    shortfall = len(all_pngs) - success
+                    if role == "PRIMARY":
+                        logger.error(
+                            f"[{role} {base_url}] {shortfall} PNG upload(s) failed"
+                        )
+                    else:
+                        logger.warning(
+                            f"WARNING mirror PNG uploads failed: {shortfall} to {base_url}"
+                        )
+            finally:
+                # Explicitly close session to ensure all connections are cleaned up
+                session.close()
 
     # Upload outlook files (PDFs + markdown) to llm_outlooks endpoint
     if upload and all_outlook_files:
