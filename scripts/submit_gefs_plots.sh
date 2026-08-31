@@ -2,11 +2,11 @@
 #SBATCH --job-name=gefs-plots
 #SBATCH --account=notchpeak-shared-short
 #SBATCH --partition=notchpeak-shared-short
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=24G
+#SBATCH --mem=48G
 #SBATCH --output=/uufs/chpc.utah.edu/common/home/%u/logs/basinwx/gefs_plots_%j.out
 #SBATCH --error=/uufs/chpc.utah.edu/common/home/%u/logs/basinwx/gefs_plots_%j.err
 #SBATCH --mail-type=FAIL
@@ -26,9 +26,13 @@
 # was commented out on 2026-03-30 ("season ended"). This job runs the GEFS half
 # alone via --no-clyfar and pushes the meteograms on their own.
 #
-# Cost: no FIS, no 31-member inference, no LLM stage -- so 1 h / 24 GB against
-# submit_clyfar.sh's 2 h / 48 GB. Tune from the PHASE_TIMING lines this prints
-# (gefs_processing_seconds is the bulk; the download dominates).
+# Cost: keeps submit_clyfar.sh's 2 h / 48 GB. An earlier 1 h / 24 GB sizing was
+# wrong: dropping the FIS removes the *inference*, but the GEFS download this job
+# keeps (31 members x 5 variables x 16-day horizon, parallel workers) is the
+# memory-hungry half. 24 GB fit once (32 min, 2026-08-27 18Z) and OOM-killed four
+# workers the next run (2026-08-31 12Z), which thrashed the download into the 1 h
+# wall. Do not trim these again without watching MaxRSS across several inits --
+# the partition allows 8 h, so headroom is nearly free.
 #
 # Schedule: 4x daily, 4.25 h after each GEFS cycle, matching what ozone season
 #           used. Install on notchpeak1:
