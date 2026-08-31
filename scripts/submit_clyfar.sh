@@ -35,8 +35,12 @@
 #
 # Environment variables required (set in ~/.bashrc_basinwx):
 #   - DATA_UPLOAD_API_KEY
-#   - BASINWX_API_URL
 #   - SYNOPTIC_API_TOKEN (if used)
+#
+# Upload destinations are NOT an env var here. They come from
+# ~/.config/ubair-website/website_urls (comma-separated, first = primary,
+# rest = best-effort mirrors), or BASINWX_API_URLS to override. The singular
+# BASINWX_API_URL was retired on 2026-08-13 -- do not reinstate it.
 #
 # Created by: John Lawson & Claude
 # Last updated: 2026-03-07
@@ -283,234 +287,66 @@ echo "================================================================"
 echo "Clyfar forecast complete!"
 echo "================================================================"
 
-# Export to BasinWx website (6 data products, up to 96 JSON files)
+# ---------------------------------------------------------------------------
+# Export + upload, then the LLM outlook.
+#
+# Both used to be inline here -- a ~95-line Python heredoc, then a ~130-line
+# LLM block -- which welded them to the model run. Re-pushing a run after a
+# host was unreachable, back-filling a newly added mirror, or regenerating a
+# single meta-responded outlook all meant re-running this entire 2 h job.
+#
+# They are now scripts/push_clyfar_products.py and scripts/run_llm_stage.sh,
+# each callable on its own against artifacts already on disk. This script
+# orchestrates the three stages; it no longer implements two of them.
+# ---------------------------------------------------------------------------
+
+export CLYFAR_DIR DATA_ROOT FIG_ROOT EXPORT_DIR JSON_TESTS_ROOT
+
+echo "================================================================"
 echo "Exporting forecast data to BasinWx..."
+PUSH_ARGS=()
 if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ]; then
     echo "Upload mode: ENABLED"
 else
     echo "Upload mode: DISABLED (CLYFAR_ENABLE_UPLOAD=$CLYFAR_ENABLE_UPLOAD)"
+    PUSH_ARGS+=(--no-upload)
 fi
 
-python3 - <<EOF
-import os
-import sys
-from datetime import datetime
-from pathlib import Path
+EXPORT_EXIT=0
+python3 scripts/push_clyfar_products.py \
+    --init "$INIT_TIME" \
+    --data-root "$DATA_ROOT" \
+    --fig-root "$FIG_ROOT" \
+    --export-dir "$EXPORT_DIR" \
+    --json-tests-root "$JSON_TESTS_ROOT" \
+    "${PUSH_ARGS[@]}" || EXPORT_EXIT=$?
 
-# Add clyfar to path
-sys.path.insert(0, "$CLYFAR_DIR")
-
-from export.to_basinwx import export_all_products, export_figures_to_basinwx
-import pandas as pd
-
-# Upload control from shell env
-upload_enabled = "${CLYFAR_ENABLE_UPLOAD}" == "1"
-
-# Parse init time
-init_str = "$INIT_TIME"
-init_dt = datetime.strptime(init_str, '%Y%m%d%H')
-
-# Load daily max data
-data_root = Path("$DATA_ROOT") / "dailymax"
-if not data_root.exists():
-    print(f"ERROR: Daily max data not found at {data_root}")
-    sys.exit(1)
-
-# Load daily-max member tables
-dailymax_df_dict = {}
-for parquet_file in data_root.glob("clyfar*_dailymax.parquet"):
-    member_name = parquet_file.stem.replace('_dailymax', '')
-    df = pd.read_parquet(parquet_file)
-    dailymax_df_dict[member_name] = df
-
-if not dailymax_df_dict:
-    print(f"ERROR: No daily max files found in {data_root}")
-    sys.exit(1)
-
-print(f"Loaded {len(dailymax_df_dict)} ensemble members")
-
-# Load full-resolution member tables (for weather exports + richer clustering metadata)
-clyfar_df_dict = {}
-for parquet_file in Path("$DATA_ROOT").glob("clyfar*_df.parquet"):
-    member_name = parquet_file.stem.replace('_df', '')
-    df = pd.read_parquet(parquet_file)
-    clyfar_df_dict[member_name] = df
-
-if not clyfar_df_dict:
-    print("WARNING: No full-resolution member tables found; weather exports may be skipped")
-    clyfar_df_dict = None
-
-# Export all products (upload=True to send to website)
-results = export_all_products(
-    dailymax_df_dict=dailymax_df_dict,
-    init_dt=init_dt,
-    output_dir="$EXPORT_DIR",
-    clyfar_df_dict=clyfar_df_dict,
-    upload=upload_enabled
-)
-
-total_files = sum(len(v) for v in results.values())
-print(f"Successfully exported {total_files} forecast files")
-print(f"  Possibility heatmaps: {len(results['possibility'])}")
-print(f"  Exceedance probabilities: {len(results['exceedance'])}")
-print(f"  Percentile scenarios: {len(results['percentiles'])}")
-print(f"  Clustering summaries: {len(results['clustering'])}")
-print(f"  Weather members: {len(results.get('weather_members', []))}")
-print(f"  Weather percentiles: {len(results.get('weather_percentiles', []))}")
-
-# Export PNG figures and PDF outlooks to BasinWx
-print("Exporting PNG figures and PDF outlooks to BasinWx...")
-fig_results = export_figures_to_basinwx(
-    fig_root="$FIG_ROOT",
-    init_dt=init_dt,
-    upload=upload_enabled,
-    json_tests_root="$JSON_TESTS_ROOT"
-)
-print(f"  Heatmap PNGs: {len(fig_results['heatmaps'])}")
-print(f"  Meteogram PNGs: {len(fig_results['meteograms'])}")
-print(f"  Outlook PDFs: {len(fig_results['outlooks'])}")
-EOF
-
-EXPORT_EXIT_CODE=$?
-
-if [ $EXPORT_EXIT_CODE -ne 0 ]; then
-    echo "WARNING: Export to BasinWx failed with exit code $EXPORT_EXIT_CODE"
-    echo "ALERT_FORECAST_EXPORT_FAILED init=$INIT_TIME exit=$EXPORT_EXIT_CODE"
-    echo "STATUS_FORECAST_EXPORT=FAILED init=$INIT_TIME exit=$EXPORT_EXIT_CODE"
-    # Don't exit - forecast data is still saved locally
+if [ $EXPORT_EXIT -ne 0 ]; then
+    echo "WARNING: Export to BasinWx failed with exit code $EXPORT_EXIT"
+    echo "ALERT_FORECAST_EXPORT_FAILED init=$INIT_TIME exit=$EXPORT_EXIT"
+    echo "STATUS_FORECAST_EXPORT=FAILED init=$INIT_TIME exit=$EXPORT_EXIT"
+    echo "  Retry without re-running the model:"
+    echo "    scripts/push_clyfar_products.py --init $INIT_TIME"
+    # Deliberately not fatal: the forecast data is saved locally regardless.
 else
     echo "STATUS_FORECAST_EXPORT=SUCCESS init=$INIT_TIME"
 fi
 
-# Generate LLM outlook (optional, non-blocking)
-# This runs AFTER all Clyfar processing and exports are complete
 echo "================================================================"
 echo "Generating LLM outlook..."
-echo "================================================================"
-echo "STATUS_LLM_STAGE=START init=$INIT_TIME"
-
-LLM_SUCCESS=false
-if [ -f "$CLYFAR_DIR/LLM-GENERATE.sh" ]; then
-    # Step 1: Sync CASE data from export directory
-    echo "Syncing CASE data for LLM prompt generation..."
-    python3 scripts/sync_case_from_local.py \
-        --init "$INIT_TIME" \
-        --source "$EXPORT_DIR" \
-        --target-root "$JSON_TESTS_ROOT" \
-        --history 5 \
-        --overwrite || {
-        echo "WARNING: CASE sync failed, LLM may have incomplete context"
-    }
-
-    # Step 2: Add texlive to PATH for PDF generation
-    # Note: CHPC module system has broken libreadline.so.6 dependency after restart,
-    # so we add texlive bin directory directly to PATH.
-    # Pandoc 3.8+ is installed via conda in clyfar-nov2025 environment.
-    TEXLIVE_BIN="/uufs/chpc.utah.edu/sys/installdir/texlive/2022/bin/x86_64-linux"
-    if [[ -d "$TEXLIVE_BIN" ]]; then
-        export PATH="$TEXLIVE_BIN:$PATH"
-        echo "Added texlive 2022 to PATH" >&2
-        echo "  xelatex: $(which xelatex 2>/dev/null || echo 'NOT IN PATH')" >&2
-        echo "  pandoc: $(which pandoc 2>/dev/null || echo 'NOT IN PATH')" >&2
-    else
-        echo "WARNING: texlive directory not found at $TEXLIVE_BIN" >&2
-    fi
-
-    # Step 3: Generate LLM outlook
-    # Failures here don't block the pipeline - forecast data is already saved
-    # IMPORTANT: Use default CLI path (unset custom commands to prevent meta-responses)
-    unset LLM_CLI_COMMAND LLM_CLI_BIN LLM_CLI_ARGS 2>/dev/null || true
-
-    # Ensure ~/.local/bin is in PATH (claude CLI is installed there)
-    # ~/.bashrc_basinwx doesn't include this, so SLURM jobs miss it
-    export PATH="$HOME/.local/bin:$PATH"
-
-    if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ]; then
-        unset LLM_SKIP_UPLOAD 2>/dev/null || true
-    else
-        export LLM_SKIP_UPLOAD=1
-    fi
-
-    # Enable retry for meta-response resilience in batch jobs.
-    # Replay drivers may override these to prefer fewer, longer LLM attempts.
-    export LLM_MAX_RETRIES="${LLM_MAX_RETRIES:-3}"
-    export LLM_TIMEOUT="${LLM_TIMEOUT:-600}"
-
-    echo "Running LLM-GENERATE.sh for init $INIT_TIME..."
-    LLM_EXIT=0
-    "$CLYFAR_DIR/LLM-GENERATE.sh" "$INIT_TIME" || LLM_EXIT=$?
-
-    case $LLM_EXIT in
-        0)
-            LLM_SUCCESS=true
-            ;;
-        2)
-            echo "WARNING: LLM output validation failed (meta-response detected)"
-            echo "Manual regeneration required: ./LLM-GENERATE.sh $INIT_TIME"
-            echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME exit=$LLM_EXIT reason=validation_failed"
-            ;;
-        *)
-            echo "WARNING: LLM outlook generation failed (exit $LLM_EXIT)"
-            echo "You can retry manually: ./LLM-GENERATE.sh $INIT_TIME"
-            echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME exit=$LLM_EXIT reason=generator_failed"
-            ;;
-    esac
-
-    if [ "$LLM_SUCCESS" = true ]; then
-        OUTLOOK_FILE="$JSON_TESTS_ROOT/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.md"
-        if [ -f "$OUTLOOK_FILE" ]; then
-            echo "LLM outlook generated: $OUTLOOK_FILE"
-            VALIDATOR="$CLYFAR_DIR/scripts/validate_llm_outlook.py"
-            if [ -f "$VALIDATOR" ]; then
-                echo "Validating outlook content integrity..."
-                if ! python3 "$VALIDATOR" "$OUTLOOK_FILE"; then
-                    echo "WARNING: Outlook validation failed; skipping upload."
-                    echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=post_generation_validation_failed"
-                    LLM_SUCCESS=false
-                fi
-            else
-                echo "WARNING: Outlook validator not found at $VALIDATOR"
-                echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=validator_missing"
-                LLM_SUCCESS=false
-            fi
-        else
-            echo "WARNING: LLM outlook file missing after generation: $OUTLOOK_FILE"
-            echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=outlook_missing"
-            LLM_SUCCESS=false
-        fi
-    fi
-
-    if [ "$LLM_SUCCESS" = true ]; then
-        echo "STATUS_LLM_STAGE=SUCCESS init=$INIT_TIME"
-        # Upload PDF to BasinWx (after LLM generation creates it)
-        PDF_FILE="$JSON_TESTS_ROOT/CASE_${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z/llm_text/LLM-OUTLOOK-${INIT_TIME:0:8}_${INIT_TIME:8:2}00Z.pdf"
-        if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ] && [ -f "$PDF_FILE" ] && [ -n "$DATA_UPLOAD_API_KEY" ]; then
-            echo "Uploading LLM outlook PDF to BasinWx..."
-            if python3 -c "
-from export.to_basinwx import upload_pdf_to_basinwx
-raise SystemExit(0 if upload_pdf_to_basinwx('$PDF_FILE') else 1)
-"; then
-                echo "PDF uploaded successfully"
-                echo "STATUS_SUBMIT_LLM_PDF_PUSH=SUCCESS init=$INIT_TIME pdf=$PDF_FILE"
-            else
-                echo "WARNING: submit-stage LLM PDF upload failed"
-                echo "ALERT_SUBMIT_LLM_PDF_PUSH_FAILED init=$INIT_TIME pdf=$PDF_FILE"
-                echo "STATUS_SUBMIT_LLM_PDF_PUSH=FAILED init=$INIT_TIME pdf=$PDF_FILE"
-            fi
-        elif [ "$CLYFAR_ENABLE_UPLOAD" != "1" ]; then
-            echo "STATUS_SUBMIT_LLM_PDF_PUSH=SKIPPED init=$INIT_TIME reason=upload_disabled"
-        elif [ ! -f "$PDF_FILE" ]; then
-            echo "STATUS_SUBMIT_LLM_PDF_PUSH=SKIPPED init=$INIT_TIME reason=pdf_missing"
-        else
-            echo "STATUS_SUBMIT_LLM_PDF_PUSH=SKIPPED init=$INIT_TIME reason=missing_api_key"
-        fi
-    else
-        echo "STATUS_LLM_STAGE=FAILED init=$INIT_TIME"
-    fi
+if [ "$CLYFAR_ENABLE_UPLOAD" = "1" ]; then
+    unset LLM_SKIP_UPLOAD 2>/dev/null || true
 else
-    echo "WARNING: LLM-GENERATE.sh not found, skipping outlook generation"
-    echo "ALERT_LLM_STAGE_FAILED init=$INIT_TIME reason=generator_script_missing"
-    echo "STATUS_LLM_STAGE=FAILED init=$INIT_TIME"
+    export LLM_SKIP_UPLOAD=1
+fi
+
+LLM_EXIT=0
+"$CLYFAR_DIR/scripts/run_llm_stage.sh" "$INIT_TIME" || LLM_EXIT=$?
+if [ $LLM_EXIT -ne 0 ]; then
+    echo "WARNING: LLM stage exited $LLM_EXIT"
+    echo "  Retry without re-running the model:"
+    echo "    scripts/run_llm_stage.sh $INIT_TIME"
+    # Deliberately not fatal: the forecast data is already exported.
 fi
 
 # Report completion
