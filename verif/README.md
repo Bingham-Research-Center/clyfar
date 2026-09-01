@@ -3,6 +3,15 @@
 This frozen repository supplies Clyfar forecasts and provenance; it does not
 own the evolving scorecard mathematics or a scoring-library implementation.
 
+The generic executable authority is
+`../latex-poss-verif-clyfar/scripts/minimal_reference_evaluator.py` at schema
+`forecast-scorecard/v1` (the GitHub repository is being renamed to
+`forecast-verification-scorecard`). The full Clyfar evaluation owns a
+checksum-bound read-only snapshot and adapter parity tests on
+`../preprint-clyfar-v0p9-five-winter` branch `eval/five-winter-v0p9`; migration
+receipt commit `abc04f4` records the transfer. Do not add a second evaluator
+implementation here.
+
 ## Authority
 
 Before evaluation work, locate the live rigour note rather than copying an old
