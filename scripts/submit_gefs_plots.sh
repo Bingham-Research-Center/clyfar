@@ -138,8 +138,21 @@ echo "================================================================"
 echo "GEFS download + meteograms for $INIT_TIME (no Clyfar inference)"
 echo "================================================================"
 
+# Retry contract, ported from submit_clyfar.sh: run_gefs_clyfar.py exits
+# 75-79 for transient failures (404 data-not-ready, incomplete index, network
+# timeout, pool timeout) expecting a resubmit. The #23 extraction dropped the
+# consumer, so a hung Herbie fetch (exit 78 after the 90-min pool watchdog)
+# killed the run silently under `set -e` — no ALERT line, nothing retried.
+RETRY_COUNT=${RETRY_COUNT:-0}
+MAX_RETRIES=${GEFS_PLOTS_MAX_RETRIES:-2}
+RETRY_DELAY_MINUTES=30
+EXIT_CODE_RETRY_MIN=75
+EXIT_CODE_RETRY_MAX=79
+echo "Retry status: attempt $((RETRY_COUNT + 1)) of $((MAX_RETRIES + 1))"
+
 # --no-clyfar runs the download/save/visualise half only: no FIS, no ozone
 # heatmaps, no LLM stage.
+set +e
 python3 run_gefs_clyfar.py \
     -i "$INIT_TIME" \
     -d "$DATA_ROOT" \
@@ -147,6 +160,29 @@ python3 run_gefs_clyfar.py \
     -n "${SLURM_CPUS_PER_TASK:-4}" \
     -m "$NMEMBERS" \
     --no-clyfar
+STAGE_EXIT=$?
+set -e
+
+if [ $STAGE_EXIT -ge $EXIT_CODE_RETRY_MIN ] && [ $STAGE_EXIT -le $EXIT_CODE_RETRY_MAX ]; then
+    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+        NEW_RETRY_COUNT=$((RETRY_COUNT + 1))
+        RETRY_JOB_ID=$(sbatch --parsable \
+               --begin=now+${RETRY_DELAY_MINUTES}minutes \
+               --export=ALL,RETRY_COUNT=$NEW_RETRY_COUNT \
+               "$CLYFAR_DIR/scripts/submit_gefs_plots.sh" "$INIT_TIME")
+        echo "STATUS_GEFS_STAGE=RETRY_SCHEDULED init=$INIT_TIME exit=$STAGE_EXIT attempt=$NEW_RETRY_COUNT job=$RETRY_JOB_ID"
+        echo "Retryable failure (exit $STAGE_EXIT); retry job $RETRY_JOB_ID begins in $RETRY_DELAY_MINUTES min. This job exits 0."
+        exit 0
+    else
+        echo "ALERT_GEFS_STAGE_FAILED init=$INIT_TIME exit=$STAGE_EXIT retries_exhausted=$MAX_RETRIES"
+        echo "STATUS_GEFS_STAGE=FAILED init=$INIT_TIME exit=$STAGE_EXIT"
+        exit $STAGE_EXIT
+    fi
+elif [ $STAGE_EXIT -ne 0 ]; then
+    echo "ALERT_GEFS_STAGE_FAILED init=$INIT_TIME exit=$STAGE_EXIT"
+    echo "STATUS_GEFS_STAGE=FAILED init=$INIT_TIME exit=$STAGE_EXIT"
+    exit $STAGE_EXIT
+fi
 
 echo "STATUS_GEFS_STAGE=SUCCESS init=$INIT_TIME"
 
