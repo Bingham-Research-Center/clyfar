@@ -8,8 +8,6 @@ from metpy.units import units
 import numpy as np
 import pandas as pd
 
-import synoptic.services as ss
-
 import utils.utils as utils
 from utils.lookups import Lookup
 
@@ -57,8 +55,19 @@ class ObsData:
 
         self.df = self.create_df()
 
+    @staticmethod
+    def _synoptic_services():
+        try:
+            import synoptic.services as ss
+        except Exception as exc:
+            raise RuntimeError(
+                "Synoptic services are unavailable for observation retrieval."
+            ) from exc
+        return ss
+
     def create_metadata_df(self, stids=None):
         # TODO - check this finds all stations within certain time, not just recent
+        ss = self._synoptic_services()
         if stids is None:
             df_meta = ss.stations_metadata(radius=self.radius_str) #, recent=self.recent)
         else:
@@ -81,6 +90,7 @@ class ObsData:
             pd.DataFrame: dataframe of observation data
 
         """
+        ss = self._synoptic_services()
         df_list = []
         for stid in self.stids:
             print("Loading data for station", stid)
