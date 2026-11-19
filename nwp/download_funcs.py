@@ -1,8 +1,11 @@
 """Helper functions to do mass downloading of NWP weather data.
 """
+import contextlib
 import datetime
 import logging
 import os
+import signal
+import threading
 
 
 import numpy as np
@@ -72,14 +75,15 @@ def herbie_load_variable(
             resol,
         )
         try:
-            ds = _herbie_fetch_slice(
-                init_dt=init_dt,
-                fxx=int(fxx),  # Convert numpy.int64 to Python int for timedelta
-                product=resol,
-                member=member,
-                query=gefs_query,
-                remove_grib=remove_grib,
-            )
+            with _fetch_deadline(FETCH_DEADLINE_S):
+                ds = _herbie_fetch_slice(
+                    init_dt=init_dt,
+                    fxx=int(fxx),  # Convert numpy.int64 to Python int for timedelta
+                    product=resol,
+                    member=member,
+                    query=gefs_query,
+                    remove_grib=remove_grib,
+                )
         except Exception as exc:
             logger.error(
                 "Herbie fetch failed for %s f%03d (%s); skipping slice",
@@ -114,6 +118,40 @@ def herbie_load_variable(
     # Crop to Uintah Basin region to match mask dimensions
     combined = GEFSData.crop_to_UB(combined)
     return combined
+
+
+# A slice normally fetches in about a second. Herbie's source probe and .idx
+# requests carry no timeout, so one stalled connection used to block its worker
+# until the pool watchdog in run_gefs_clyfar.py discarded the whole run. Past
+# this deadline the slice is skipped like any other failed fetch.
+FETCH_DEADLINE_S = 120
+
+
+@contextlib.contextmanager
+def _fetch_deadline(seconds, refire_s=5):
+    """Raise TimeoutError in the block once it has run for ``seconds``.
+
+    SIGALRM interrupts a blocking socket read; socket.setdefaulttimeout() does
+    not, because requests passes timeout=None explicitly. The alarm re-fires
+    every ``refire_s`` because Herbie swallows exceptions while probing sources
+    and would otherwise carry on without a deadline. Signals reach only the main
+    thread, so off it (or without SIGALRM) this is a no-op.
+    """
+    if (not hasattr(signal, "SIGALRM")
+            or threading.current_thread() is not threading.main_thread()):
+        yield
+        return
+
+    def _expire(signum, frame):
+        raise TimeoutError(f"fetch exceeded {seconds}s")
+
+    previous = signal.signal(signal.SIGALRM, _expire)
+    signal.setitimer(signal.ITIMER_REAL, seconds, refire_s)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def _herbie_fetch_slice(init_dt, fxx, product, member, query, remove_grib):
