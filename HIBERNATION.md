@@ -1,5 +1,5 @@
 # Clyfar Freeze and Hibernation Runbook
-Date updated: 2026-08-07
+Date updated: 2026-11-19
 
 This repository is the maintenance-frozen Clyfar implementation. It preserves
 the accepted forecast, replay, export, and Ffion paths without serving as a home
@@ -18,42 +18,36 @@ for new experiments, event studies, generated artifacts, or broad roadmaps.
 
 ## Seasonal operations state
 
-The last verified snapshot, on 2026-03-30, had the observation downloader
-active and the six-hourly Clyfar submit cron commented out. This is historical
-evidence, not proof of current crontab state.
-
-Check live state before any operations decision:
+The full winter ozone job and the plots-only GEFS job have separate cron
+entries. They can share a schedule and write products for the same
+initialization. Check both before changing either.
 
 ```bash
-crontab -l | nl -ba
-rg -n "Observations|submit_clyfar.sh" <(crontab -l)
+crontab -l | rg -n 'get_map_obs|submit_(clyfar|gefs_plots)\.sh|run_.*push\.sh'
 ```
 
-Expected hibernation pattern:
-
-```cron
-# Observations remain active.
-# The line invoking sbatch scripts/submit_clyfar.sh remains present but commented.
-```
-
-Do not rewrite command bodies when changing cadence. Keep
-`scripts/submit_clyfar.sh` as the operational entrypoint so init anchoring and
-downstream markers remain consistent.
+A leading `#` disables an entry. Check the cron host and its time zone.
+Observations, road forecasts and HRRR each have their own cadence.
 
 ## Safe resume
 
-1. Verify the checkout, environment, storage roots, and live crontab.
-2. Run the smoke command in `README.md` with upload disabled.
-3. Uncomment the existing Clyfar cron line with `crontab -e`.
-4. Re-check `crontab -l | nl -ba`.
-5. Verify the first cycle using Slurm state, `.out`/`.err`, forecast-export
-   markers, and explicit LLM-stage markers.
-
-Before editing cron, a recoverable local backup can be written under `/tmp`:
-
-```bash
-crontab -l > /tmp/clyfar_crontab.backup.$(date +%Y%m%d_%H%M%S)
-```
+1. Verify the checked-out commit, local edits, environment and external product
+   roots on the cron host. Back up the crontab before an approved change.
+2. Run the upload-disabled compute-node smoke in [README.md](README.md).
+   Check the member files and initialization. A smoke covers only part of a cycle.
+3. Agree which job owns GEFS meteograms during winter. Review the plots-only
+   entry alongside the seasonal entry to avoid duplicate work and writes.
+   Activate the agreed cadence using the existing submit wrapper, then read
+   back the live entries.
+4. For the first cycle match the initialization across the job’s `.out` and
+   `.err`, `STATUS_FORECAST_EXPORT`, `STATUS_LLM_STAGE`, and the per-host
+   upload receipts. Retries and downstream warnings can accompany a clean
+   Slurm exit.
+5. On both www.basinwx.dev and www.basinwx.com inspect `/api/health`,
+   `/api/monitoring/freshness`, and the corresponding files under
+   `/api/filelist/forecasts`, `/api/filelist/images` and
+   `/api/filelist/llm_outlooks`. Open the expected files for that init.
+   Check the human Ozone Alert separately with the duty forecaster.
 
 ## Frozen-repo boundaries
 

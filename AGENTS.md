@@ -1,5 +1,5 @@
 # Repository Guidelines
-Date updated: 2026-08-07
+Date updated: 2026-11-19
 
 Minimal cold-start router for the frozen Clyfar fork.
 
@@ -15,6 +15,12 @@ Minimal cold-start router for the frozen Clyfar fork.
 - Keep source, tests, templates, small required static lookups in `data/geog/`, and concise maintained docs in Git.
 - Keep run data, replay/reforecast results, CASE bundles, figures, logs, Matplotlib state, and Herbie caches outside the checkout.
 - Do not add dated handoffs, session summaries, case-study artifacts, generated notebook output, or speculative roadmaps. Use Git history, `../ceidwad`, `../brc-knowledge`, or the manuscript repo as appropriate.
+- Full seasonal evaluation belongs to the `../preprint-clyfar-v0p9-five-winter` worktree, including
+  evaluation reducers, replay adapters, campaigns, score tables, and research
+  figures. Keep only the frozen producer and minimal producer-contract tests
+  here. The unmerged `eval/daily-verification-contract` branch is migration
+  input, not an evaluation bundle to merge into operational `main`; a genuine
+  production-behaviour fix requires its own explicit review.
 - For legacy-checkout cleanup, classify tracked static data, derived outputs, and
   regenerable caches before acting. Preserve `data/geog/`; relocate reviewed
   outputs separately; do not bundle a deep Herbie cache into a cross-filesystem
@@ -43,6 +49,8 @@ Minimal cold-start router for the frozen Clyfar fork.
 
 ## Cross-repo pointers
 - `../ceidwad`: task cards and run reports.
-- `../preprint-clyfar-v0p9`: manuscript source of truth.
+- `../preprint-clyfar-v0p9`: `main` owns the Clyfar v1 system paper;
+  `eval/five-winter-v0p9` owns the full seasonal evaluation paper.
 - `../brc-knowledge`: durable research/reference material.
-- `../brc-tools`: shared operational utilities.
+- `../manuscripts/forecast-verification-scorecard/docs/clyfar-scoring.md`: current mathematics and executable handoff. Pin the version used.
+- `../brc-tools`: observation/NWP utilities and shared transport. `../ubair-website` owns ingestion and display.

@@ -1,5 +1,5 @@
 # Clyfar Project Overview
-Date updated: 2026-08-07
+Date updated: 2026-11-19
 
 Clyfar produces wintertime ozone guidance for the Uinta Basin from GEFS
 forecast inputs. It reduces ensemble weather fields to basin-representative
@@ -41,8 +41,8 @@ tree. Use one branch and external worktree per lane.
 
 | Lane | Owner and stable interface | Boundary |
 |---|---|---|
-| Ffion | A future `brc-ffion` owns prompting, bundle resolution, narrative validation, and LLM/PDF execution. Clyfar owns the versioned CASE inputs and forecast provenance. | During migration, `FFION_MANIFEST` is the compatibility seam. Do not remove the bundled Ffion path until an external bundle produces parity on fixed CASE fixtures. |
-| Evaluation | `../brc-knowledge` owns the scorecard mathematics; a scoring package owns its implementation; Clyfar supplies member-preserving raw possibilities, observations, and provenance. | Do not depend on the current `../possverif` prototype. Follow `verif/README.md` and pin the exact scorecard source used. |
+| Ffion | The standalone `brc-ffion` checkout contains prompting, bundle resolution, narrative validation, and LLM/PDF execution. Clyfar owns the versioned CASE inputs and forecast provenance. | During migration, `FFION_MANIFEST` is the compatibility seam. Do not remove the bundled Ffion path until an external bundle produces parity on fixed CASE fixtures. |
+| Evaluation | The forecast-verification-scorecard manuscript owns the equations and reference evaluator. Clyfar supplies raw member forecasts and provenance. The five-winter evaluation pairs them with observations. | Do not depend on the current `../possverif` prototype. Follow `verif/README.md` and pin the exact scorecard source used. |
 | Optimisation | Treatment branches may change rules, membership functions, add a pseudo-lapse-rate input, or correct upstream predictors. | Preserve `fis/v0p9.py` as the control. Each treatment must emit the same forecast contract and retain raw plus transformed predictors. |
 
 Scenario clustering remains a Clyfar-side forecast product: it converts the
@@ -70,8 +70,7 @@ that gate and the operational wrapper can select it explicitly.
 
 - Clyfar releases use annotated `vX.Y.Z` tags. While Ffion remains bundled,
   its compatibility releases retain annotated `ffion-vX.Y.Z` tags.
-- An independent `brc-ffion` should be created by history-preserving extraction,
-  then use its own annotated `vX.Y.Z` tags. Clyfar records the Ffion version,
+- The independent `brc-ffion` extraction uses its own `vX.Y.Z` tags. Clyfar records the Ffion version,
   manifest path, and component hashes; the two projects do not share a version
   number.
 - Never move an existing tag. A maintenance fix gets a new patch tag; a bundle
